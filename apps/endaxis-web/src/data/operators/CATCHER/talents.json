@@ -1,0 +1,109 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "subAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "坚韧防线",
+      "icon": "/avatars/CATCHER/icon_talent_meurs_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "每有10点意志，防御力+1.0",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "每有10点意志，防御力+1.2",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "全局思维",
+      "icon": "/avatars/CATCHER/icon_talent_meurs_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "终结技教科书式猛攻的最后一击产生2次冲击波，每次冲击波造成攻击力30%的物理伤害",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 30,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "终结技教科书式猛攻的最后一击产生3次冲击波，每次冲击波造成攻击力45%的物理伤害",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 45,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "shelter",
+      "name": "庇护",
+      "icon": "/icons/icon_battle_affix_shelter.webp"
+    },
+    {
+      "key": "weak",
+      "name": "虚弱",
+      "icon": "/icons/icon_battle_affix_weak.webp"
+    }
+  ]
+}

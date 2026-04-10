@@ -1,0 +1,25 @@
+{
+  "id": "LAEVATAIN",
+  "slug": "laevatain",
+  "name": "莱万汀",
+  "nameEn": "Laevatain",
+  "rarity": 6,
+  "profession": "vanguard",
+  "professionLabel": "突击",
+  "element": "blaze",
+  "elementLabel": "灼热",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "intellect",
+  "mainAttributeLabel": "智识",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/LAEVATAIN/LAEVATAIN.webp",
+  "icons": {
+    "skill": "/avatars/LAEVATAIN/icon_skill_laevat_01_line.webp",
+    "link": "/avatars/LAEVATAIN/icon_combo_skill_laevat_01.webp",
+    "ultimate": "/avatars/LAEVATAIN/icon_ultimate_skill_laevat_01.webp",
+    "talent1": "/avatars/LAEVATAIN/icon_talent_laevat_01.webp",
+    "talent2": "/avatars/LAEVATAIN/icon_talent_laevat_02.webp"
+  }
+}

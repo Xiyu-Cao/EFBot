@@ -1,0 +1,66 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "受到低温灌注的主控干员，重击命中敌人时额外造成20%伤害和5点失衡",
+      "effects": [],
+      "name": "守墓人之赠"
+    },
+    {
+      "level": 2,
+      "description": "力量+20，寒冷伤害+10%",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "strength",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "damage_bonus",
+          "stat": "cold_dmg",
+          "value": 10,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "零度武装"
+    },
+    {
+      "level": 3,
+      "description": "连携技噬冬和终结技临终别礼的伤害倍率提高至原本的1.15倍",
+      "effects": [
+        {
+          "type": "multiplier_scaling",
+          "stat": "link/ultimate",
+          "value": 1.15,
+          "unit": "factor",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "统御严冬"
+    },
+    {
+      "level": 4,
+      "description": "终结技临终别礼所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "诚挚告别"
+    },
+    {
+      "level": 5,
+      "description": "战技塞什卡的秘传返还的技力额外提高5点，并额外提高生成的幻影追击伤害倍率至原本的1.2倍。",
+      "effects": [],
+      "name": "寒风再起"
+    }
+  ]
+}

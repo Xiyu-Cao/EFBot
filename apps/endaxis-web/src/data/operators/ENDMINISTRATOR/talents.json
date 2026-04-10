@@ -1,0 +1,110 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "subAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "本质瓦解",
+      "icon": "/avatars/ENDMINISTRATOR/icon_talent_endminm_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "当敌人附着的源石结晶被消耗后，自身攻击力+15%，持续15秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 15,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "当敌人附着的源石结晶被消耗后，自身攻击力+30%，持续15秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 30,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "现实静滞",
+      "icon": "/avatars/ENDMINISTRATOR/icon_talent_endminm_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "附着源石结晶的敌人受到的物理伤害+10%",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "physical_dmg",
+              "value": 10,
+              "unit": "percent",
+              "scope": "runtime_passive",
+              "note": "enemy debuff"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "附着源石结晶的敌人受到的物理伤害+20%",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "physical_dmg",
+              "value": 20,
+              "unit": "percent",
+              "scope": "runtime_passive",
+              "note": "enemy debuff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "endmin_debuff",
+      "name": "结晶",
+      "icon": "/avatars/ENDMINISTRATOR/icon_skill_endmin_debuff.webp"
+    }
+  ]
+}

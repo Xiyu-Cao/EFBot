@@ -1,0 +1,82 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技焚灭的追加攻击的伤害倍率提升至原本的1.2倍，且命中后返还20点技力",
+      "effects": [
+        {
+          "type": "sp_refund",
+          "stat": "on_magma_skill",
+          "value": 20,
+          "unit": "flat",
+          "scope": "runtime_conditional",
+          "note": "SP part implemented in carrierConsumptionHandlers; 倍率×1.2 part NOT implemented"
+        }
+      ],
+      "name": "熔火之心"
+    },
+    {
+      "level": 2,
+      "description": "智识+20，普通攻击伤害+15%",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "intellect",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "damage_bonus",
+          "stat": "attack_dmg_bonus",
+          "value": 15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "追忆之旅"
+    },
+    {
+      "level": 3,
+      "description": "战技焚灭造成的燃烧持续时间+50%，且燃烧的伤害提升至原本的1.5倍",
+      "effects": [
+        {
+          "type": "duration_modifier",
+          "stat": "burn",
+          "value": 1.5,
+          "unit": "factor",
+          "scope": "runtime_potential"
+        },
+        {
+          "type": "special_zone",
+          "stat": "burn_damage",
+          "value": 1.5,
+          "unit": "factor",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "往事碎片"
+    },
+    {
+      "level": 4,
+      "description": "终结技黄昏所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "冰淇淋熔炉"
+    },
+    {
+      "level": 5,
+      "description": "终结技黄昏的强化普通攻击的伤害倍率提升至原本的1.2倍，且终结技期间，莱万汀每击败一个敌人，终结技的持续时间+1秒。（最多+7秒）",
+      "effects": [],
+      "name": "存在的证明"
+    }
+  ]
+}

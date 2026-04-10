@@ -1,0 +1,25 @@
+{
+  "id": "SNOWSHINE",
+  "slug": "snowshine",
+  "name": "昼雪",
+  "nameEn": "Snowshine",
+  "rarity": 5,
+  "profession": "defender",
+  "professionLabel": "重装",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "claym",
+  "weaponTypeLabel": "双手剑",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/SNOWSHINE/SNOWSHINE.webp",
+  "icons": {
+    "skill": "/avatars/SNOWSHINE/icon_skill_aurora_01.webp",
+    "link": "/avatars/SNOWSHINE/icon_combo_skill_aurora_01.webp",
+    "ultimate": "/avatars/SNOWSHINE/icon_ultimate_skill_aurora_01.webp",
+    "talent1": "/avatars/SNOWSHINE/icon_talent_aurora_01.webp",
+    "talent2": "/avatars/SNOWSHINE/icon_talent_aurora_02.webp"
+  }
+}

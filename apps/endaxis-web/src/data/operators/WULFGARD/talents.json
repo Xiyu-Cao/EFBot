@@ -1,0 +1,104 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "subAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "灼热獠牙",
+      "icon": "/avatars/WULFGARD/icon_talent_wolfgd_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "每次施加燃烧后，获得灼热獠牙状态，持续10秒，该状态无法叠加。状态持续期间，自身造成的灼热伤害+20%",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "blaze_dmg",
+              "value": 20,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional self buff"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "每次施加燃烧后，获得灼热獠牙状态，持续10秒，该状态无法叠加。状态持续期间，自身造成的灼热伤害+30%",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "blaze_dmg",
+              "value": 30,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional self buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "节制准则",
+      "icon": "/avatars/WULFGARD/icon_talent_wolfgd_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "战技灼热弹痕成功消耗法术异常时，返还5点技力",
+          "effects": [
+            {
+              "type": "sp_refund",
+              "stat": "on_anomaly_consume",
+              "value": 5,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "skill consumes magic anomaly → refund SP"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "战技灼热弹痕成功消耗法术异常时，返还10点技力",
+          "effects": [
+            {
+              "type": "sp_refund",
+              "stat": "on_anomaly_consume",
+              "value": 10,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "skill consumes magic anomaly → refund SP"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": []
+}

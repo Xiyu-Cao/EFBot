@@ -1,0 +1,25 @@
+{
+  "id": "YVONNE",
+  "slug": "yvonne",
+  "name": "伊冯",
+  "nameEn": "Yvonne",
+  "rarity": 6,
+  "profession": "vanguard",
+  "professionLabel": "突击",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "pistol",
+  "weaponTypeLabel": "手铳",
+  "mainAttribute": "intellect",
+  "mainAttributeLabel": "智识",
+  "subAttribute": "agility",
+  "subAttributeLabel": "敏捷",
+  "avatar": "/avatars/YVONNE/YVONNE.webp",
+  "icons": {
+    "skill": "/avatars/YVONNE/icon_skill_yvonne_01.webp",
+    "link": "/avatars/YVONNE/icon_combo_skill_yvonne_01.webp",
+    "ultimate": "/avatars/YVONNE/icon_ultimate_skill_yvonne_01.webp",
+    "talent1": "/avatars/YVONNE/icon_talent_yvonne_01.webp",
+    "talent2": "/avatars/YVONNE/icon_talent_yvonne_02.webp"
+  }
+}

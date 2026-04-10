@@ -1,0 +1,63 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技秘杖·引力模式的作用范围+20%",
+      "effects": [],
+      "name": "云层之上"
+    },
+    {
+      "level": 2,
+      "description": "受到终结技秘杖·重力场的重力紊乱区域影响时，每层破防状态对法术脆弱的提升效果加倍，且结算时视为目标额外拥有1层破防（不超过4层）",
+      "effects": [
+        {
+          "type": "parsed_unimplemented",
+          "note": "Implemented in carrierConsumptionHandlers: registerGilbertaBreakScaling P2 branch"
+        }
+      ],
+      "name": "乘风而行敌人"
+    },
+    {
+      "level": 3,
+      "description": "天赋信使的歌声效果加强：终结技充能效率额外+5%",
+      "effects": [],
+      "name": "轻盈脚步"
+    },
+    {
+      "level": 4,
+      "description": "终结技秘杖·重力场所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "云间舞踏"
+    },
+    {
+      "level": 5,
+      "description": "连携技秘杖·矩阵位移冷却时间-2秒，伤害倍率提升至原本的1.3倍。",
+      "effects": [
+        {
+          "type": "multiplier_scaling",
+          "stat": "link",
+          "value": 1.3,
+          "unit": "factor",
+          "scope": "runtime_potential"
+        },
+        {
+          "type": "cooldown_modifier",
+          "stat": "link",
+          "value": -2,
+          "unit": "flat_seconds",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "特别信件"
+    }
+  ]
+}

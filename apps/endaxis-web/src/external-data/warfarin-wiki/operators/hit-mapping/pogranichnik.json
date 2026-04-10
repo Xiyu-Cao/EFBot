@@ -1,0 +1,368 @@
+{
+  "id": "POGRANICHNIK",
+  "gdId": "POGRANICHNK",
+  "slug": "pogranichnik",
+  "skills": {
+    "normalAttack": {
+      "name": "全面攻势",
+      "type": "普通攻击",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "普攻第一段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_0",
+          "mappingConfidence": "low",
+          "m3Value": "52%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第二段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_1",
+          "mappingConfidence": "low",
+          "m3Value": "63%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第三段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_2",
+          "mappingConfidence": "low",
+          "m3Value": "74%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第四段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_3",
+          "mappingConfidence": "low",
+          "m3Value": "86%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第五段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_4",
+          "mappingConfidence": "low",
+          "m3Value": "97%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "处决攻击倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "900%",
+          "category": "execution_attack",
+          "notes": "Execution attack — separate hit type, not default combo"
+        },
+        {
+          "label": "下落攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "fall_attack",
+          "notes": "Fall/aerial attack — separate hit type, not default combo"
+        }
+      ]
+    },
+    "skill": {
+      "name": "粉碎阵线",
+      "type": "战技",
+      "gdTickCount": 2,
+      "mappings": [
+        {
+          "label": "第一段伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "192%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=2, gd_ticks=2)"
+        },
+        {
+          "label": "第二段伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_1",
+          "mappingConfidence": "high",
+          "m3Value": "238%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 1 (wiki_base_rows=2, gd_ticks=2)"
+        },
+        {
+          "label": "第一段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "第二段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "消耗一层破防时技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "消耗二层破防时技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "15",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "消耗三层破防时技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "25",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "消耗四层破防时技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "35",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    },
+    "link": {
+      "name": "盈月邀击",
+      "type": "连携技",
+      "gdTickCount": 3,
+      "mappings": [
+        {
+          "label": "第一段伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "95%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=3, gd_ticks=3)"
+        },
+        {
+          "label": "第二段伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_1",
+          "mappingConfidence": "high",
+          "m3Value": "122%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 1 (wiki_base_rows=3, gd_ticks=3)"
+        },
+        {
+          "label": "第三段伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_2",
+          "mappingConfidence": "high",
+          "m3Value": "149%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 2 (wiki_base_rows=3, gd_ticks=3)"
+        },
+        {
+          "label": "强化第三段伤害倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "297%",
+          "category": "enhanced_variant",
+          "notes": "Enhanced hit variant — condition-dependent, not default"
+        },
+        {
+          "label": "冷却时间",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "17s",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "第一段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "3",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "第一段技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "第二段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "3",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "第二段技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "7",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "第三段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "4",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "第三段技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "13",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "强化第三段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "9",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "强化第三段技力恢复",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "23",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    },
+    "ultimate": {
+      "name": "盾卫旗队，上前",
+      "type": "终结技",
+      "gdTickCount": 6,
+      "mappings": [
+        {
+          "label": "进军伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "medium",
+          "m3Value": "300%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=3, gd_ticks=6); best-effort assignment"
+        },
+        {
+          "label": "袭扰伤害倍率",
+          "classification": "multi_hit_damage_candidate",
+          "mappedTarget": "tick_1",
+          "mappingConfidence": "medium",
+          "m3Value": "100%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=3, gd_ticks=6); best-effort assignment"
+        },
+        {
+          "label": "决胜伤害倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "tick_2",
+          "mappingConfidence": "medium",
+          "m3Value": "450%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=3, gd_ticks=6); best-effort assignment"
+        },
+        {
+          "label": "所需终结技能量",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "90",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "铁誓持续时间",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "30",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        },
+        {
+          "label": "进军失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "袭扰恢复技力",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "决胜失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "15",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "决胜恢复技力",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "40",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    }
+  }
+}

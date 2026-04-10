@@ -1,0 +1,98 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "subAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "闪冻锁鲜",
+      "icon": "/avatars/ALESH/icon_talent_deepfin_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "附近有敌人被冻结或被附着源石结晶后，自身获得3点终结技能量。自身造成冻结触发上述效果时，额外获得6点终结技能量。该效果每3秒内最多触发一次",
+          "effects": [
+            {
+              "type": "gauge_modifier",
+              "stat": "ult_gauge_gain",
+              "value": 3,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "on-hit gauge gain"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "附近有敌人被冻结或被附着源石结晶后，自身获得4点终结技能量。自身造成冻结触发上述效果时，额外获得8点终结技能量。该效果每3秒内最多触发一次",
+          "effects": [
+            {
+              "type": "gauge_modifier",
+              "stat": "ult_gauge_gain",
+              "value": 4,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "on-hit gauge gain"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "钓鳞老手",
+      "icon": "/avatars/ALESH/icon_talent_deepfin_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "每10点智识会使连携技凿孔底钓术钓起珍鳞的概率+0.2%，最多+30%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "每10点智识会使连携技凿孔底钓术钓起珍鳞的概率+0.5%，最多+30%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": []
+}

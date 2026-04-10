@@ -1,0 +1,85 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "subAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "歼灭协议",
+      "icon": "/avatars/PERLICA/icon_talent_pelica_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "对失衡的敌人造成的伤害+20%",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "all_dmg",
+              "value": 20,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in computeSpecialZone: +20% vs staggered"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "对失衡的敌人造成的伤害+30%",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "all_dmg",
+              "value": 30,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in computeSpecialZone: +30% vs staggered"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "循环协议",
+      "icon": "/avatars/PERLICA/icon_talent_pelica_02.webp",
+      "unlockStage": 3,
+      "upgradeStage": null,
+      "stages": [
+        {
+          "promotion": 3,
+          "type": "unlock",
+          "description": "连携技即时协议·闪链命中处于破防状态的敌人时，还会弹射1次",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 1,
+      "unlockStages": [
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": []
+}

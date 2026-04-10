@@ -1,0 +1,104 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "subAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "斫痕",
+      "icon": "/avatars/ROSSI/icon_talent_wulfa_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "战技的狼之珀造成伤害后，会对目标施加爪印斫痕状态，持续15秒，该效果无法叠加。爪印斫痕持续期间，目标每秒受到洛茜攻击力25%的物理伤害，且受到的物理伤害和灼热伤害+6%。",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 25,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "战技的狼之珀造成伤害后，会对目标施加爪印斫痕状态，持续25秒，该效果无法叠加。爪印斫痕持续期间，目标每秒受到洛茜攻击力30%的物理伤害，且受到的物理伤害和灼热伤害+12%。",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 30,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "沸血",
+      "icon": "/avatars/ROSSI/icon_talent_wulfa_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "洛茜对处于爪印斫痕状态的敌人施放技能造成暴击伤害时，会额外触发一次攻击力12%的灼热伤害，并且为自身回复[智识×0.04]点生命值。若目标同时处于燃烧状态，则上述伤害和治疗效果提升至1.5倍。",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 12,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "洛茜对处于爪印斫痕状态的敌人施放技能造成暴击伤害时，会额外触发一次攻击力24%的灼热伤害，并且为自身回复[智识×0.08]点生命值。若目标同时处于燃烧状态，则上述伤害和治疗效果提升至1.5倍。",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 24,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": []
+}

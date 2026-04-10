@@ -1,0 +1,66 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "终结技切丝入锅！至少击败了一个敌人，大潘造成的物理伤害+30%，持续15秒，该效果无法叠加",
+      "effects": [
+        {
+          "type": "damage_bonus",
+          "stat": "physical_dmg",
+          "value": 30,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "精烹细作如果"
+    },
+    {
+      "level": 2,
+      "description": "天赋尝尝咸淡效果加强：备料状态持续时间+10秒，最大叠加层数+1",
+      "effects": [],
+      "name": "五味调和"
+    },
+    {
+      "level": 3,
+      "description": "力量+15，造成的物理伤害+8%",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "strength",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "damage_bonus",
+          "stat": "physical_dmg",
+          "value": 8,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "先进工作者"
+    },
+    {
+      "level": 4,
+      "description": "终结技切丝入锅！所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "自制酱料"
+    },
+    {
+      "level": 5,
+      "description": "战技颠勺！如果仅命中单个敌人，对目标额外施加一层破防，该效果每45秒最多触发一次。",
+      "effects": [],
+      "name": "猛火收汁"
+    }
+  ]
+}

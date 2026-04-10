@@ -1,0 +1,161 @@
+{
+  "id": "AKEKURI",
+  "gdId": "AKEKURI",
+  "slug": "akekuri",
+  "skills": {
+    "normalAttack": {
+      "name": "进取剑锋",
+      "type": "普通攻击",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "普攻第一段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_0",
+          "mappingConfidence": "low",
+          "m3Value": "45%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=4, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第二段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_1",
+          "mappingConfidence": "low",
+          "m3Value": "62%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=4, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第三段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_2",
+          "mappingConfidence": "low",
+          "m3Value": "73%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=4, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第四段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_3",
+          "mappingConfidence": "low",
+          "m3Value": "111%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=4, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "处决攻击倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "900%",
+          "category": "execution_attack",
+          "notes": "Execution attack — separate hit type, not default combo"
+        },
+        {
+          "label": "下落攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "fall_attack",
+          "notes": "Fall/aerial attack — separate hit type, not default combo"
+        }
+      ]
+    },
+    "skill": {
+      "name": "热情迸发",
+      "type": "战技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "320%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        }
+      ]
+    },
+    "link": {
+      "name": "快闪冲击",
+      "type": "连携技",
+      "gdTickCount": 2,
+      "mappings": [
+        {
+          "label": "每段伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "medium",
+          "m3Value": "180%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=1, gd_ticks=2); best-effort assignment"
+        },
+        {
+          "label": "冷却时间",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "9s",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "每段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "每段恢复技力",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "7.5",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    },
+    "ultimate": {
+      "name": "小队，集结！",
+      "type": "终结技",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "所需终结技能量",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "120",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "恢复技力",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "80",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    }
+  }
+}

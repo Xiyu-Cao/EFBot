@@ -1,0 +1,25 @@
+{
+  "id": "AVYWENNA",
+  "slug": "avywenna",
+  "name": "艾维文娜",
+  "nameEn": "Avywenna",
+  "rarity": 5,
+  "profession": "vanguard",
+  "professionLabel": "突击",
+  "element": "emag",
+  "elementLabel": "电磁",
+  "weaponType": "lance",
+  "weaponTypeLabel": "长柄武器",
+  "mainAttribute": "will",
+  "mainAttributeLabel": "意志",
+  "subAttribute": "agility",
+  "subAttributeLabel": "敏捷",
+  "avatar": "/avatars/AVYWENNA/AVYWENNA.webp",
+  "icons": {
+    "skill": "/avatars/AVYWENNA/icon_skill_avywen_01_line.webp",
+    "link": "/avatars/AVYWENNA/icon_combo_skill_avywen_01.webp",
+    "ultimate": "/avatars/AVYWENNA/icon_ultimate_skill_avywen_01.webp",
+    "talent1": "/avatars/AVYWENNA/icon_talent_avywen_01.webp",
+    "talent2": "/avatars/AVYWENNA/icon_talent_avywen_02.webp"
+  }
+}

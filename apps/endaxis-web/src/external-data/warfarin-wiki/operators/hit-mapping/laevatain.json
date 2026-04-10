@@ -1,0 +1,332 @@
+{
+  "id": "LAEVATAIN",
+  "gdId": "LAEVATAIN",
+  "slug": "laevatain",
+  "skills": {
+    "normalAttack": {
+      "name": "燃烬",
+      "type": "普通攻击",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "普攻第一段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_0",
+          "mappingConfidence": "low",
+          "m3Value": "36%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第二段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_1",
+          "mappingConfidence": "low",
+          "m3Value": "54%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第三段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_2",
+          "mappingConfidence": "low",
+          "m3Value": "56%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第四段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_3",
+          "mappingConfidence": "low",
+          "m3Value": "88%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第五段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_4",
+          "mappingConfidence": "low",
+          "m3Value": "119%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "处决攻击倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "900%",
+          "category": "execution_attack",
+          "notes": "Execution attack — separate hit type, not default combo"
+        },
+        {
+          "label": "下落攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "fall_attack",
+          "notes": "Fall/aerial attack — separate hit type, not default combo"
+        }
+      ]
+    },
+    "skill": {
+      "name": "焚灭",
+      "type": "战技",
+      "gdTickCount": 10,
+      "mappings": [
+        {
+          "label": "初始爆炸伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "medium",
+          "m3Value": "140%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=1, gd_ticks=10); best-effort assignment"
+        },
+        {
+          "label": "追加伤害倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "medium",
+          "m3Value": "770%",
+          "category": "conditional_extra_hit",
+          "notes": "Extra hit triggered by condition; not default multiplier"
+        },
+        {
+          "label": "终结技期间第一段倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "330%",
+          "category": "ult_phase_override",
+          "notes": "Skill multiplier changes during ultimate phase — separate context"
+        },
+        {
+          "label": "终结技期间第二段倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "370%",
+          "category": "ult_phase_override",
+          "notes": "Skill multiplier changes during ultimate phase — separate context"
+        },
+        {
+          "label": "终结技期间追加攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "medium",
+          "m3Value": "900%",
+          "category": "conditional_extra_hit",
+          "notes": "Extra hit triggered by condition; not default multiplier"
+        },
+        {
+          "label": "初始爆炸失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "持续伤害每段倍率",
+          "classification": "anomaly_or_reaction_damage",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "14%",
+          "category": "excluded",
+          "notes": "anomaly_or_reaction_damage: not a damage multiplier"
+        },
+        {
+          "label": "追加失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "燃烧时长（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        },
+        {
+          "label": "追加攻击获得终结技能量",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "100",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "终结技期间第一段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "终结技期间第二段失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "终结技期间追加攻击失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "终结技期间燃烧时长（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    },
+    "link": {
+      "name": "沸腾",
+      "type": "连携技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "540%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "冷却时间",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "9s",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "命中1个敌人获得终结技能量",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "25",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "命中2个敌人获得终结技能量",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "30",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "命中3个或以上敌人获得终结技能量",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "35",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    },
+    "ultimate": {
+      "name": "黄昏",
+      "type": "终结技",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "强化普攻第一段倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "146%",
+          "category": "ult_enhanced_normal",
+          "notes": "Normal attack override during ult — separate tick set"
+        },
+        {
+          "label": "强化普攻第二段倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "182%",
+          "category": "ult_enhanced_normal",
+          "notes": "Normal attack override during ult — separate tick set"
+        },
+        {
+          "label": "强化普攻第三段倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "260%",
+          "category": "ult_enhanced_normal",
+          "notes": "Normal attack override during ult — separate tick set"
+        },
+        {
+          "label": "强化普攻第四段倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "456%",
+          "category": "ult_enhanced_normal",
+          "notes": "Normal attack override during ult — separate tick set"
+        },
+        {
+          "label": "所需终结技能量",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "300",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "15",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "ANTAL",
+  "slug": "antal",
+  "name": "安塔尔",
+  "nameEn": "Antal",
+  "rarity": 4,
+  "profession": "support",
+  "professionLabel": "辅助",
+  "element": "emag",
+  "elementLabel": "电磁",
+  "weaponType": "funnel",
+  "weaponTypeLabel": "法术单元",
+  "mainAttribute": "intellect",
+  "mainAttributeLabel": "智识",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/ANTAL/ANTAL.webp",
+  "icons": {
+    "skill": "/avatars/ANTAL/icon_skill_antal_01.webp",
+    "link": "/avatars/ANTAL/icon_combo_skill_antal_01.webp",
+    "ultimate": "/avatars/ANTAL/icon_ultimate_skill_antal_01.webp",
+    "talent1": "/avatars/ANTAL/icon_talent_antal_01.webp",
+    "talent2": "/avatars/ANTAL/icon_talent_antal_02.webp"
+  }
+}

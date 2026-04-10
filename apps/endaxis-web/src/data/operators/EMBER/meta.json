@@ -1,0 +1,25 @@
+{
+  "id": "EMBER",
+  "slug": "ember",
+  "name": "余烬",
+  "nameEn": "Ember",
+  "rarity": 6,
+  "profession": "defender",
+  "professionLabel": "重装",
+  "element": "blaze",
+  "elementLabel": "灼热",
+  "weaponType": "claym",
+  "weaponTypeLabel": "双手剑",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/EMBER/EMBER.webp",
+  "icons": {
+    "skill": "/avatars/EMBER/icon_skill_azrila_01.webp",
+    "link": "/avatars/EMBER/icon_combo_skill_azrila_01.webp",
+    "ultimate": "/avatars/EMBER/icon_ultimate_skill_azrila_01.webp",
+    "talent1": "/avatars/EMBER/icon_talent_azrila_01.webp",
+    "talent2": "/avatars/EMBER/icon_talent_azrila_02.webp"
+  }
+}

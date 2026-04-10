@@ -1,0 +1,25 @@
+{
+  "id": "ESTELLA",
+  "slug": "estella",
+  "name": "埃特拉",
+  "nameEn": "Estella",
+  "rarity": 4,
+  "profession": "guard",
+  "professionLabel": "近卫",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "lance",
+  "weaponTypeLabel": "长柄武器",
+  "mainAttribute": "will",
+  "mainAttributeLabel": "意志",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/ESTELLA/ESTELLA.webp",
+  "icons": {
+    "skill": "/avatars/ESTELLA/icon_skill_whiten_01.webp",
+    "link": "/avatars/ESTELLA/icon_combo_skill_whiten_01.webp",
+    "ultimate": "/avatars/ESTELLA/icon_ultimate_skill_whiten_01.webp",
+    "talent1": "/avatars/ESTELLA/icon_talent_whiten_01.webp",
+    "talent2": "/avatars/ESTELLA/icon_talent_whiten_02.webp"
+  }
+}

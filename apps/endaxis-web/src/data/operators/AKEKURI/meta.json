@@ -1,0 +1,25 @@
+{
+  "id": "AKEKURI",
+  "slug": "akekuri",
+  "name": "秋栗",
+  "nameEn": "Akekuri",
+  "rarity": 4,
+  "profession": "pioneer",
+  "professionLabel": "先锋",
+  "element": "blaze",
+  "elementLabel": "灼热",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/AKEKURI/AKEKURI.webp",
+  "icons": {
+    "skill": "/avatars/AKEKURI/icon_skill_karin_01.webp",
+    "link": "/avatars/AKEKURI/icon_combo_skill_karin_01.webp",
+    "ultimate": "/avatars/AKEKURI/icon_ultimate_skill_karin_01.webp",
+    "talent1": "/avatars/AKEKURI/icon_talent_karin_01.webp",
+    "talent2": "/avatars/AKEKURI/icon_talent_karin_02.webp"
+  }
+}

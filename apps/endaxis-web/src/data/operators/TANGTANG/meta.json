@@ -1,0 +1,25 @@
+{
+  "id": "TANGTANG",
+  "slug": "tangtang",
+  "name": "汤汤",
+  "nameEn": "Tangtang",
+  "rarity": 6,
+  "profession": "caster",
+  "professionLabel": "术师",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "pistol",
+  "weaponTypeLabel": "手铳",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/TANGTANG/TANGTANG.webp",
+  "icons": {
+    "skill": "/avatars/TANGTANG/icon_skill_tangtang_01.webp",
+    "link": "/avatars/TANGTANG/icon_combo_skill_tangtang_01.webp",
+    "ultimate": "/avatars/TANGTANG/icon_ultimate_skill_tangtang_01.webp",
+    "talent1": "/avatars/TANGTANG/icon_talent_tangtang_01.webp",
+    "talent2": "/avatars/TANGTANG/icon_talent_tangtang_02.webp"
+  }
+}

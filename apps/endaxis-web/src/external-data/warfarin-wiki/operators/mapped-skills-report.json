@@ -1,0 +1,1553 @@
+{
+  "total": 24,
+  "operators": [
+    {
+      "id": "AKEKURI",
+      "slug": "akekuri",
+      "skills": {
+        "normalAttack": {
+          "name": "进取剑锋",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "热情迸发",
+          "total_rows": 2,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "快闪冲击",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "resource_gain": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "每段伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "小队，集结！",
+          "total_rows": 2,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "resource_gain": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": []
+        }
+      }
+    },
+    {
+      "id": "ALESH",
+      "slug": "alesh",
+      "skills": {
+        "normalAttack": {
+          "name": "基本挥竿法",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "非常规路亚",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 1,
+            "resource_gain": 4,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "凿孔底钓术",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "status_value": 1,
+            "extra_damage_candidate": 1,
+            "resource_gain": 2,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "大鳞，上钩！",
+          "total_rows": 6,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "finisher_damage_candidate": 1,
+            "resource_gain": 3,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "终结伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ANTAL",
+      "slug": "antal",
+      "skills": {
+        "normalAttack": {
+          "name": "交换电流",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "指定研究对象",
+          "total_rows": 4,
+          "counts": {
+            "base_damage_candidate": 1,
+            "status_duration": 1,
+            "status_value": 2
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "磁暴试验场",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "超频时刻",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_value": 2,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": []
+        }
+      }
+    },
+    {
+      "id": "ARCLIGHT",
+      "slug": "arclight",
+      "skills": {
+        "normalAttack": {
+          "name": "循迹逐猎",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "疾风迅雷",
+          "total_rows": 6,
+          "counts": {
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 2,
+            "extra_damage_candidate": 1,
+            "resource_gain": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "鸣雷",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "resource_gain": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "轰雷掣电",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 2
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ARDELIA",
+      "slug": "ardelia",
+      "skills": {
+        "normalAttack": {
+          "name": "岩石的轻语",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "奔腾的多利",
+          "total_rows": 4,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "火山蘑菇云",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率",
+            "爆炸伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "毛茸茸派对",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "AVYWENNA",
+      "slug": "avywenna",
+      "skills": {
+        "normalAttack": {
+          "name": "雷枪·疾袭",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "雷枪·截回",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 2,
+            "stagger_or_break_value": 3,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "伤害倍率",
+            "雷枪伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "雷枪·掣击",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "雷枪·决颤",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "CATCHER",
+      "slug": "catcher",
+      "skills": {
+        "normalAttack": {
+          "name": "基础战术",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "刚性阻击",
+          "total_rows": 4,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 1,
+            "resource_gain": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "即时压制",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "status_value": 2,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "教科书式猛攻",
+          "total_rows": 9,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 3,
+            "stagger_or_break_value": 3,
+            "status_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率",
+            "第三段伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "CHEN_QIANYU",
+      "slug": "chen-qianyu",
+      "skills": {
+        "normalAttack": {
+          "name": "破飞霞",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "归穹宇",
+          "total_rows": 3,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "见天河",
+          "total_rows": 2,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "冽风霜",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 2,
+            "finisher_damage_candidate": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "斩击伤害倍率",
+            "终结一击伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DA_PAN",
+      "slug": "da-pan",
+      "skills": {
+        "normalAttack": {
+          "name": "滚刀切！",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "颠勺！",
+          "total_rows": 3,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "加料！",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "切丝入锅！",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "extra_damage_candidate": 1,
+            "finisher_damage_candidate": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "终结伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "EMBER",
+      "slug": "ember",
+      "skills": {
+        "normalAttack": {
+          "name": "陷阵剑术",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "进军",
+          "total_rows": 3,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 2
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "前线援护",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 2
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "重燃誓约",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ENDMINISTRATOR",
+      "slug": "endministrator",
+      "skills": {
+        "normalAttack": {
+          "name": "毁伤序列",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "构成序列",
+          "total_rows": 2,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "锁闭序列",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "extra_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "轰击序列",
+          "total_rows": 3,
+          "counts": {
+            "base_damage_candidate": 1,
+            "extra_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ESTELLA",
+      "slug": "estella",
+      "skills": {
+        "normalAttack": {
+          "name": "噪点",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "凝声",
+          "total_rows": 2,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "失真",
+          "total_rows": 6,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "extra_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "status_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": []
+        },
+        "ultimate": {
+          "name": "震音",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "FLUORITE",
+      "slug": "fluorite",
+      "skills": {
+        "normalAttack": {
+          "name": "独门射击法",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "小惊喜",
+          "total_rows": 3,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "免费赠礼",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "巅峰闹剧",
+          "total_rows": 8,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 4,
+            "status_value": 2,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率",
+            "第三段伤害倍率",
+            "第四段伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "GILBERTA",
+      "slug": "gilberta",
+      "skills": {
+        "normalAttack": {
+          "name": "秘杖·束能技艺",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "秘杖·引力模式",
+          "total_rows": 3,
+          "counts": {
+            "base_damage_candidate": 2,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "牵引伤害倍率",
+            "爆炸伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "秘杖·矩阵位移",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "秘杖·重力场",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1,
+            "status_value": 3
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "LAEVATAIN",
+      "slug": "laevatain",
+      "skills": {
+        "normalAttack": {
+          "name": "燃烬",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "焚灭",
+          "total_rows": 14,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 5,
+            "anomaly_or_reaction_damage": 1,
+            "extra_damage_candidate": 4,
+            "status_duration": 2,
+            "resource_gain": 1
+          },
+          "needs_review": 4,
+          "damage_candidates": [
+            "初始爆炸伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "沸腾",
+          "total_rows": 6,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "resource_gain": 3
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "黄昏",
+          "total_rows": 6,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_duration": 1,
+            "extra_damage_candidate": 4
+          },
+          "needs_review": 4,
+          "damage_candidates": []
+        }
+      }
+    },
+    {
+      "id": "LAST_RITE",
+      "slug": "last-rite",
+      "skills": {
+        "normalAttack": {
+          "name": "严霜之舞",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "塞什卡的秘传",
+          "total_rows": 4,
+          "counts": {
+            "extra_damage_candidate": 1,
+            "resource_gain": 2,
+            "status_duration": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": []
+        },
+        "link": {
+          "name": "噬冬",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "extra_damage_candidate": 1,
+            "resource_gain": 2
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "冰刺伤害倍率",
+            "斩击基础伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "临终别礼",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 3,
+            "stagger_or_break_value": 3
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率",
+            "第三段伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "LIFENG",
+      "slug": "lifeng",
+      "skills": {
+        "normalAttack": {
+          "name": "摧破",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "荡浊身",
+          "total_rows": 6,
+          "counts": {
+            "multi_hit_damage_candidate": 3,
+            "stagger_or_break_value": 1,
+            "status_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率",
+            "第三段伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "忿怒相",
+          "total_rows": 5,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "不动心",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 3,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "PERLICA",
+      "slug": "perlica",
+      "skills": {
+        "normalAttack": {
+          "name": "协议α·突破",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "协议ω·雷击",
+          "total_rows": 2,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "即时协议·闪链",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "协议ε·70.41κ",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "POGRANICHNIK",
+      "slug": "pogranichnik",
+      "skills": {
+        "normalAttack": {
+          "name": "全面攻势",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "粉碎阵线",
+          "total_rows": 8,
+          "counts": {
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 2,
+            "resource_gain": 4
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "盈月邀击",
+          "total_rows": 13,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "multi_hit_damage_candidate": 3,
+            "stagger_or_break_value": 4,
+            "resource_gain": 4,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "第一段伤害倍率",
+            "第二段伤害倍率",
+            "第三段伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "盾卫旗队，上前",
+          "total_rows": 9,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_duration": 1,
+            "multi_hit_damage_candidate": 2,
+            "stagger_or_break_value": 2,
+            "resource_gain": 2,
+            "finisher_damage_candidate": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "进军伤害倍率",
+            "袭扰伤害倍率",
+            "决胜伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "SNOWSHINE",
+      "slug": "snowshine",
+      "skills": {
+        "normalAttack": {
+          "name": "失温猛击",
+          "total_rows": 5,
+          "counts": {
+            "base_damage_candidate": 3,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率"
+          ]
+        },
+        "skill": {
+          "name": "饱和性防御",
+          "total_rows": 4,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_value": 1,
+            "resource_gain": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "极地救援",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_value": 5,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": []
+        },
+        "ultimate": {
+          "name": "凛冽寒霜",
+          "total_rows": 6,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "anomaly_or_reaction_damage": 1,
+            "status_duration": 2
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "爆炸伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "TANGTANG",
+      "slug": "tangtang",
+      "skills": {
+        "normalAttack": {
+          "name": "崩你脑壳！",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "踏潮卷浪！",
+          "total_rows": 8,
+          "counts": {
+            "base_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "status_duration": 2,
+            "resource_gain": 1,
+            "unknown_needs_review": 2
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "射击伤害倍率",
+            "单个水龙卷伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "河水，助我！",
+          "total_rows": 4,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1,
+            "status_duration": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "大当家盯着呢！",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "anomaly_or_reaction_damage": 1,
+            "status_duration": 1,
+            "base_damage_candidate": 1,
+            "extra_damage_candidate": 1,
+            "stagger_or_break_value": 2
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "巨浪伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "WULFGARD",
+      "slug": "wulfgard",
+      "skills": {
+        "normalAttack": {
+          "name": "多重连射",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 4,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率"
+          ]
+        },
+        "skill": {
+          "name": "灼热弹痕",
+          "total_rows": 4,
+          "counts": {
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 2,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "爆裂手雷·β型",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "狼之怒",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "每段伤害倍率"
+          ]
+        }
+      }
+    },
+    {
+      "id": "XAIHI",
+      "slug": "xaihi",
+      "skills": {
+        "normalAttack": {
+          "name": "冷却",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "分布式拒绝服务",
+          "total_rows": 5,
+          "counts": {
+            "status_value": 3,
+            "status_duration": 2
+          },
+          "needs_review": 0,
+          "damage_candidates": []
+        },
+        "link": {
+          "name": "压力测试",
+          "total_rows": 3,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "base_damage_candidate": 1,
+            "stagger_or_break_value": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "栈溢出",
+          "total_rows": 6,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_value": 3,
+            "unknown_needs_review": 1,
+            "status_duration": 1
+          },
+          "needs_review": 1,
+          "damage_candidates": []
+        }
+      }
+    },
+    {
+      "id": "YVONNE",
+      "slug": "yvonne",
+      "skills": {
+        "normalAttack": {
+          "name": "雀跃扳机",
+          "total_rows": 7,
+          "counts": {
+            "base_damage_candidate": 5,
+            "finisher_damage_candidate": 1,
+            "extra_damage_candidate": 1
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普攻第一段倍率",
+            "普攻第二段倍率",
+            "普攻第三段倍率",
+            "普攻第四段倍率",
+            "普攻第五段倍率"
+          ]
+        },
+        "skill": {
+          "name": "冰冰弹·β型",
+          "total_rows": 6,
+          "counts": {
+            "base_damage_candidate": 1,
+            "extra_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "resource_gain": 2
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "基础伤害倍率"
+          ]
+        },
+        "link": {
+          "name": "速冻仔·υ37",
+          "total_rows": 7,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_duration": 1,
+            "status_value": 1,
+            "base_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "resource_gain": 1
+          },
+          "needs_review": 0,
+          "damage_candidates": [
+            "能量伤害倍率",
+            "爆炸伤害倍率"
+          ]
+        },
+        "ultimate": {
+          "name": "冷冻射手",
+          "total_rows": 9,
+          "counts": {
+            "cooldown_or_cost": 1,
+            "status_duration": 1,
+            "base_damage_candidate": 1,
+            "extra_damage_candidate": 2,
+            "stagger_or_break_value": 1,
+            "status_value": 3
+          },
+          "needs_review": 2,
+          "damage_candidates": [
+            "普通攻击伤害倍率"
+          ]
+        }
+      }
+    }
+  ],
+  "classification_totals": {
+    "base_damage_candidate": 161,
+    "finisher_damage_candidate": 28,
+    "extra_damage_candidate": 50,
+    "stagger_or_break_value": 85,
+    "cooldown_or_cost": 47,
+    "resource_gain": 37,
+    "status_value": 38,
+    "status_duration": 35,
+    "multi_hit_damage_candidate": 30,
+    "anomaly_or_reaction_damage": 3,
+    "unknown_needs_review": 3
+  }
+}

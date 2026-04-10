@@ -1,0 +1,104 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "subAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "勾芡",
+      "icon": "/avatars/DAPAN/icon_talent_dapan_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "每消耗1层破防后，造成的物理伤害+4%，持续10秒，该效果最多叠加4层",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "physical_dmg",
+              "value": 4,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional self buff"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "每消耗1层破防后，造成的物理伤害+6%，持续10秒，该效果最多叠加4层",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "physical_dmg",
+              "value": 6,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional self buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "尝尝咸淡",
+      "icon": "/avatars/DAPAN/icon_talent_dapan_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "终结技切丝入锅！的最后一击每命中一个敌人，获得一层备料状态，持续20秒，最多叠加1层。当处于备料状态时，连携技命中敌人后立即恢复40%冷却时间并消耗一层备料状态",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "终结技切丝入锅！的最后一击每命中一个敌人，获得一层备料状态，持续20秒，最多叠加2层。当处于备料状态时，连携技命中敌人后立即恢复40%冷却时间并消耗一层备料状态",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "dapan_buff",
+      "name": "备料",
+      "icon": "/avatars/DAPAN/icon_battle_dapan_buff.webp"
+    }
+  ]
+}

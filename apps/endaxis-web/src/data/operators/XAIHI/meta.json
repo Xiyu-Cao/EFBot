@@ -1,0 +1,25 @@
+{
+  "id": "XAIHI",
+  "slug": "xaihi",
+  "name": "赛希",
+  "nameEn": "Xaihi",
+  "rarity": 5,
+  "profession": "support",
+  "professionLabel": "辅助",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "funnel",
+  "weaponTypeLabel": "法术单元",
+  "mainAttribute": "will",
+  "mainAttributeLabel": "意志",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/XAIHI/XAIHI.webp",
+  "icons": {
+    "skill": "/avatars/XAIHI/icon_skill_seraph_01.webp",
+    "link": "/avatars/XAIHI/icon_combo_skill_seraph_01.webp",
+    "ultimate": "/avatars/XAIHI/icon_ultimate_skill_seraph_01.webp",
+    "talent1": "/avatars/XAIHI/icon_talent_seraph_01.webp",
+    "talent2": "/avatars/XAIHI/icon_talent_seraph_02.webp"
+  }
+}

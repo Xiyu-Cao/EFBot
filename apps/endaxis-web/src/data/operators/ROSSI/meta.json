@@ -1,0 +1,25 @@
+{
+  "id": "ROSSI",
+  "slug": "rossi",
+  "name": "洛茜",
+  "nameEn": "Rossi",
+  "rarity": 6,
+  "profession": "guard",
+  "professionLabel": "近卫",
+  "element": "physical",
+  "elementLabel": "物理",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/ROSSI/ROSSI.webp",
+  "icons": {
+    "skill": "/avatars/ROSSI/icon_skill_wulfa_01.webp",
+    "link": "/avatars/ROSSI/icon_combo_skill_wulfa_01.webp",
+    "ultimate": "/avatars/ROSSI/icon_ultimate_skill_wulfa_01.webp",
+    "talent1": "/avatars/ROSSI/icon_talent_wulfa_01.webp",
+    "talent2": "/avatars/ROSSI/icon_talent_wulfa_02.webp"
+  }
+}

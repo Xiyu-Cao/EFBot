@@ -1,0 +1,25 @@
+{
+  "id": "CHENQIANYU",
+  "slug": "chen-qianyu",
+  "name": "陈千语",
+  "nameEn": "Chen Qianyu",
+  "rarity": 5,
+  "profession": "guard",
+  "professionLabel": "近卫",
+  "element": "physical",
+  "elementLabel": "物理",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/CHENQIANYU/CHENQIANYU.webp",
+  "icons": {
+    "skill": "/avatars/CHENQIANYU/icon_skill_chen_01.webp",
+    "link": "/avatars/CHENQIANYU/icon_combo_skill_chen_01.webp",
+    "ultimate": "/avatars/CHENQIANYU/icon_ultimate_skill_chen_01.webp",
+    "talent1": "/avatars/CHENQIANYU/icon_talent_chen_01.webp",
+    "talent2": "/avatars/CHENQIANYU/icon_talent_chen_02.webp"
+  }
+}

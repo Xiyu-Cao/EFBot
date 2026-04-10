@@ -1,0 +1,42 @@
+{
+  "name": "endaxis-vue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "convert:images": "node scripts/convert-png-to-webp.js",
+    "type-check": "vue-tsc --noEmit --project tsconfig.app.json",
+    "test": "vitest",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.10.1",
+    "@vueuse/core": "^14.1.0",
+    "@zumer/snapdom": "^2.0.1",
+    "element-plus": "^2.11.8",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.22",
+    "vue-i18n": "^11.1.2",
+    "vue-router": "^4.6.3",
+    "vuedraggable": "^4.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1",
+    "@types/node": "^25.0.9",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "node-html-parser": "^7.1.0",
+    "sharp": "^0.34.5",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.11",
+    "vite-plugin-vue-devtools": "^8.0.3",
+    "vitest": "^4.0.17",
+    "vue-tsc": "^3.2.2"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "subAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "启动进程",
+      "icon": "/avatars/XAIHI/icon_talent_seraph_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "连携技压力测试命中敌人时，如果目标已经处于寒冷附着或冻结状态，还会使目标受到的寒冷伤害+7%，持续5秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "cold_dmg",
+              "value": 7,
+              "unit": "percent",
+              "scope": "runtime_passive",
+              "note": "enemy debuff"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "连携技压力测试命中敌人时，如果目标已经处于寒冷附着或冻结状态，还会使目标受到的寒冷伤害+10%，持续5秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "cold_dmg",
+              "value": 10,
+              "unit": "percent",
+              "scope": "runtime_passive",
+              "note": "enemy debuff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "协议冻结",
+      "icon": "/avatars/XAIHI/icon_talent_seraph_02.webp",
+      "unlockStage": 3,
+      "upgradeStage": null,
+      "stages": [
+        {
+          "promotion": 3,
+          "type": "unlock",
+          "description": "终结技栈溢出会额外净化全队的寒冷附着和冻结状态",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 1,
+      "unlockStages": [
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "skill_seraph",
+      "name": "支援晶体",
+      "icon": "/avatars/XAIHI/icon_skill_seraph_01.webp"
+    },
+    {
+      "key": "spell_enhance",
+      "name": "法术增幅",
+      "icon": "/icons/icon_battle_affix_spell_enhance.webp"
+    },
+    {
+      "key": "cryst_enhance",
+      "name": "寒冷增幅",
+      "icon": "/icons/icon_battle_affix_cryst_enhance.webp"
+    },
+    {
+      "key": "natural_enhance",
+      "name": "自然增幅",
+      "icon": "/icons/icon_battle_affix_natural_enhance.webp"
+    }
+  ]
+}

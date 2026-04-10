@@ -1,0 +1,25 @@
+{
+  "id": "LASTRITE",
+  "slug": "last-rite",
+  "name": "别礼",
+  "nameEn": "Last Rite",
+  "rarity": 6,
+  "profession": "vanguard",
+  "professionLabel": "突击",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "claym",
+  "weaponTypeLabel": "双手剑",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/LASTRITE/LASTRITE.webp",
+  "icons": {
+    "skill": "/avatars/LASTRITE/icon_skill_lastrite_01.webp",
+    "link": "/avatars/LASTRITE/icon_combo_skill_lastrite_01.webp",
+    "ultimate": "/avatars/LASTRITE/icon_ultimate_skill_lastrite_01.webp",
+    "talent1": "/avatars/LASTRITE/icon_talent_lastrite_01.webp",
+    "talent2": "/avatars/LASTRITE/icon_talent_lastrite_02.webp"
+  }
+}

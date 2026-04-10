@@ -1,0 +1,115 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "subAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "高效派送",
+      "icon": "/avatars/AVYWENNA/icon_talent_avywen_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "掷出、召回雷枪、强雷枪命中敌人后，获得3点终结技能量",
+          "effects": [
+            {
+              "type": "gauge_modifier",
+              "stat": "ult_gauge_gain",
+              "value": 3,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "on-hit gauge gain"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "掷出、召回雷枪、强雷枪命中敌人后，获得4点终结技能量",
+          "effects": [
+            {
+              "type": "gauge_modifier",
+              "stat": "ult_gauge_gain",
+              "value": 4,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "on-hit gauge gain"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "委婉手段",
+      "icon": "/avatars/AVYWENNA/icon_talent_avywen_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "终结技雷枪·决颤命中敌人时对其施加6%电磁脆弱，持续10秒",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "emag_dmg",
+              "value": 6,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "enemy emag fragility on ultimate hit, 10s"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "终结技雷枪·决颤命中敌人时对其施加10%电磁脆弱，持续10秒",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "emag_dmg",
+              "value": 10,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "enemy emag fragility on ultimate hit, 10s"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "Thunderlances",
+      "name": "雷枪",
+      "icon": "/avatars/AVYWENNA/icon_combo_skill_avywen_01.webp"
+    },
+    {
+      "key": "Thunderlances EX",
+      "name": "强雷枪",
+      "icon": "/avatars/AVYWENNA/icon_ultimate_skill_avywen_01.webp"
+    }
+  ]
+}

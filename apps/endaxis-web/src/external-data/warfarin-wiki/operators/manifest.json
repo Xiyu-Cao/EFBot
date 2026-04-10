@@ -1,0 +1,176 @@
+{
+  "source": "https://warfarin.wiki/cn/operators",
+  "fetched_at": "2026-03-26T02:47:15.514Z",
+  "total": 24,
+  "operators": [
+    {
+      "slug": "tangtang",
+      "name_zh": "汤汤",
+      "id": "TANGTANG",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "endministrator",
+      "name_zh": "管理员",
+      "id": "ENDMINISTRATOR",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "lifeng",
+      "name_zh": "黎风",
+      "id": "LIFENG",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "ember",
+      "name_zh": "余烬",
+      "id": "EMBER",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "gilberta",
+      "name_zh": "洁尔佩塔",
+      "id": "GILBERTA",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "ardelia",
+      "name_zh": "艾尔黛拉",
+      "id": "ARDELIA",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "pogranichnik",
+      "name_zh": "骏卫",
+      "id": "POGRANICHNIK",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "yvonne",
+      "name_zh": "伊冯",
+      "id": "YVONNE",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "laevatain",
+      "name_zh": "莱万汀",
+      "id": "LAEVATAIN",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "last-rite",
+      "name_zh": "别礼",
+      "id": "LAST_RITE",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "chen-qianyu",
+      "name_zh": "陈千语",
+      "id": "CHEN_QIANYU",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "snowshine",
+      "name_zh": "昼雪",
+      "id": "SNOWSHINE",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "xaihi",
+      "name_zh": "赛希",
+      "id": "XAIHI",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "perlica",
+      "name_zh": "佩丽卡",
+      "id": "PERLICA",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "wulfgard",
+      "name_zh": "狼卫",
+      "id": "WULFGARD",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "arclight",
+      "name_zh": "弧光",
+      "id": "ARCLIGHT",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "alesh",
+      "name_zh": "阿列什",
+      "id": "ALESH",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "avywenna",
+      "name_zh": "艾维文娜",
+      "id": "AVYWENNA",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "da-pan",
+      "name_zh": "大潘",
+      "id": "DA_PAN",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "estella",
+      "name_zh": "埃特拉",
+      "id": "ESTELLA",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "catcher",
+      "name_zh": "卡契尔",
+      "id": "CATCHER",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "antal",
+      "name_zh": "安塔尔",
+      "id": "ANTAL",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "fluorite",
+      "name_zh": "萤石",
+      "id": "FLUORITE",
+      "status": "ok",
+      "warnings": []
+    },
+    {
+      "slug": "akekuri",
+      "name_zh": "秋栗",
+      "id": "AKEKURI",
+      "status": "ok",
+      "warnings": []
+    }
+  ],
+  "warnings": []
+}

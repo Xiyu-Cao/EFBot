@@ -1,0 +1,125 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "subAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "活着的旗帜",
+      "icon": "/avatars/POGRANICHNK/icon_talent_pograni_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "战斗中，通过自身技能每恢复80点技力后，获得持续20秒的士气激昂。\n士气激昂效果：攻击力+4%，源石技艺强度+4。\n该效果最多叠加3层，每层单独计算时间",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 4,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff (ATK component)"
+            },
+            {
+              "type": "stat_bonus",
+              "stat": "originium_arts_power",
+              "value": 4,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "conditional buff (arts power component, not yet consumed by runtime)"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "战斗中，通过自身技能每恢复80点技力后，获得持续20秒的士气激昂。\n士气激昂效果：攻击力+8%，源石技艺强度+8。\n该效果最多叠加3层，每层单独计算时间",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 8,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff (ATK component)"
+            },
+            {
+              "type": "stat_bonus",
+              "stat": "originium_arts_power",
+              "value": 8,
+              "unit": "flat",
+              "scope": "runtime_conditional",
+              "note": "conditional buff (arts power component, not yet consumed by runtime)"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "战术教导",
+      "icon": "/avatars/POGRANICHNK/icon_talent_pograni_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "当任意干员触发终结技盾卫旗队，上前的后续效果后，也会获得持续5秒的士气激昂。\n需要激活天赋活着的旗帜",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "当任意干员触发终结技盾卫旗队，上前的后续效果后，也会获得持续10秒的士气激昂。\n需要激活天赋活着的旗帜",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "pograni_buff",
+      "name": "铁誓",
+      "icon": "/avatars/POGRANICHNK/icon_battle_pograni_buff.webp"
+    },
+    {
+      "key": "pograni_talent",
+      "name": "士气激昂",
+      "icon": "/avatars/POGRANICHNK/icon_battle_pograni_talent_1.webp"
+    }
+  ]
+}

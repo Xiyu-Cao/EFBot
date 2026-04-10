@@ -1,0 +1,523 @@
+{
+  "app": {
+    "name": "Endaxis"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "copy": "Copy",
+    "delete": "Delete",
+    "default": "Default",
+    "export": "Export",
+    "all": "all",
+    "language": "Language",
+    "load": "Load",
+    "moveDown": "Move down",
+    "moveUp": "Move up",
+    "new": "new",
+    "noneParen": "(none)",
+    "off": "off",
+    "old": "old",
+    "on": "on",
+    "paste": "Paste",
+    "receive": "Import",
+    "reset": "Reset",
+    "type": "Type",
+    "triggerTime": "Trigger time",
+    "stacks": "Stacks",
+    "duration": "Duration",
+    "unequip": "Unequip",
+    "uncategorized": "Uncategorized",
+    "unknown": "Unknown",
+    "unknownSkill": "Unknown skill",
+    "levelSuffix": "lvl",
+    "size": {
+      "large": "L",
+      "medium": "M",
+      "small": "S"
+    },
+    "warning": "Warning"
+  },
+  "locale": {
+    "en": "English",
+    "ru": "Русский",
+    "zhCN": "简体中文"
+  },
+  "timeline": {
+    "export": {
+      "copyCode": "Copy Data Code",
+      "dialogTitle": "Export Settings",
+      "durationHintMax": "Maximum support {max}s",
+      "durationLabel": "Export Duration (seconds)",
+      "exportImage": "Export Image",
+      "exportJson": "Export JSON",
+      "failed": "Export failed: {msg}",
+      "filenameLabel": "File Name",
+      "filenamePlaceholder": "Please enter file name",
+      "imageExported": "Timeline image exported: {filename}",
+      "rendering": "Rendering timeline image for the first {seconds} seconds..."
+    },
+    "header": {
+      "languageTooltip": "Language",
+      "loadTooltip": "Import .json project file or .png image",
+      "receiveTooltip": "Paste data code to import project",
+      "resetTooltip": "Clear all content",
+      "strictMode": "Strict",
+      "strictModeTooltip": "Cycle validation mode: Sandbox → Audit → Strict",
+      "legalityMode": {
+        "sandbox": "Sandbox",
+        "audit": "Audit",
+        "strict": "Strict"
+      }
+    },
+    "strict": {
+      "noTrack": "Track not found",
+      "linkCooldown": "Link skill on cooldown ({remaining}s remaining)",
+      "gaugeInsufficient": "Insufficient ultimate gauge ({current} / {required} required)",
+      "spInsufficient": "Insufficient SP ({current} / {required} required)",
+      "overlap": "Overlaps with existing action \"{name}\""
+    },
+    "import": {
+      "dialogAlert": "Warning: Importing will overwrite all current project data. It is recommended to save first.",
+      "dialogConfirm": "Confirm overwrite and import",
+      "dialogHint": "Please paste the data code:",
+      "dialogPlaceholder": "Paste long string here...",
+      "dialogTitle": "Import Project",
+      "dropHint": "Drag file to import",
+      "failed": "Loading failed: {msg}",
+      "pngNoData": "This image does not contain valid ENDAXIS project data",
+      "pngSuccess": "Successfully loaded project from image!",
+      "projectLoaded": "Project loaded successfully!"
+    },
+    "share": {
+      "copied": "Share code copied to clipboard! You can send it to friends to import.",
+      "copyFailed": "Failed to generate share code: {msg}",
+      "inputRequired": "Please enter the share code",
+      "imported": "Successfully imported shared plan!",
+      "importFailed": "Invalid share code format or corrupted data"
+    },
+    "mobile": {
+      "time": "Time",
+      "import": "Import",
+      "importing": "Importing...",
+      "more": "More",
+      "loadout": {
+        "title": "Loadout",
+        "openAria": "View {name}'s loadout",
+        "weapon": "Weapon",
+        "equipment": "Equipment",
+        "none": "Not equipped",
+        "slot": {
+          "armor": "Armor",
+          "gloves": "Gloves",
+          "accessory1": "Accessory 1",
+          "accessory2": "Accessory 2"
+        }
+      },
+      "actionInfo": {
+        "title": "Skill Info",
+        "notFound": "Skill not found (the scenario may have changed or data was updated)",
+        "start": "Start Time",
+        "end": "End Time",
+        "duration": "Duration"
+      }
+    },
+    "attack": {
+      "enhancedAttack": "Enhanced Attack"
+    },
+    "loading": "Loading resources...",
+    "reset": {
+      "confirm": "Are you sure you want to clear all current progress? This will clear all plan data.",
+      "confirmButton": "Confirm Clear",
+      "done": "Project has been reset"
+    },
+    "scenario": {
+      "addTooltip": "New Project",
+      "defaultName": "Project {index}",
+      "copySuffix": "Copy",
+      "deleteConfirm": "Are you sure you want to delete this project? This action cannot be undone.",
+      "deleteTitle": "Delete project",
+      "deleteTooltip": "Delete current project",
+      "deleted": "The project has been deleted",
+      "duplicateTooltip": "Copy current project",
+      "duplicated": "The project was copied",
+      "limit": "Maximum number of projects reached ({max})",
+      "renameTooltip": "Rename current project",
+      "unnamed": "Unnamed project"
+    },
+    "shortcut": {
+      "boxSelectOff": "Box Select Mode: Off",
+      "boxSelectOn": "Box Select Mode: On",
+      "connectionTool": "Connection Tool: {state}",
+      "copied": "Copied",
+      "cursorGuideOff": "Guide Lines: Hidden",
+      "cursorGuideOn": "Guide Lines: Enabled",
+      "pasted": "Pasted",
+      "redo": "Redo",
+      "snapMode01": "0.1s",
+      "snapModeFrame": "1 Frame (1/60s)",
+      "snapPrecision": "Snap Precision: {mode}",
+      "undo": "Undo"
+    }
+  },
+  "timelineGrid": {
+    "action": {
+      "locked": "This action is locked"
+    },
+    "alignGuide": {
+      "alignLeft": "Align Left",
+      "alignRight": "Align Right",
+      "snapBack": "Snap to Back",
+      "snapFront": "Snap to Front"
+    },
+    "alignResult": {
+      "alignedLeft": "Aligned Left",
+      "alignedRight": "Aligned Right",
+      "snappedBack": "Snapped to Back",
+      "snappedFront": "Snapped to Front",
+      "unchanged": "Position unchanged"
+    },
+    "cursor": {
+      "sp": "SP",
+      "stagger": "Stagger",
+      "gauge": "Gauge"
+    },
+    "cycleBoundary": "Cycle Boundary",
+    "prep": {
+      "title": "Pre-battle Preparation",
+      "expand": "Click to Expand",
+      "collapseTitle": "Collapse Pre-battle Preparation Area",
+      "setDurationTitle": "Set Pre-battle Preparation Duration"
+    },
+    "ruler": {
+      "gameTimeCollapseTitle": "Game Time (Click to Collapse)",
+      "realTimeTitle": "Real Time",
+      "gameTimeExpandTitle": "Expand Game Timeline"
+    },
+    "elementFilter": {
+      "all": "All",
+      "blaze": "Heat",
+      "cold": "Cryo",
+      "emag": "Electric",
+      "nature": "Nature",
+      "physical": "Physical"
+    },
+    "equipmentDialog": {
+      "allCategories": "All Categories",
+      "allLevels": "All Levels",
+      "empty": "No matching equipment found",
+      "refine": "Artificing",
+      "refineBase": "No Artificing",
+      "refineTier": "Artifice {tier}",
+      "searchPlaceholder": "Search equipment name/ID...",
+      "title": "Select Equipment - {slot}",
+      "uncategorized": "Uncategorized",
+      "unequipTooltip": "Unequip current item"
+    },
+    "equipmentSlot": {
+      "accessory1": "Accessory 1",
+      "accessory2": "Accessory 2",
+      "armor": "Armor",
+      "equipment": "Equipment",
+      "gloves": "Gloves"
+    },
+    "operatorDialog": {
+      "clearTrack": "Clear Current Track",
+      "empty": "No matching operator found",
+      "inTeam": "In Team",
+      "searchPlaceholder": "Search by name...",
+      "title": "Change Operator"
+    },
+    "selection": {
+      "deleted": "Deleted",
+      "selectedCount": "{count} actions selected"
+    },
+    "toolbar": {
+      "boxSelect": "Box select (Ctrl+B)",
+      "compilerToggle": "New compiler (Ctrl+G)",
+      "connectionTool": "Connection tool (Alt+L)",
+      "cursorGuide": "Guide line (Ctrl+G)",
+      "snapPrecision": "Snap precision (Alt+S)"
+    },
+    "track": {
+      "changeOperatorTooltip": "Click to change operator",
+      "operatorAlreadyInUse": "This operator is already on another track!",
+      "selectOperator": "Select OP",
+      "selectWeaponTooltip": "Select weapon",
+      "setBonusActive": "Set bonus active"
+    },
+    "weaponDialog": {
+      "empty": "No matching weapon found",
+      "equipped": "Equipped",
+      "searchPlaceholder": "Search weapon name...",
+      "title": "Select Weapon",
+      "unequipTooltip": "Unequip current weapon"
+    }
+  },
+  "actionLibrary": {
+    "fallback": {
+      "noEquip": "No Equipment",
+      "noOperator": "No OP ",
+      "noWeapon": "No Weapon Equipped"
+    },
+    "panels": {
+      "operatorStats": "Operator Stats",
+      "weaponStats": "Weapon Stats",
+      "equipmentRefine": "Equipment Artificing"
+    },
+    "labels": {
+      "initialCharge": "Initial Charge",
+      "maxCharge": "Max Charge",
+      "chargeEfficiency": "Charge Efficiency",
+      "linkCdReduction": "Combo CD Reduction",
+      "originiumArtsPower": "Arts Intensity",
+      "commonSlot1": "Attribute 1",
+      "commonSlot2": "Attribute 2",
+      "exclusiveBuff": "Exclusive Buff",
+      "armor": "Armor",
+      "gloves": "Gloves",
+      "accessory1": "Accessory 1",
+      "accessory2": "Accessory 2"
+    },
+    "section": {
+      "weaponBuffLibrary": "Weapon Buff Library",
+      "setBuffLibrary": "Set Buff Library",
+      "operatorSkillLibrary": "Operator Skill Library"
+    },
+    "hints": {
+      "noRefineNon70": "No Artificing below Lv70",
+      "dragWeaponBuff": "Drag weapon buff to track. Drop position = start time",
+      "dragSetBuff": "Drag buff to track. Drop position = start time",
+      "clickOrDrag": "Click to edit base values / Drag to arrange timeline"
+    },
+    "suffix": {
+      "equipment": "Equipment"
+    },
+    "tabs": {
+      "operator": "OP",
+      "set": "SET",
+      "setNeedEquip": "Equip any gear first",
+      "weapon": "WPN",
+      "weaponNeedSelect": "Select a weapon for current operator"
+    }
+  },
+  "skillType": {
+    "attack": "Final Strike",
+    "attack_auto": "Normal Attack",
+    "main_control": "Main Control",
+    "dodge": "Dodge",
+    "execution": "Finisher",
+    "skill": "Skill",
+    "link": "Combo",
+    "ultimate": "Ultimate",
+    "weapon": "Weapon",
+    "set": "Set",
+    "unknown": "Skill"
+  },
+  "enemyTier": {
+    "normal": "Normal",
+    "elite": "Elite",
+    "champion": "Champion",
+    "head": "Head",
+    "boss": "Boss"
+  },
+  "weapon": {
+    "skill": "Weapon Skill",
+    "effect": "Weapon Effect"
+  },
+  "contextMenu": {
+    "lockPosition": "Lock Position",
+    "unlockPosition": "Unlock Position",
+    "disableCalc": "Disable (Exclude from calculation)",
+    "enableCalc": "Enable (Include in calculation)",
+    "color": "Color",
+    "connectionSettings": "Connection Settings",
+    "setSourcePort": "Set Output Point",
+    "setTargetPort": "Set Input Point",
+    "globalOps": "Global Operations",
+    "addCycleBoundary": "Add Cycle Boundary",
+    "addSwitchEvent": "Switch Character Here..."
+  },
+  "connection": {
+    "connect": "Connect",
+    "dragToConnect": "Drag to Connect",
+    "deleteHint": "Select with left click and press Delete to remove",
+    "direction": {
+      "to": "to",
+      "from": "from"
+    },
+    "port": {
+      "right": "R",
+      "left": "L",
+      "top": "T",
+      "bottom": "B",
+      "topRight": "TR",
+      "bottomRight": "BR",
+      "topLeft": "TL",
+      "bottomLeft": "BL"
+    },
+    "portPosition": {
+      "topLeft": "Top Left",
+      "top": "Top",
+      "topRight": "Top Right",
+      "left": "Left",
+      "center": "Center",
+      "right": "Right",
+      "bottomLeft": "Bottom Left",
+      "bottom": "Bottom",
+      "bottomRight": "Bottom Right"
+    }
+  },
+  "effects": {
+    "group": {
+      "exclusive": "Exclusive Effects",
+      "physical": "Physical status",
+      "attach": "Arts Infliction",
+      "burst": "Arts Burst",
+      "status": "Status Effects",
+      "other": "Other"
+    },
+    "name": {
+      "break": "Vulnerability",
+      "armor_break": "Breach",
+      "stagger": "Crush",
+      "knockdown": "Knock Down",
+      "knockup": "Lift",
+      "blaze_attach": "Heat Infliction",
+      "emag_attach": "Electric Infliction",
+      "cold_attach": "Cryo Infliction",
+      "nature_attach": "Nature Infliction",
+      "blaze_burst": "Heat Burst",
+      "emag_burst": "Electric Burst",
+      "cold_burst": "Cryo Burst",
+      "nature_burst": "Nature Burst",
+      "burning": "Combustion",
+      "conductive": "Electrification",
+      "frozen": "Solidification",
+      "ice_shatter": "Shatter",
+      "corrosion": "Corrosion",
+      "default": "Default Icon"
+    }
+  },
+  "propertiesPanel": {
+    "noSelection": "No skill selected",
+    "globalMode": "Global Mode",
+    "sections": {
+      "basic": "Basic Attributes"
+    },
+    "labels": {
+      "durationS": "Duration(s)",
+      "cooldownS": "CD(s)",
+      "triggerWindowS": "Trigger Window(s)",
+      "spCost": "SP Cost",
+      "gaugeCost": "Charge Cost",
+      "gaugeGain": "SP Gain",
+      "teamGaugeGain": "Team SP",
+      "enhancementTimeS": "Enhancement Time (s)"
+    },
+    "damage": {
+      "title": "Damage Points",
+      "system": "Trigger System",
+      "stagger": "Stagger",
+      "sp": "SP",
+      "empty": "No points",
+      "tickTime": "Time",
+      "tickStagger": "Stagger",
+      "tickSpGain": "SP",
+      "bindEffects": "Bind Status Icon",
+      "bindPlaceholder": "Select status to bind"
+    },
+    "bars": {
+      "title": "Custom Time Bars",
+      "system": "Timing System",
+      "activeItems": "Active Entries",
+      "empty": "No time bars",
+      "namePlaceholder": "Entry Name",
+      "offsetS": "Trigger Time (s)",
+      "durationS": "Duration (s)"
+    },
+    "effects": {
+      "title": "Status Effects & Layout",
+      "addEffect": "Add",
+      "addRow": "Add",
+      "editing": "Editing [{row}:{col}]",
+      "selectPlaceholder": "Select Status"
+    },
+    "connections": {
+      "title": "Skill Connections",
+      "system": "Connections",
+      "currentCount": "count",
+      "chooseTarget": "Target",
+      "new": "Add",
+      "empty": "No connections",
+      "thisSkill": "This Skill",
+      "outPort": "out",
+      "inPort": "in",
+      "consume": "Consume",
+      "consumed": "Consumed",
+      "offset": "Offset"
+    }
+  },
+  "resourceMonitor": {
+    "sections": {
+      "enemy": "Enemy Attributes",
+      "team": "Team Attributes"
+    },
+    "labels": {
+      "maxStagger": "Max Stagger",
+      "staggerNodes": "Stagger Nodes",
+      "nodeDuration": "Node duration",
+      "breakDuration": "Break duration",
+      "executionRecovery": "Finisher recovery",
+      "initialSp": "Initial SP",
+      "spPerSecond": "SP/sec."
+    },
+    "sp": {
+      "insufficient": "不足"
+    },
+    "enemy": {
+      "custom": "Custom Enemy",
+      "unknown": "Unknown Enemy",
+      "clickToChange": "Click to change enemy",
+      "dialogTitle": "Select Enemy",
+      "searchPlaceholder": "Search enemy...",
+      "specialGroup": "Special",
+      "customDesc": "Manually adjust attribute values",
+      "desc": "Max:{max} | Nodes:{nodes}",
+      "empty": "No matching enemies found"
+    }
+  },
+  "stats": {
+    "primary_ability": "Main Attribute",
+    "secondary_ability": "Sec. Attribute",
+    "strength": "Strength",
+    "agility": "Agility",
+    "intellect": "Intellect",
+    "will": "Will",
+    "attack": "Attack",
+    "hp": "HP",
+    "crit_rate": "Critical Rate",
+    "crit_dmg": "Critical DMG",
+    "blaze_dmg": "Heat DMG",
+    "emag_dmg": "Electric DMG",
+    "cold_dmg": "Cryo DMG",
+    "nature_dmg": "Nature DMG",
+    "healing_effect": "Treatment Efficiency",
+    "physical_dmg": "Physical DMG",
+    "arts_dmg": "Arts DMG",
+    "attack_dmg_bonus": "Normal Attack DMG Bonus",
+    "skill_dmg_bonus": "Skill DMG Bonus",
+    "link_dmg_bonus": "Combo DMG Bonus",
+    "ultimate_dmg_bonus": "Ultimate DMG Bonus",
+    "all_skill_dmg_bonus": "All Skills DMG Bonus",
+    "broken_dmg_bonus": "DMG Bonus vs Broken Targets",
+    "originium_arts_power": "Arts Intensity",
+    "ult_charge_eff": "Ultimate Gain Eff.",
+    "link_cd_reduction": "Combo CD reduction"
+  },
+  "actionItem": {
+    "tickTooltip": "Time: {time}\nStagger: {stagger}\nSP: {sp}",
+    "lockedTitle": "Locked",
+    "disabledTitle": "Disabled"
+  }
+}

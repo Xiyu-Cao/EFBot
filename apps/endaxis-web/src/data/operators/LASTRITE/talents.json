@@ -1,0 +1,108 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "subAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "低温症",
+      "icon": "/avatars/LASTRITE/icon_talent_lastrite_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "当别礼消耗任何法术附着后，对该目标施加寒冷脆弱，效果为被消耗的法术附着层数×2%，持续15秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "cold_fragility_per_layer",
+              "stat": "cold_dmg",
+              "value": 2,
+              "unit": "percent_per_layer",
+              "scope": "runtime_conditional",
+              "note": "cold fragility = consumed layers × 2%, 15s"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "当别礼消耗任何法术附着后，对该目标施加寒冷脆弱，效果为被消耗的法术附着层数×4%，持续15秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "cold_fragility_per_layer",
+              "stat": "cold_dmg",
+              "value": 4,
+              "unit": "percent_per_layer",
+              "scope": "runtime_conditional",
+              "note": "cold fragility = consumed layers × 4%, 15s"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "低温脆性",
+      "icon": "/avatars/LASTRITE/icon_talent_lastrite_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "终结技临终别礼造成伤害时，如果敌人处于寒冷脆弱状态，将其寒冷脆弱的效果视为原本的1.2倍",
+          "effects": [
+            {
+              "type": "fragility_amplify",
+              "stat": "cold_dmg",
+              "value": 1.2,
+              "scope": "runtime_conditional",
+              "note": "multiplies cold fragility during ultimate"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "终结技临终别礼造成伤害时，如果敌人处于寒冷脆弱状态，将其寒冷脆弱的效果视为原本的1.5倍",
+          "effects": [
+            {
+              "type": "fragility_amplify",
+              "stat": "cold_dmg",
+              "value": 1.5,
+              "scope": "runtime_conditional",
+              "note": "multiplies cold fragility during ultimate"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "lastrite_buff",
+      "name": "低温灌注",
+      "icon": "/avatars/LASTRITE/icon_battle_lastrite_buff.webp"
+    }
+  ]
+}

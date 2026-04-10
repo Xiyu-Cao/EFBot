@@ -1,0 +1,25 @@
+{
+  "id": "PERLICA",
+  "slug": "perlica",
+  "name": "佩丽卡",
+  "nameEn": "Perlica",
+  "rarity": 5,
+  "profession": "caster",
+  "professionLabel": "术师",
+  "element": "emag",
+  "elementLabel": "电磁",
+  "weaponType": "funnel",
+  "weaponTypeLabel": "法术单元",
+  "mainAttribute": "intellect",
+  "mainAttributeLabel": "智识",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/PERLICA/PERLICA.webp",
+  "icons": {
+    "skill": "/avatars/PERLICA/icon_skill_pelica_01.webp",
+    "link": "/avatars/PERLICA/icon_combo_skill_pelica_01.webp",
+    "ultimate": "/avatars/PERLICA/icon_ultimate_skill_pelica_01.webp",
+    "talent1": "/avatars/PERLICA/icon_talent_pelica_01.webp",
+    "talent2": "/avatars/PERLICA/icon_talent_pelica_02.webp"
+  }
+}

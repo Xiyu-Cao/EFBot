@@ -1,0 +1,104 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "subAttribute": {
+    "key": "will",
+    "label": "意志",
+    "icon": "/icons/icon_attribute_will.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "朋友的身影",
+      "icon": "/avatars/ARDELIA/icon_talent_ardelia_01.webp",
+      "unlockStage": 0,
+      "upgradeStage": 2,
+      "defaultUnlock": true,
+      "stages": [
+        {
+          "promotion": 0,
+          "type": "default",
+          "description": "战技奔腾的多利命中敌人后生成3个多利先生的影子，终结技毛茸茸派对散射的多利先生的分身落地时有10%概率生成多利先生的影子。主控干员触碰多利先生的影子后，艾尔黛拉为其回复[45+意志×0.38]点生命值。\n主控干员生命值已满时，将转而治疗小队中生命值百分比最低的干员。\n多利先生的影子持续10秒，最多同时存在10个",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 1,
+          "type": "upgrade",
+          "description": "战技奔腾的多利命中敌人后生成3个多利先生的影子，终结技毛茸茸派对散射的多利先生的分身落地时有10%概率生成多利先生的影子。主控干员触碰多利先生的影子后，艾尔黛拉为其回复[63+意志×0.53]点生命值。\n主控干员生命值已满时，将转而治疗小队中生命值百分比最低的干员。\n多利先生的影子持续10秒，最多同时存在10个",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "战技奔腾的多利命中敌人后生成3个多利先生的影子，终结技毛茸茸派对散射的多利先生的分身落地时有10%概率生成多利先生的影子。主控干员触碰多利先生的影子后，艾尔黛拉为其回复[90+意志×0.75]点生命值。\n主控干员生命值已满时，将转而治疗小队中生命值百分比最低的干员。\n多利先生的影子持续10秒，最多同时存在10个",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 3,
+      "unlockStages": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "山顶冲浪",
+      "icon": "/avatars/ARDELIA/icon_talent_ardelia_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": null,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "当艾尔黛拉的战技奔腾的多利成功触发额外效果后，若附近存在其他处于腐蚀状态的敌人，会立即再对其发动一次战技。\n每次主动施放战技只会触发一次该效果",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 1,
+      "unlockStages": [
+        2
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "spell_vulnerable",
+      "name": "法术脆弱",
+      "icon": "/icons/icon_battle_affix_spell_vulnerable.webp"
+    },
+    {
+      "key": "physical_vulnerable",
+      "name": "物理脆弱",
+      "icon": "/icons/icon_battle_affix_physical_vulnerable.webp"
+    }
+  ]
+}

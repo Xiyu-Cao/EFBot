@@ -1,0 +1,39 @@
+{
+  "_doc": "Ability expansion static rules.",
+  "promotionStages": [
+    {
+      "promotion": 0,
+      "maxLevel": 20,
+      "skillCap": 1,
+      "unlocks": [
+        "talent_0"
+      ]
+    },
+    {
+      "promotion": 1,
+      "maxLevel": 40,
+      "skillCap": 3,
+      "unlocks": []
+    },
+    {
+      "promotion": 2,
+      "maxLevel": 60,
+      "skillCap": 6,
+      "unlocks": [
+        "talent_1"
+      ]
+    },
+    {
+      "promotion": 3,
+      "maxLevel": 80,
+      "skillCap": 9,
+      "unlocks": []
+    },
+    {
+      "promotion": 4,
+      "maxLevel": 90,
+      "skillCap": 12,
+      "unlocks": []
+    }
+  ]
+}

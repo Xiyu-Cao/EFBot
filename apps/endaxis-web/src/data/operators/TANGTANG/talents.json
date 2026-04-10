@@ -1,0 +1,113 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "subAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "肝胆相照",
+      "icon": "/avatars/TANGTANG/icon_talent_tangtang_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "涡流附近5米范围内，友方干员获得10%加速，敌人受到20%缓速，离开范围后该效果持续3秒",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "涡流附近5米范围内，友方干员获得20%加速，敌人受到40%缓速，离开范围后该效果持续3秒",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "呼风唤浪",
+      "icon": "/avatars/TANGTANG/icon_talent_tangtang_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "主控干员在古老图形中进行下落攻击，提前结束演化时，形成一个水龙卷，并消耗附近所有涡流使其形成额外的水龙卷。\n此次形成的水龙卷效果同战技踏潮卷浪！，造成的伤害+40%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "主控干员在古老图形中进行下落攻击，提前结束演化时，形成一个水龙卷，并消耗附近所有涡流使其形成额外的水龙卷。\n此次形成的水龙卷效果同战技踏潮卷浪！，造成的伤害+60%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "skillwater",
+      "name": "水龙卷",
+      "icon": "/avatars/TANGTANG/icon_talent_tangtang_02.webp"
+    },
+    {
+      "key": "comboskillwater",
+      "name": "涡流",
+      "icon": "/avatars/TANGTANG/icon_battle_tangtang_comboskillwater.webp"
+    },
+    {
+      "key": "ultskilldebuff",
+      "name": "古老图形",
+      "icon": "/avatars/TANGTANG/icon_battle_tangtang_ultskilldebuff.webp"
+    },
+    {
+      "key": "spell_vulnerable",
+      "name": "法术脆弱",
+      "icon": "/icons/icon_battle_affix_spell_vulnerable.webp"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技刚性阻击和终结技教科书式猛攻命中敌人后，额外造成一次[300+防御力×5.0]的物理伤害",
+      "effects": [],
+      "name": "多重战备"
+    },
+    {
+      "level": 2,
+      "description": "防御力+20，意志+10",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "will",
+          "value": 10,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "defense",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        }
+      ],
+      "name": "额外特训"
+    },
+    {
+      "level": 3,
+      "description": "连携技即时压制提供的护盾持续时间+5秒",
+      "effects": [],
+      "name": "不屈心锚"
+    },
+    {
+      "level": 4,
+      "description": "终结技教科书式猛攻所需的终结技能量-10%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -10,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "苦难代偿"
+    },
+    {
+      "level": 5,
+      "description": "卡契尔存在护盾时，战技刚性阻击成功命中敌人后返还10点技力。",
+      "effects": [],
+      "name": "无悔抉择"
+    }
+  ]
+}

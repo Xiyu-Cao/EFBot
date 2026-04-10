@@ -1,0 +1,188 @@
+{
+  "id": "ENDMINISTRATOR",
+  "gdId": "ENDMINISTRATOR",
+  "slug": "endministrator",
+  "skills": {
+    "normalAttack": {
+      "name": "毁伤序列",
+      "type": "普通攻击",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "普攻第一段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_0",
+          "mappingConfidence": "low",
+          "m3Value": "51%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第二段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_1",
+          "mappingConfidence": "low",
+          "m3Value": "61%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第三段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_2",
+          "mappingConfidence": "low",
+          "m3Value": "68%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第四段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_3",
+          "mappingConfidence": "low",
+          "m3Value": "78%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第五段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_4",
+          "mappingConfidence": "low",
+          "m3Value": "90%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "处决攻击倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "900%",
+          "category": "execution_attack",
+          "notes": "Execution attack — separate hit type, not default combo"
+        },
+        {
+          "label": "下落攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "fall_attack",
+          "notes": "Fall/aerial attack — separate hit type, not default combo"
+        }
+      ]
+    },
+    "skill": {
+      "name": "构成序列",
+      "type": "战技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "350%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        }
+      ]
+    },
+    "link": {
+      "name": "锁闭序列",
+      "type": "连携技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "100%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "击碎结晶伤害倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "medium",
+          "m3Value": "400%",
+          "category": "conditional_extra_hit",
+          "notes": "Crystal shatter bonus — conditional"
+        },
+        {
+          "label": "冷却时间",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "15s",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "封印时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    },
+    "ultimate": {
+      "name": "轰击序列",
+      "type": "终结技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "800%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "额外伤害倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "medium",
+          "m3Value": "600%",
+          "category": "conditional_extra_hit",
+          "notes": "Extra damage on condition; not default multiplier"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "25",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        }
+      ]
+    }
+  }
+}

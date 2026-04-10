@@ -1,0 +1,98 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "subAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "科技连击",
+      "icon": "/avatars/YVONNE/icon_talent_yvonne_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "战技冰冰弹·β型成功施加冻结后，下一次普通攻击直接施放重击",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "战技冰冰弹·β型成功施加冻结后，下一次普通攻击直接施放重击，且此次重击造成的伤害+50%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "冰点",
+      "icon": "/avatars/YVONNE/icon_talent_yvonne_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "对处于寒冷附着状态的敌人造成的暴击伤害+10%；对处于冻结状态的敌人效果加倍",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "crit_dmg",
+              "value": 10,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in DamageResolver: +10% cold, +20% frozen"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "对处于寒冷附着状态的敌人造成的暴击伤害+20%；对处于冻结状态的敌人效果加倍",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "crit_dmg",
+              "value": 20,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in DamageResolver: +20% cold, +40% frozen"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": []
+}

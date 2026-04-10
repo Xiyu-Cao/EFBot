@@ -1,0 +1,104 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "subAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "落井下石爱好者",
+      "icon": "/avatars/FLUORITE/icon_talent_bounda_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "萤石对处于缓速状态的目标造成的伤害+10% ",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "all_dmg",
+              "value": 10,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in computeSpecialZone: +10% vs slowed targets"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "萤石对处于缓速状态的目标造成的伤害+20% ",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "all_dmg",
+              "value": 20,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in computeSpecialZone: +20% vs slowed targets"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "捉摸不定",
+      "icon": "/avatars/FLUORITE/icon_talent_bounda_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "有20%的概率免疫法术伤害，之后使自身攻击力+10%，持续10秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 10,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "有20%的概率免疫法术伤害，之后使自身攻击力+20%，持续10秒，该效果无法叠加",
+          "effects": [
+            {
+              "type": "stat_bonus",
+              "stat": "attack_percent",
+              "value": 20,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "conditional buff"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": []
+}

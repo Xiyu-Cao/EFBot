@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Left hex: filled (M1) -->
+  <path d="M 23,50 L 30.5,37.01 L 45.5,37.01 A 25.98,25.98 0 0,1 45.5,62.99 L 30.5,62.99 Z"
+        fill="white"/>
+  <!-- Upper-right hex: filled (M2) -->
+  <path d="M 69.5,23.15 L 77,36.14 L 69.5,49.13 A 25.98,25.98 0 0,1 47,36.14 L 54.5,23.15 Z"
+        fill="white"/>
+  <!-- Lower-right hex: filled (M3) -->
+  <path d="M 69.5,76.85 L 54.5,76.85 L 47,63.86 A 25.98,25.98 0 0,1 69.5,50.87 L 77,63.86 Z"
+        fill="white"/>
+</svg>

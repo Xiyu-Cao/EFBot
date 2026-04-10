@@ -1,0 +1,77 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "力量+15，敏捷+15",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "strength",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "agility",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        }
+      ],
+      "name": "独狼"
+    },
+    {
+      "level": 2,
+      "description": "天赋节制准则效果加强：额外返还10点技力",
+      "effects": [
+        {
+          "type": "sp_refund_bonus",
+          "stat": "on_anomaly_consume",
+          "value": 10,
+          "unit": "flat",
+          "scope": "runtime_conditional",
+          "note": "extra +10 refund SP on top of talent_1 base. Implemented in carrierConsumptionHandlers."
+        }
+      ],
+      "name": "铳械改造"
+    },
+    {
+      "level": 3,
+      "description": "灼热獠牙状态下，施放战技触发额外效果时，立即刷新自身灼热獠牙状态的持续时间，同时使小队内其他干员获得灼热獠牙，效果为基础的50%",
+      "effects": [
+        {
+          "type": "parsed_unimplemented",
+          "note": "Implemented in carrierConsumptionHandlers: registerWulfgardSkillConsume P3 branch"
+        }
+      ],
+      "name": "狩猎时刻"
+    },
+    {
+      "level": 4,
+      "description": "意志终结技狼之怒所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "狼群"
+    },
+    {
+      "level": 5,
+      "description": "施放终结技狼之怒后立即刷新连携技爆裂手雷·β型冷却时间。",
+      "effects": [
+        {
+          "type": "parsed_unimplemented",
+          "note": "Implemented in carrierConsumptionHandlers: registerWulfgardUltLinkCdReset"
+        }
+      ],
+      "name": "天生掠食者"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "ARDELIA",
+  "slug": "ardelia",
+  "name": "艾尔黛拉",
+  "nameEn": "Ardelia",
+  "rarity": 6,
+  "profession": "support",
+  "professionLabel": "辅助",
+  "element": "nature",
+  "elementLabel": "自然",
+  "weaponType": "funnel",
+  "weaponTypeLabel": "法术单元",
+  "mainAttribute": "intellect",
+  "mainAttributeLabel": "智识",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/ARDELIA/ARDELIA.webp",
+  "icons": {
+    "skill": "/avatars/ARDELIA/icon_skill_ardelia_01.webp",
+    "link": "/avatars/ARDELIA/icon_combo_skill_ardelia_01.webp",
+    "ultimate": "/avatars/ARDELIA/icon_ultimate_skill_ardelia_01.webp",
+    "talent1": "/avatars/ARDELIA/icon_talent_ardelia_01.webp",
+    "talent2": "/avatars/ARDELIA/icon_talent_ardelia_02.webp"
+  }
+}

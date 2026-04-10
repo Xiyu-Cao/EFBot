@@ -1,0 +1,269 @@
+{
+  "id": "TANGTANG",
+  "gdId": "TANGTANG",
+  "slug": "tangtang",
+  "skills": {
+    "normalAttack": {
+      "name": "崩你脑壳！",
+      "type": "普通攻击",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "普攻第一段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_0",
+          "mappingConfidence": "low",
+          "m3Value": "51%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第二段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_1",
+          "mappingConfidence": "low",
+          "m3Value": "56%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第三段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_2",
+          "mappingConfidence": "low",
+          "m3Value": "79%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第四段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_3",
+          "mappingConfidence": "low",
+          "m3Value": "82%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第五段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_4",
+          "mappingConfidence": "low",
+          "m3Value": "113%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=5, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "处决攻击倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "900%",
+          "category": "execution_attack",
+          "notes": "Execution attack — separate hit type, not default combo"
+        },
+        {
+          "label": "下落攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "fall_attack",
+          "notes": "Fall/aerial attack — separate hit type, not default combo"
+        }
+      ]
+    },
+    "skill": {
+      "name": "踏潮卷浪！",
+      "type": "战技",
+      "gdTickCount": 2,
+      "mappings": [
+        {
+          "label": "射击伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=2, gd_ticks=2)"
+        },
+        {
+          "label": "单个水龙卷伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_1",
+          "mappingConfidence": "high",
+          "m3Value": "300%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 1 (wiki_base_rows=2, gd_ticks=2)"
+        },
+        {
+          "label": "两个水龙卷法术脆弱",
+          "classification": "unknown_needs_review",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5%",
+          "category": "excluded",
+          "notes": "Fragility value, not damage"
+        },
+        {
+          "label": "三个水龙卷法术脆弱",
+          "classification": "unknown_needs_review",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10%",
+          "category": "excluded",
+          "notes": "Fragility value, not damage"
+        },
+        {
+          "label": "射击失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "水龙卷持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "3",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        },
+        {
+          "label": "每处涡流技力返还",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "20",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        },
+        {
+          "label": "法术脆弱持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "15",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    },
+    "link": {
+      "name": "河水，助我！",
+      "type": "连携技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "240%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "冷却时间",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "12s",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "10",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "涡流持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "30",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    },
+    "ultimate": {
+      "name": "大当家盯着呢！",
+      "type": "终结技",
+      "gdTickCount": 2,
+      "mappings": [
+        {
+          "label": "巨浪伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "medium",
+          "m3Value": "400%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=1, gd_ticks=2); best-effort assignment"
+        },
+        {
+          "label": "提前降下巨浪伤害倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "special_branch",
+          "mappingConfidence": "medium",
+          "m3Value": "700%",
+          "category": "early_trigger_variant",
+          "notes": "Variant for early activation"
+        },
+        {
+          "label": "所需终结技能量",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "90",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "持续伤害总倍率",
+          "classification": "anomaly_or_reaction_damage",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "320%",
+          "category": "excluded",
+          "notes": "anomaly_or_reaction_damage: not a damage multiplier"
+        },
+        {
+          "label": "古老图形持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "4",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        },
+        {
+          "label": "巨浪失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "15",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "提前降下巨浪失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "20",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        }
+      ]
+    }
+  }
+}

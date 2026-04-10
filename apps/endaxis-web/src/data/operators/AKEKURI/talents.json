@@ -1,0 +1,88 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "agility",
+    "label": "敏捷",
+    "icon": "/icons/icon_attribute_agi.webp"
+  },
+  "subAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "胜利喝彩",
+      "icon": "/avatars/AKEKURI/icon_talent_karin_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "每10点智识会使连携技快闪冲击的技力恢复量+1.0%，最多提高50%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "每10点智识会使连携技快闪冲击的技力恢复量+1.5%，最多提高75%",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "心流时间",
+      "icon": "/avatars/AKEKURI/icon_talent_karin_02.webp",
+      "unlockStage": 3,
+      "upgradeStage": null,
+      "stages": [
+        {
+          "promotion": 3,
+          "type": "unlock",
+          "description": "施放终结技小队，集结！期间，获得连击",
+          "effects": [
+            {
+              "type": "damage_bonus",
+              "stat": "all_dmg",
+              "value": 30,
+              "unit": "percent",
+              "scope": "runtime_conditional",
+              "note": "Implemented in carrierConsumptionHandlers: combo buff for ultimate duration"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 1,
+      "unlockStages": [
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "combo",
+      "name": "连击",
+      "icon": "/icons/icon_battle_affix_combo.webp"
+    }
+  ]
+}

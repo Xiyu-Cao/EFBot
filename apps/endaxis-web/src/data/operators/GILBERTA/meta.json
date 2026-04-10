@@ -1,0 +1,25 @@
+{
+  "id": "GILBERTA",
+  "slug": "gilberta",
+  "name": "洁尔佩塔",
+  "nameEn": "Gilberta",
+  "rarity": 6,
+  "profession": "support",
+  "professionLabel": "辅助",
+  "element": "nature",
+  "elementLabel": "自然",
+  "weaponType": "funnel",
+  "weaponTypeLabel": "法术单元",
+  "mainAttribute": "will",
+  "mainAttributeLabel": "意志",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/GILBERTA/GILBERTA.webp",
+  "icons": {
+    "skill": "/avatars/GILBERTA/icon_skill_aglina_01.webp",
+    "link": "/avatars/GILBERTA/icon_combo_skill_aglina_01.webp",
+    "ultimate": "/avatars/GILBERTA/icon_ultimate_skill_aglina_01.webp",
+    "talent1": "/avatars/GILBERTA/icon_talent_aglina_01.webp",
+    "talent2": "/avatars/GILBERTA/icon_talent_aglina_02.webp"
+  }
+}

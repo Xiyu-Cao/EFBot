@@ -1,0 +1,91 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技荡浊身施加的物理脆弱效果+5%，且对破防层数不超过2层的敌人仍然能触发此额外效果",
+      "effects": [],
+      "name": "破执"
+    },
+    {
+      "level": 2,
+      "description": "",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "strength",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "agility",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "intellect",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "will",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        }
+      ],
+      "name": "修身全能力+15"
+    },
+    {
+      "level": 3,
+      "description": "天赋顿悟效果加强：每点智识和意志使攻击力额外+0.05%",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "attack_percent",
+          "scope": "static",
+          "scaling": {
+            "from": [
+              "intellect",
+              "will"
+            ],
+            "perPoint": 0.05
+          },
+          "note": "stacks with talent_0 顿悟 (0.10/0.15)"
+        }
+      ],
+      "name": "养性"
+    },
+    {
+      "level": 4,
+      "description": "终结技不动心所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "刹那"
+    },
+    {
+      "level": 5,
+      "description": "天赋伏魔效果加强：每隔15秒，下一次触发时额外造成攻击力250%的物理伤害和5点失衡。",
+      "effects": [
+        {
+          "type": "parsed_unimplemented",
+          "note": "Implemented in talentConditionalRegistry: LIFENG demon_subduer P5 branch"
+        }
+      ],
+      "name": "不懈"
+    }
+  ]
+}

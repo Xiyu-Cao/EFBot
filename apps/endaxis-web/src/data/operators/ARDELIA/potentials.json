@@ -1,0 +1,70 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技奔腾的多利消耗腐蚀后施加的物理脆弱与法术脆弱效果+8%",
+      "effects": [
+        {
+          "type": "parsed_unimplemented",
+          "note": "Implemented in builtinBoundEffects: consume_corrosion_apply_vuln checks P1 for +8%"
+        }
+      ],
+      "name": "羊的乐园"
+    },
+    {
+      "level": 2,
+      "description": "天赋朋友的身影效果加强：当主控干员触碰多利先生的影子后，艾尔黛拉会以一半的效果额外治疗另一名生命值百分比最低的友方干员",
+      "effects": [],
+      "name": "游戏奖励"
+    },
+    {
+      "level": 3,
+      "description": "终结技毛茸茸派对的持续时间+1秒，且生成多利先生的影子的概率提升至原本的1.2倍",
+      "effects": [],
+      "name": "爆炸式喷发"
+    },
+    {
+      "level": 4,
+      "description": "终结技毛茸茸派对所需的终结技能量能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "岩中花朵"
+    },
+    {
+      "level": 5,
+      "description": "连携技火山蘑菇云冷却时间-2秒，伤害倍率提升至原本的1.2倍，施加的腐蚀效果持续时间+4秒。",
+      "effects": [
+        {
+          "type": "multiplier_scaling",
+          "stat": "link",
+          "value": 1.2,
+          "unit": "factor",
+          "scope": "runtime_potential"
+        },
+        {
+          "type": "cooldown_modifier",
+          "stat": "link",
+          "value": -2,
+          "unit": "flat_seconds",
+          "scope": "runtime_potential"
+        },
+        {
+          "type": "duration_modifier",
+          "stat": "corrosion",
+          "value": 4,
+          "unit": "flat_seconds",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "火山蒸汽"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "敏捷+10，智识+10",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "agility",
+          "value": 10,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "intellect",
+          "value": 10,
+          "unit": "flat",
+          "scope": "static"
+        }
+      ],
+      "name": "利手成双"
+    },
+    {
+      "level": 2,
+      "description": "天赋捉摸不定效果加强：法术伤害免疫概率+10%",
+      "effects": [],
+      "name": "读心技巧"
+    },
+    {
+      "level": 3,
+      "description": "战技小惊喜黏附的自制炸弹爆炸后，将缓速效果扩散给所有命中敌人，持续6秒",
+      "effects": [],
+      "name": "三倍惊喜"
+    },
+    {
+      "level": 4,
+      "description": "终结技巅峰闹剧所需的终结技能量-10%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -10,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "闹剧专家"
+    },
+    {
+      "level": 5,
+      "description": "每当有敌人被施加寒冷附着或自然附着时，连携技免费赠礼冷却时间-1秒，该效果每1秒最多触发一次。",
+      "effects": [],
+      "name": "享受混乱"
+    }
+  ]
+}

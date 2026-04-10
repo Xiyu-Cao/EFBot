@@ -1,0 +1,25 @@
+{
+  "id": "ALESH",
+  "slug": "alesh",
+  "name": "阿列什",
+  "nameEn": "Alesh",
+  "rarity": 5,
+  "profession": "pioneer",
+  "professionLabel": "先锋",
+  "element": "cold",
+  "elementLabel": "寒冷",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/ALESH/ALESH.webp",
+  "icons": {
+    "skill": "/avatars/ALESH/icon_skill_deepfin_01_line.webp",
+    "link": "/avatars/ALESH/icon_combo_skill_deepfin_01.webp",
+    "ultimate": "/avatars/ALESH/icon_ultimate_skill_deepfin_01.webp",
+    "talent1": "/avatars/ALESH/icon_talent_deepfin_01.webp",
+    "talent2": "/avatars/ALESH/icon_talent_deepfin_02.webp"
+  }
+}

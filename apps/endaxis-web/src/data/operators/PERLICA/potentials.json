@@ -1,0 +1,68 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "连携技即时协议·闪链施加的导电持续时间+75%",
+      "effects": [
+        {
+          "type": "duration_modifier",
+          "stat": "conduction",
+          "value": 1.75,
+          "unit": "factor",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "危机处理"
+    },
+    {
+      "level": 2,
+      "description": "终结技协议ε·70.41κ所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "谈判策略"
+    },
+    {
+      "level": 3,
+      "description": "当佩丽卡对敌人施加导电后，在5秒内攻击力+20%，该效果最多叠加2层",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "attack_percent",
+          "value": 20,
+          "unit": "percent",
+          "scope": "runtime_conditional",
+          "note": "On PERLICA apply conduction → ATK+20%, 5s, max 2 stacks"
+        }
+      ],
+      "name": "监督重任"
+    },
+    {
+      "level": 4,
+      "description": "连携技即时协议·闪链施加的导电使敌人受到法术伤害提高的效果提升至原本的1.33倍",
+      "effects": [],
+      "name": "长效导流"
+    },
+    {
+      "level": 5,
+      "description": "终结技协议ε·70.41κ的暴击率+30%。",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "crit_rate",
+          "value": 30,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "再入控制"
+    }
+  ]
+}

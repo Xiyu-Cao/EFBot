@@ -1,0 +1,218 @@
+[
+  {
+    "id": "TANGTANG",
+    "slug": "tangtang",
+    "name_zh": "汤汤",
+    "name_en": "Tangtang",
+    "rarity": 6,
+    "element": "寒冷",
+    "profession": "术师"
+  },
+  {
+    "id": "ENDMINISTRATOR",
+    "slug": "endministrator",
+    "name_zh": "管理员",
+    "name_en": "Endministrator",
+    "rarity": 6,
+    "element": "物理",
+    "profession": "近卫"
+  },
+  {
+    "id": "LIFENG",
+    "slug": "lifeng",
+    "name_zh": "黎风",
+    "name_en": "Lifeng",
+    "rarity": 6,
+    "element": "物理",
+    "profession": "近卫"
+  },
+  {
+    "id": "EMBER",
+    "slug": "ember",
+    "name_zh": "余烬",
+    "name_en": "Ember",
+    "rarity": 6,
+    "element": "灼热",
+    "profession": "重装"
+  },
+  {
+    "id": "GILBERTA",
+    "slug": "gilberta",
+    "name_zh": "洁尔佩塔",
+    "name_en": "Gilberta",
+    "rarity": 6,
+    "element": "自然",
+    "profession": "辅助"
+  },
+  {
+    "id": "ARDELIA",
+    "slug": "ardelia",
+    "name_zh": "艾尔黛拉",
+    "name_en": "Ardelia",
+    "rarity": 6,
+    "element": "自然",
+    "profession": "辅助"
+  },
+  {
+    "id": "POGRANICHNIK",
+    "slug": "pogranichnik",
+    "name_zh": "骏卫",
+    "name_en": "Pogranichnik",
+    "rarity": 6,
+    "element": "物理",
+    "profession": "先锋"
+  },
+  {
+    "id": "YVONNE",
+    "slug": "yvonne",
+    "name_zh": "伊冯",
+    "name_en": "Yvonne",
+    "rarity": 6,
+    "element": "寒冷",
+    "profession": "突击"
+  },
+  {
+    "id": "LAEVATAIN",
+    "slug": "laevatain",
+    "name_zh": "莱万汀",
+    "name_en": "Laevatain",
+    "rarity": 6,
+    "element": "灼热",
+    "profession": "突击"
+  },
+  {
+    "id": "LAST_RITE",
+    "slug": "last-rite",
+    "name_zh": "别礼",
+    "name_en": "Last Rite",
+    "rarity": 6,
+    "element": "寒冷",
+    "profession": "突击"
+  },
+  {
+    "id": "CHEN_QIANYU",
+    "slug": "chen-qianyu",
+    "name_zh": "陈千语",
+    "name_en": "Chen Qianyu",
+    "rarity": 5,
+    "element": "物理",
+    "profession": "近卫"
+  },
+  {
+    "id": "SNOWSHINE",
+    "slug": "snowshine",
+    "name_zh": "昼雪",
+    "name_en": "Snowshine",
+    "rarity": 5,
+    "element": "寒冷",
+    "profession": "重装"
+  },
+  {
+    "id": "XAIHI",
+    "slug": "xaihi",
+    "name_zh": "赛希",
+    "name_en": "Xaihi",
+    "rarity": 5,
+    "element": "寒冷",
+    "profession": "辅助"
+  },
+  {
+    "id": "PERLICA",
+    "slug": "perlica",
+    "name_zh": "佩丽卡",
+    "name_en": "Perlica",
+    "rarity": 5,
+    "element": "电磁",
+    "profession": "术师"
+  },
+  {
+    "id": "WULFGARD",
+    "slug": "wulfgard",
+    "name_zh": "狼卫",
+    "name_en": "Wulfgard",
+    "rarity": 5,
+    "element": "灼热",
+    "profession": "术师"
+  },
+  {
+    "id": "ARCLIGHT",
+    "slug": "arclight",
+    "name_zh": "弧光",
+    "name_en": "Arclight",
+    "rarity": 5,
+    "element": "电磁",
+    "profession": "先锋"
+  },
+  {
+    "id": "ALESH",
+    "slug": "alesh",
+    "name_zh": "阿列什",
+    "name_en": "Alesh",
+    "rarity": 5,
+    "element": "寒冷",
+    "profession": "先锋"
+  },
+  {
+    "id": "AVYWENNA",
+    "slug": "avywenna",
+    "name_zh": "艾维文娜",
+    "name_en": "Avywenna",
+    "rarity": 5,
+    "element": "电磁",
+    "profession": "突击"
+  },
+  {
+    "id": "DA_PAN",
+    "slug": "da-pan",
+    "name_zh": "大潘",
+    "name_en": "Da Pan",
+    "rarity": 5,
+    "element": "物理",
+    "profession": "突击"
+  },
+  {
+    "id": "ESTELLA",
+    "slug": "estella",
+    "name_zh": "埃特拉",
+    "name_en": "Estella",
+    "rarity": 4,
+    "element": "寒冷",
+    "profession": "近卫"
+  },
+  {
+    "id": "CATCHER",
+    "slug": "catcher",
+    "name_zh": "卡契尔",
+    "name_en": "Catcher",
+    "rarity": 4,
+    "element": "物理",
+    "profession": "重装"
+  },
+  {
+    "id": "ANTAL",
+    "slug": "antal",
+    "name_zh": "安塔尔",
+    "name_en": "Antal",
+    "rarity": 4,
+    "element": "电磁",
+    "profession": "辅助"
+  },
+  {
+    "id": "FLUORITE",
+    "slug": "fluorite",
+    "name_zh": "萤石",
+    "name_en": "Fluorite",
+    "rarity": 4,
+    "element": "自然",
+    "profession": "术师"
+  },
+  {
+    "id": "AKEKURI",
+    "slug": "akekuri",
+    "name_zh": "秋栗",
+    "name_en": "Akekuri",
+    "rarity": 4,
+    "element": "灼热",
+    "profession": "先锋"
+  }
+]

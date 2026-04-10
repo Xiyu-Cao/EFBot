@@ -1,0 +1,25 @@
+{
+  "id": "ENDMINISTRATOR",
+  "slug": "endministrator",
+  "name": "管理员",
+  "nameEn": "Endministrator",
+  "rarity": 6,
+  "profession": "guard",
+  "professionLabel": "近卫",
+  "element": "physical",
+  "elementLabel": "物理",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/ENDMINISTRATOR/ENDMINISTRATOR.webp",
+  "icons": {
+    "skill": "/avatars/ENDMINISTRATOR/icon_skill_endmin_01.webp",
+    "link": "/avatars/ENDMINISTRATOR/icon_combo_skill_endmin_01.webp",
+    "ultimate": "/avatars/ENDMINISTRATOR/icon_ultimate_skill_endmin_01.webp",
+    "talent1": "/avatars/ENDMINISTRATOR/icon_talent_endminm_01.webp",
+    "talent2": "/avatars/ENDMINISTRATOR/icon_talent_endminm_02.webp"
+  }
+}

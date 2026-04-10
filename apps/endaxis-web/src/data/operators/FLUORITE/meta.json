@@ -1,0 +1,25 @@
+{
+  "id": "FLUORITE",
+  "slug": "fluorite",
+  "name": "萤石",
+  "nameEn": "Fluorite",
+  "rarity": 4,
+  "profession": "caster",
+  "professionLabel": "术师",
+  "element": "nature",
+  "elementLabel": "自然",
+  "weaponType": "pistol",
+  "weaponTypeLabel": "手铳",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/FLUORITE/FLUORITE.webp",
+  "icons": {
+    "skill": "/avatars/FLUORITE/icon_skill_bounda_01.webp",
+    "link": "/avatars/FLUORITE/icon_combo_skill_bounda_01.webp",
+    "ultimate": "/avatars/FLUORITE/icon_ultimate_skill_bounda_01.webp",
+    "talent1": "/avatars/FLUORITE/icon_talent_bounda_01.webp",
+    "talent2": "/avatars/FLUORITE/icon_talent_bounda_02.webp"
+  }
+}

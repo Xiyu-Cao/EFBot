@@ -1,0 +1,108 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "subAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "即兴发挥",
+      "icon": "/avatars/ANTAL/icon_talent_antal_01.webp",
+      "unlockStage": 1,
+      "upgradeStage": 2,
+      "stages": [
+        {
+          "promotion": 1,
+          "type": "unlock",
+          "description": "队伍中处于增幅状态的干员造成技能伤害后，安塔尔为其回复[72+力量×0.6]点生命值，每个干员每30秒最多受到1次该回复效果",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 2,
+          "type": "upgrade",
+          "description": "队伍中处于增幅状态的干员造成技能伤害后，安塔尔为其回复[108+力量×0.9]点生命值，每个干员每30秒最多受到1次该回复效果",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "下意识",
+      "icon": "/avatars/ANTAL/icon_talent_antal_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "有30%的概率免疫物理伤害，并回复自身[27+力量×0.23]点生命值",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "有30%的概率免疫物理伤害，并回复自身[45+力量×0.38]点生命值",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "antal_buff",
+      "name": "聚焦",
+      "icon": "/avatars/ANTAL/icon_battle_antal_buff.webp"
+    },
+    {
+      "key": "fire_enhance",
+      "name": "灼热增幅",
+      "icon": "/icons/icon_battle_affix_fire_enhance.webp"
+    },
+    {
+      "key": "pulse_enhance",
+      "name": "电磁增幅",
+      "icon": "/icons/icon_battle_affix_pulse_enhance.webp"
+    }
+  ]
+}

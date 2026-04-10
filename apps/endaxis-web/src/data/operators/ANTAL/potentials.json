@@ -1,0 +1,58 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "终结技超频时刻提供的电磁增幅和灼热增幅效果提高至原本的1.1倍",
+      "effects": [],
+      "name": "术法天分"
+    },
+    {
+      "level": 2,
+      "description": "终结技超频时刻所需的终结技能量-10%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -10,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "自动化改良"
+    },
+    {
+      "level": 3,
+      "description": "若被聚焦的敌人在聚焦期间被击败，返还15点技力",
+      "effects": [],
+      "name": "源石理论应用"
+    },
+    {
+      "level": 4,
+      "description": "智识+10，最大生命值+10%",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "intellect",
+          "value": 10,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "hp_percent",
+          "value": 10,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "奶奶的叮嘱"
+    },
+    {
+      "level": 5,
+      "description": "聚焦同一个目标20秒以后，电磁脆弱和灼热脆弱效果会提高4%。",
+      "effects": [],
+      "name": "高规格技术测试"
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "id": "SNOWSHINE",
+  "gdId": "SNOWSHINE",
+  "slug": "snowshine",
+  "skills": {
+    "normalAttack": {
+      "name": "失温猛击",
+      "type": "普通攻击",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "普攻第一段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_0",
+          "mappingConfidence": "low",
+          "m3Value": "124%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=3, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第二段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_1",
+          "mappingConfidence": "low",
+          "m3Value": "132%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=3, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "普攻第三段倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "candidate_hit_2",
+          "mappingConfidence": "low",
+          "m3Value": "225%",
+          "category": "default_body_hit",
+          "notes": "Tick count mismatch (wiki_base_rows=3, gd_ticks=0); best-effort assignment"
+        },
+        {
+          "label": "处决攻击倍率",
+          "classification": "finisher_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "900%",
+          "category": "execution_attack",
+          "notes": "Execution attack — separate hit type, not default combo"
+        },
+        {
+          "label": "下落攻击倍率",
+          "classification": "extra_damage_candidate",
+          "mappedTarget": "conditional_extra",
+          "mappingConfidence": "high",
+          "m3Value": "180%",
+          "category": "fall_attack",
+          "notes": "Fall/aerial attack — separate hit type, not default combo"
+        }
+      ]
+    },
+    "skill": {
+      "name": "饱和性防御",
+      "type": "战技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "450%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "20",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "庇护效果",
+          "classification": "status_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "90%",
+          "category": "excluded",
+          "notes": "status_value: not a damage multiplier"
+        },
+        {
+          "label": "返还技力",
+          "classification": "resource_gain",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "30",
+          "category": "excluded",
+          "notes": "resource_gain: not a damage multiplier"
+        }
+      ]
+    },
+    "link": {
+      "name": "极地救援",
+      "type": "连携技",
+      "gdTickCount": 0,
+      "mappings": [
+        {
+          "label": "冷却时间",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "23s",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "初始治疗基础值",
+          "classification": "status_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "216",
+          "category": "excluded",
+          "notes": "status_value: not a damage multiplier"
+        },
+        {
+          "label": "每点意志增加的初始治疗值",
+          "classification": "status_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "0.5",
+          "category": "excluded",
+          "notes": "status_value: not a damage multiplier"
+        },
+        {
+          "label": "持续治疗基础值",
+          "classification": "status_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "54",
+          "category": "excluded",
+          "notes": "status_value: not a damage multiplier"
+        },
+        {
+          "label": "每点意志增加的持续治疗值",
+          "classification": "status_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "0.13",
+          "category": "excluded",
+          "notes": "status_value: not a damage multiplier"
+        },
+        {
+          "label": "持续治疗间隔（秒）",
+          "classification": "status_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "0.5",
+          "category": "excluded",
+          "notes": "status_value: not a damage multiplier"
+        },
+        {
+          "label": "持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "3",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    },
+    "ultimate": {
+      "name": "凛冽寒霜",
+      "type": "终结技",
+      "gdTickCount": 1,
+      "mappings": [
+        {
+          "label": "爆炸伤害倍率",
+          "classification": "base_damage_candidate",
+          "mappedTarget": "tick_0",
+          "mappingConfidence": "high",
+          "m3Value": "450%",
+          "category": "default_body_hit",
+          "notes": "Aligned to gamedata tick 0 (wiki_base_rows=1, gd_ticks=1)"
+        },
+        {
+          "label": "所需终结技能量",
+          "classification": "cooldown_or_cost",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "80",
+          "category": "excluded",
+          "notes": "cooldown_or_cost: not a damage multiplier"
+        },
+        {
+          "label": "失衡值",
+          "classification": "stagger_or_break_value",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "20",
+          "category": "excluded",
+          "notes": "stagger_or_break_value: not a damage multiplier"
+        },
+        {
+          "label": "持续伤害倍率",
+          "classification": "anomaly_or_reaction_damage",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "65%",
+          "category": "excluded",
+          "notes": "anomaly_or_reaction_damage: not a damage multiplier"
+        },
+        {
+          "label": "持续伤害间隔（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "0.5",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        },
+        {
+          "label": "持续时间（秒）",
+          "classification": "status_duration",
+          "mappedTarget": "not_runtime_multiplier",
+          "mappingConfidence": "high",
+          "m3Value": "5",
+          "category": "excluded",
+          "notes": "status_duration: not a damage multiplier"
+        }
+      ]
+    }
+  }
+}

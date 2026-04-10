@@ -1,0 +1,138 @@
+{
+  "_doc": "Main attribute + talent definitions.",
+  "mainAttribute": {
+    "key": "intellect",
+    "label": "智识",
+    "icon": "/icons/icon_attribute_wisd.webp"
+  },
+  "subAttribute": {
+    "key": "strength",
+    "label": "力量",
+    "icon": "/icons/icon_attribute_str.webp"
+  },
+  "talents": [
+    {
+      "id": "talent_0",
+      "name": "灼心",
+      "icon": "/avatars/LAEVATAIN/icon_talent_laevat_01.webp",
+      "unlockStage": 0,
+      "upgradeStage": 2,
+      "defaultUnlock": true,
+      "stages": [
+        {
+          "promotion": 0,
+          "type": "default",
+          "description": "主控干员重击或处决命中后，莱万汀会吸收周围敌人的灼热附着。\n每吸收一层灼热附着，自身获得一层熔火，最多叠加4层。\n达到4层后，莱万汀造成的伤害无视敌人10点灼热抗性，持续20秒。\n附近敌人被击败时，身上的灼热附着也会被吸收",
+          "effects": [
+            {
+              "type": "resistance_ignore",
+              "value": 10,
+              "unit": "flat",
+              "scope": "runtime_passive",
+              "note": "resistance penetration"
+            }
+          ]
+        },
+        {
+          "promotion": 1,
+          "type": "upgrade",
+          "description": "主控干员重击或处决命中后，莱万汀会吸收周围敌人的灼热附着。\n每吸收一层灼热附着，自身获得一层熔火，最多叠加4层。\n达到4层后，莱万汀造成的伤害无视敌人15点灼热抗性，持续20秒。\n附近敌人被击败时，身上的灼热附着也会被吸收",
+          "effects": [
+            {
+              "type": "resistance_ignore",
+              "value": 15,
+              "unit": "flat",
+              "scope": "runtime_passive",
+              "note": "resistance penetration"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "主控干员重击或处决命中后，莱万汀会吸收周围敌人的灼热附着。\n每吸收一层灼热附着，自身获得一层熔火，最多叠加4层。\n达到4层后，莱万汀造成的伤害无视敌人20点灼热抗性，持续20秒。\n附近敌人被击败时，身上的灼热附着也会被吸收",
+          "effects": [
+            {
+              "type": "resistance_ignore",
+              "value": 20,
+              "unit": "flat",
+              "scope": "runtime_passive",
+              "note": "resistance penetration"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 3,
+      "unlockStages": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "id": "talent_1",
+      "name": "复燃",
+      "icon": "/avatars/LAEVATAIN/icon_talent_laevat_02.webp",
+      "unlockStage": 2,
+      "upgradeStage": 3,
+      "stages": [
+        {
+          "promotion": 2,
+          "type": "unlock",
+          "description": "当生命值低于40%时，获得90%庇护，并每秒回复5%最大生命值，持续4秒。该效果每120秒最多触发一次",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        },
+        {
+          "promotion": 3,
+          "type": "upgrade",
+          "description": "当生命值低于40%时，获得90%庇护，并每秒回复5%最大生命值，持续8秒。该效果每120秒最多触发一次",
+          "effects": [
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "complex effect, see description"
+            }
+          ]
+        }
+      ],
+      "maxLevel": 2,
+      "unlockStages": [
+        2,
+        3
+      ]
+    }
+  ],
+  "exclusiveBuffs": [
+    {
+      "key": "magma_0",
+      "name": "熔火0",
+      "icon": "/avatars/LAEVATAIN/magma_0.webp"
+    },
+    {
+      "key": "magma_1",
+      "name": "熔火1",
+      "icon": "/avatars/LAEVATAIN/magma_1.webp"
+    },
+    {
+      "key": "magma_2",
+      "name": "熔火2",
+      "icon": "/avatars/LAEVATAIN/magma_2.webp"
+    },
+    {
+      "key": "magma_3",
+      "name": "熔火3",
+      "icon": "/avatars/LAEVATAIN/magma_3.webp"
+    },
+    {
+      "key": "magma_4",
+      "name": "熔火4",
+      "icon": "/avatars/LAEVATAIN/magma_4.webp"
+    }
+  ]
+}

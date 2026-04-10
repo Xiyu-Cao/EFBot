@@ -1,0 +1,66 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "天赋高效派送效果加强：获得的终结技能量+2点",
+      "effects": [],
+      "name": "筹码加倍"
+    },
+    {
+      "level": 2,
+      "description": "雷枪、强雷枪的存在时间+20秒",
+      "effects": [
+        {
+          "type": "duration_modifier",
+          "stat": "Thunderlances",
+          "value": 20,
+          "unit": "flat_seconds",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "大棒悬头"
+    },
+    {
+      "level": 3,
+      "description": "意志+15，造成的电磁伤害+8%",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "will",
+          "value": 15,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "damage_bonus",
+          "stat": "emag_dmg",
+          "value": 8,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "绝不让步"
+    },
+    {
+      "level": 4,
+      "description": "终结技雷枪·决颤所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "经验老到"
+    },
+    {
+      "level": 5,
+      "description": "召回的雷枪、强雷枪命中处于电磁脆弱状态的敌人时，伤害倍率提升至原本的1.15倍。",
+      "effects": [],
+      "name": "恩威并施"
+    }
+  ]
+}

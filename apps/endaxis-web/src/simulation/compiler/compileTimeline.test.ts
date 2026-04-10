@@ -1,0 +1,322 @@
+import { describe, it, expect } from "vitest";
+import { compileTimeline } from "./compileTimeline";
+import type { Action, ActionNode, Anomaly } from "./types";
+
+function createAction(action: Partial<Action>): Action {
+  return {
+    instanceId: action.instanceId || "",
+    id: action.id || "",
+    type: "skill",
+    name: "mock_skill",
+    logicalStartTime: 0,
+    element: "physical",
+    enhancementTime: 0,
+    startTime: 0,
+    cooldown: 0,
+    spCost: 0,
+    gaugeCost: 0,
+    gaugeGain: 0,
+    teamGaugeGain: 0,
+    duration: 0,
+    triggerWindow: 0,
+    animationTime: 0,
+    allowedTypes: ["skill"],
+    damageTicks: [],
+    physicalAnomaly: [],
+    ...action,
+  };
+}
+
+function createAnomaly(anomaly: Partial<Anomaly>): Anomaly {
+  return {
+    _id: anomaly._id || "",
+    type: "buff",
+    duration: 0,
+    offset: 0,
+    stacks: 1,
+    ...anomaly,
+  };
+}
+
+describe("compileTimeline", () => {
+  const createMockAction = (
+    id: string,
+    startTime: number,
+    duration: number,
+    options: Partial<Action> = {}
+  ): ActionNode => ({
+    id,
+    type: "action",
+    trackId: "",
+    trackIndex: 0,
+    node: createAction({
+      startTime,
+      duration,
+      type: options.type || "skill",
+      animationTime: options.animationTime,
+      triggerWindow: options.triggerWindow,
+      ...options,
+    }),
+  });
+
+  it("应正确映射动作", () => {
+    const actions = [createMockAction("A", 0, 5), createMockAction("B", 6, 2)];
+
+    const result = compileTimeline(actions);
+    expect(result.actions).toHaveLength(2);
+    expect(result.actions[0]?.realStartTime).toBe(0);
+    expect(result.actions[1]?.realStartTime).toBe(6);
+  });
+
+  describe("时停计算", () => {
+    it("应推迟时停期间开始的动作", () => {
+      const ult = createMockAction("ULT", 2, 5, {
+        type: "ultimate",
+        animationTime: 2,
+      });
+      const skill = createMockAction("SKILL", 3, 1, { type: "skill" });
+
+      const result = compileTimeline([ult, skill]);
+
+      const resolvedUlt = result.actions.find((a) => a.id === "ULT")!;
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+
+      expect(resolvedUlt.realStartTime).toBe(2);
+      expect(resolvedUlt.realDuration).toBe(5);
+
+      // 推迟 1 秒
+      expect(resolvedSkill.realStartTime).toBe(4);
+
+      // 长度不变
+      expect(resolvedSkill.realDuration).toBe(1);
+    });
+
+    it("应延长时停期间未结束的动作", () => {
+      const ult = createMockAction("ULT", 2, 3, {
+        type: "ultimate",
+        animationTime: 1.5,
+      });
+      const skill = createMockAction("SKILL", 0, 2.2, { type: "skill" });
+      const link = createMockAction("LINK", 3.5, 1.2, { type: "link" });
+
+      const result = compileTimeline([ult, skill, link]);
+
+      const resolvedUlt = result.actions.find((a) => a.id === "ULT")!;
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+      const resolvedLink = result.actions.find((a) => a.id === "LINK")!;
+
+      expect(resolvedUlt.realStartTime).toBe(2);
+      // 延长 3 + 0.5 = 3.5
+      expect(resolvedUlt.realDuration).toBe(3.5);
+
+      expect(resolvedLink.realStartTime).toBe(3.5);
+      expect(resolvedLink.realDuration).toBe(1.2);
+
+      // 开始时间不变
+      expect(resolvedSkill.realStartTime).toBe(0);
+
+      // 延长 2.2 + 1.5 + 0.5 = 4.2
+      expect(resolvedSkill.realDuration).toBe(4.2);
+    });
+
+    it("应忽略禁用的动作", () => {
+      const ult = createMockAction("ULT", 2, 5, {
+        type: "ultimate",
+        animationTime: 2,
+        isDisabled: true,
+      });
+      const skill = createMockAction("SKILL", 3, 1, { type: "skill" });
+
+      const result = compileTimeline([ult, skill]);
+
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+
+      // ULT 被禁用，所以 SKILL 不受影响
+      expect(resolvedSkill.realStartTime).toBe(3);
+      expect(resolvedSkill.realDuration).toBe(1);
+    });
+
+    // 触发窗口为负
+    it("应忽略幽灵动作", () => {
+      const ult = createMockAction("ULT", 2, 5, {
+        type: "ultimate",
+        animationTime: 2,
+        triggerWindow: -1,
+      });
+      const skill = createMockAction("SKILL", 3, 1, { type: "skill" });
+
+      const result = compileTimeline([ult, skill]);
+
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+
+      expect(resolvedSkill.realStartTime).toBe(3);
+      expect(resolvedSkill.realDuration).toBe(1);
+    });
+
+    it("连携的时停可被缩短", () => {
+      const link1 = createMockAction("LINK1", 0, 1.2, {
+        type: "link",
+      });
+      const link2 = createMockAction("LINK2", 0.1, 1.2, {
+        type: "link",
+      });
+
+      const result = compileTimeline([link1, link2]);
+
+      const l1 = result.actions.find((a) => a.id === "LINK1")!;
+      const l2 = result.actions.find((a) => a.id === "LINK2")!;
+
+      expect(l1.realStartTime).toBe(0);
+      // 长度延长 1.2 + 0.5 = 1.7
+      expect(l1.realDuration).toBe(1.7);
+      // 开始时间不受时停影响
+      expect(l2.realStartTime).toBe(0.1);
+      expect(l2.realDuration).toBe(1.2);
+    });
+
+    it("终结技时停不可缩短", () => {
+      const ult1 = createMockAction("ULT1", 0, 1.5, {
+        type: "ultimate",
+        animationTime: 1.5,
+      });
+      const ult2 = createMockAction("ULT2", 1, 2.7, {
+        type: "ultimate",
+        animationTime: 2.7,
+      });
+
+      const result = compileTimeline([ult1, ult2]);
+
+      const r1 = result.actions.find((a) => a.id === "ULT1")!;
+      const r2 = result.actions.find((a) => a.id === "ULT2")!;
+
+      expect(r1.realStartTime).toBe(0);
+      expect(r1.realDuration).toBe(1.5);
+      // 延后至 ult1 结束
+      expect(r2.realStartTime).toBe(1.5);
+      expect(r2.realDuration).toBe(2.7);
+    });
+
+    it("应推迟时停期间开始的状态", () => {
+      const ult = createMockAction("ULT", 2, 5, {
+        type: "ultimate",
+        animationTime: 2,
+      });
+      const skill = createMockAction("SKILL", 3, 1, {
+        type: "skill",
+        physicalAnomaly: [
+          [
+            createAnomaly({
+              _id: "eff1",
+              offset: 1,
+              duration: 1,
+              type: "buff",
+            }),
+          ],
+        ],
+      });
+
+      const result = compileTimeline([ult, skill]);
+
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+
+      expect(resolvedSkill.effects).toHaveLength(1);
+      // 动作推迟至 4 秒，状态再延后 1 秒 = 5 秒
+      expect(resolvedSkill.effects[0]?.realStartTime).toBe(5);
+      expect(resolvedSkill.effects[0]?.realDuration).toBe(1);
+      expect(resolvedSkill.effects[0]?.extensionAmount).toBe(0);
+    });
+
+    it("应推延长时停期间未结束的状态的持续时间", () => {
+      const ult = createMockAction("ULT", 3, 5, {
+        type: "ultimate",
+        animationTime: 2,
+      });
+      const skill = createMockAction("SKILL", 1, 1, {
+        type: "skill",
+        physicalAnomaly: [
+          [
+            createAnomaly({
+              _id: "eff1",
+              offset: 1,
+              duration: 2,
+              type: "buff",
+            }),
+          ],
+        ],
+      });
+
+      const result = compileTimeline([ult, skill]);
+
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+
+      expect(resolvedSkill.effects).toHaveLength(1);
+      expect(resolvedSkill.effects[0]?.realStartTime).toBe(2);
+      // 状态持续时间延长 2 秒
+      expect(resolvedSkill.effects[0]?.realDuration).toBe(4);
+      expect(resolvedSkill.effects[0]?.extensionAmount).toBe(2);
+    });
+
+    it("应推迟伤害触发点", () => {
+      const ult = createMockAction("ULT", 2, 5, {
+        type: "ultimate",
+        animationTime: 2,
+      });
+      const skill = createMockAction("SKILL", 1, 2, {
+        type: "skill",
+        damageTicks: [
+          {
+            offset: 0,
+            sp: 0,
+            stagger: 0,
+          },
+          {
+            offset: 2,
+            sp: 0,
+            stagger: 0,
+          },
+        ],
+      });
+
+      const result = compileTimeline([ult, skill]);
+
+      const resolvedSkill = result.actions.find((a) => a.id === "SKILL")!;
+
+      expect(resolvedSkill.resolvedDamageTicks).toHaveLength(2);
+      // 第一段伤害不受影响
+      expect(resolvedSkill.resolvedDamageTicks[0]?.realOffset).toBe(0);
+      expect(resolvedSkill.resolvedDamageTicks[0]?.realTime).toBe(1);
+      // 第二段伤害推迟2秒
+      expect(resolvedSkill.resolvedDamageTicks[1]?.realOffset).toBe(4);
+      expect(resolvedSkill.resolvedDamageTicks[1]?.realTime).toBe(5);
+    });
+  });
+
+  it("应计算状态消耗", () => {
+    const producer = createMockAction("PROD", 0, 10, {
+      physicalAnomaly: [
+        [createAnomaly({ _id: "eff1", offset: 0, duration: 10, type: "buff" })],
+      ],
+    });
+    const consumer = createMockAction("CONS", 5, 2);
+
+    const connections = [
+      {
+        id: "c1",
+        fromEffectId: "eff1",
+        to: "CONS",
+        from: "PROD",
+        isConsumption: true,
+        consumptionOffset: 0,
+      },
+    ];
+
+    const result = compileTimeline([producer, consumer], connections);
+
+    const rProd = result.actions.find((a) => a.id === "PROD")!;
+    const effect = rProd.effects[0];
+
+    expect(effect).toBeDefined();
+    expect(effect?.isConsumed).toBe(true);
+    expect(effect?.displayDuration).toBe(5);
+  });
+});

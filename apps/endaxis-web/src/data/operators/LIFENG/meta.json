@@ -1,0 +1,25 @@
+{
+  "id": "LIFENG",
+  "slug": "lifeng",
+  "name": "黎风",
+  "nameEn": "Lifeng",
+  "rarity": 6,
+  "profession": "guard",
+  "professionLabel": "近卫",
+  "element": "physical",
+  "elementLabel": "物理",
+  "weaponType": "lance",
+  "weaponTypeLabel": "长柄武器",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "strength",
+  "subAttributeLabel": "力量",
+  "avatar": "/avatars/LIFENG/LIFENG.webp",
+  "icons": {
+    "skill": "/avatars/LIFENG/icon_skill_lifeng_01.webp",
+    "link": "/avatars/LIFENG/icon_combo_skill_lifeng_01.webp",
+    "ultimate": "/avatars/LIFENG/icon_ultimate_skill_lifeng_01.webp",
+    "talent1": "/avatars/LIFENG/icon_talent_lifeng_01.webp",
+    "talent2": "/avatars/LIFENG/icon_talent_lifeng_02.webp"
+  }
+}

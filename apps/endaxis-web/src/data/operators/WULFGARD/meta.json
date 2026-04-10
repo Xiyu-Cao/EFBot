@@ -1,0 +1,25 @@
+{
+  "id": "WULFGARD",
+  "slug": "wulfgard",
+  "name": "狼卫",
+  "nameEn": "Wulfgard",
+  "rarity": 5,
+  "profession": "caster",
+  "professionLabel": "术师",
+  "element": "blaze",
+  "elementLabel": "灼热",
+  "weaponType": "pistol",
+  "weaponTypeLabel": "手铳",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "agility",
+  "subAttributeLabel": "敏捷",
+  "avatar": "/avatars/WULFGARD/WULFGARD.webp",
+  "icons": {
+    "skill": "/avatars/WULFGARD/icon_skill_wolfgd_01_line.webp",
+    "link": "/avatars/WULFGARD/icon_combo_skill_wolfgd_01.webp",
+    "ultimate": "/avatars/WULFGARD/icon_ultimate_skill_wolfgd_01.webp",
+    "talent1": "/avatars/WULFGARD/icon_talent_wolfgd_01.webp",
+    "talent2": "/avatars/WULFGARD/icon_talent_wolfgd_02.webp"
+  }
+}

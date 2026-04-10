@@ -1,0 +1,448 @@
+{
+  "total_rows": 517,
+  "by_category": {
+    "default_body_hit": 195,
+    "execution_attack": 24,
+    "fall_attack": 24,
+    "excluded": 248,
+    "unknown": 1,
+    "conditional_extra_hit": 11,
+    "enhanced_variant": 2,
+    "aerial_combo": 1,
+    "conditional_branch": 2,
+    "ult_phase_override": 2,
+    "ult_enhanced_normal": 4,
+    "character_specific_extra": 1,
+    "early_trigger_variant": 1,
+    "ult_heavy_hit": 1
+  },
+  "by_confidence": {
+    "low": 110,
+    "high": 361,
+    "medium": 46
+  },
+  "by_operator": {
+    "AKEKURI": 14,
+    "ALESH": 26,
+    "ANTAL": 17,
+    "ARCLIGHT": 22,
+    "ARDELIA": 19,
+    "AVYWENNA": 21,
+    "CATCHER": 26,
+    "CHEN_QIANYU": 17,
+    "DA_PAN": 16,
+    "EMBER": 19,
+    "ENDMINISTRATOR": 17,
+    "ESTELLA": 17,
+    "FLUORITE": 20,
+    "GILBERTA": 19,
+    "LAEVATAIN": 33,
+    "LAST_RITE": 24,
+    "LIFENG": 24,
+    "PERLICA": 15,
+    "POGRANICHNIK": 37,
+    "SNOWSHINE": 22,
+    "TANGTANG": 26,
+    "WULFGARD": 16,
+    "XAIHI": 21,
+    "YVONNE": 29
+  },
+  "operators": [
+    {
+      "id": "LAEVATAIN",
+      "total": 33,
+      "categories": {
+        "default_body_hit": 7,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "conditional_extra_hit": 2,
+        "ult_phase_override": 2,
+        "excluded": 16,
+        "ult_enhanced_normal": 4
+      },
+      "confidences": {
+        "low": 5,
+        "high": 19,
+        "medium": 9
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "YVONNE",
+      "total": 29,
+      "categories": {
+        "default_body_hit": 9,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "conditional_extra_hit": 3,
+        "excluded": 14,
+        "ult_heavy_hit": 1
+      },
+      "confidences": {
+        "low": 7,
+        "high": 17,
+        "medium": 5
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "ENDMINISTRATOR",
+      "total": 17,
+      "categories": {
+        "default_body_hit": 8,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 5,
+        "conditional_extra_hit": 2
+      },
+      "confidences": {
+        "low": 5,
+        "high": 10,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "ESTELLA",
+      "total": 17,
+      "categories": {
+        "default_body_hit": 6,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 7,
+        "conditional_branch": 2
+      },
+      "confidences": {
+        "low": 4,
+        "high": 11,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "ALESH",
+      "total": 26,
+      "categories": {
+        "default_body_hit": 8,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 15,
+        "unknown": 1
+      },
+      "confidences": {
+        "low": 6,
+        "high": 20
+      },
+      "needsManual": 1
+    },
+    {
+      "id": "ARCLIGHT",
+      "total": 22,
+      "categories": {
+        "default_body_hit": 10,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "conditional_extra_hit": 1,
+        "excluded": 9
+      },
+      "confidences": {
+        "low": 5,
+        "high": 15,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "LAST_RITE",
+      "total": 24,
+      "categories": {
+        "default_body_hit": 9,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "character_specific_extra": 1,
+        "excluded": 11,
+        "conditional_extra_hit": 1
+      },
+      "confidences": {
+        "low": 4,
+        "high": 18,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "LIFENG",
+      "total": 24,
+      "categories": {
+        "default_body_hit": 11,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 10,
+        "conditional_extra_hit": 1
+      },
+      "confidences": {
+        "low": 4,
+        "high": 19,
+        "medium": 1
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "WULFGARD",
+      "total": 16,
+      "categories": {
+        "default_body_hit": 7,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "conditional_extra_hit": 1,
+        "excluded": 6
+      },
+      "confidences": {
+        "low": 4,
+        "high": 9,
+        "medium": 3
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "AKEKURI",
+      "total": 14,
+      "categories": {
+        "default_body_hit": 6,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 6
+      },
+      "confidences": {
+        "low": 4,
+        "high": 9,
+        "medium": 1
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "ANTAL",
+      "total": 17,
+      "categories": {
+        "default_body_hit": 6,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 9
+      },
+      "confidences": {
+        "low": 4,
+        "high": 13
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "ARDELIA",
+      "total": 19,
+      "categories": {
+        "default_body_hit": 8,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 9
+      },
+      "confidences": {
+        "low": 4,
+        "high": 14,
+        "medium": 1
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "AVYWENNA",
+      "total": 21,
+      "categories": {
+        "default_body_hit": 9,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "enhanced_variant": 1,
+        "excluded": 9
+      },
+      "confidences": {
+        "low": 6,
+        "high": 13,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "CATCHER",
+      "total": 26,
+      "categories": {
+        "default_body_hit": 10,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 14
+      },
+      "confidences": {
+        "low": 5,
+        "high": 20,
+        "medium": 1
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "CHEN_QIANYU",
+      "total": 17,
+      "categories": {
+        "default_body_hit": 9,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 6
+      },
+      "confidences": {
+        "low": 5,
+        "high": 10,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "DA_PAN",
+      "total": 16,
+      "categories": {
+        "default_body_hit": 7,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 6,
+        "aerial_combo": 1
+      },
+      "confidences": {
+        "low": 4,
+        "high": 9,
+        "medium": 3
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "EMBER",
+      "total": 19,
+      "categories": {
+        "default_body_hit": 7,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 10
+      },
+      "confidences": {
+        "low": 4,
+        "high": 14,
+        "medium": 1
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "FLUORITE",
+      "total": 20,
+      "categories": {
+        "default_body_hit": 10,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 8
+      },
+      "confidences": {
+        "low": 4,
+        "high": 15,
+        "medium": 1
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "GILBERTA",
+      "total": 19,
+      "categories": {
+        "default_body_hit": 8,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 9
+      },
+      "confidences": {
+        "low": 4,
+        "high": 13,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "PERLICA",
+      "total": 15,
+      "categories": {
+        "default_body_hit": 7,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 6
+      },
+      "confidences": {
+        "low": 4,
+        "high": 11
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "POGRANICHNIK",
+      "total": 37,
+      "categories": {
+        "default_body_hit": 13,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 21,
+        "enhanced_variant": 1
+      },
+      "confidences": {
+        "low": 5,
+        "high": 28,
+        "medium": 4
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "SNOWSHINE",
+      "total": 22,
+      "categories": {
+        "default_body_hit": 5,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 15
+      },
+      "confidences": {
+        "low": 3,
+        "high": 19
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "TANGTANG",
+      "total": 26,
+      "categories": {
+        "default_body_hit": 9,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 14,
+        "early_trigger_variant": 1
+      },
+      "confidences": {
+        "low": 5,
+        "high": 19,
+        "medium": 2
+      },
+      "needsManual": 0
+    },
+    {
+      "id": "XAIHI",
+      "total": 21,
+      "categories": {
+        "default_body_hit": 6,
+        "execution_attack": 1,
+        "fall_attack": 1,
+        "excluded": 13
+      },
+      "confidences": {
+        "low": 5,
+        "high": 16
+      },
+      "needsManual": 0
+    }
+  ]
+}

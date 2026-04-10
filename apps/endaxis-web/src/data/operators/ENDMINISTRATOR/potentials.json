@@ -1,0 +1,32 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技构成序列消耗源石结晶时，返还50点技力",
+      "effects": [
+        {
+          "type": "sp_refund",
+          "stat": "on_crystal_consume",
+          "value": 50,
+          "unit": "flat",
+          "scope": "runtime_conditional",
+          "note": "implemented in carrierConsumptionHandlers"
+        }
+      ],
+      "name": "最后的苏醒"
+    },
+    {
+      "level": 2,
+      "description": "天赋本质瓦解效果加强：自身获得攻击力提升时，其他友方干员获得一半的攻击力提升效果",
+      "effects": [],
+      "name": "权能映射"
+    },
+    {
+      "level": 3,
+      "description": "？？？？？？4？？？？？？5？？？？？？",
+      "effects": []
+    }
+  ],
+  "maxPotential": 2
+}

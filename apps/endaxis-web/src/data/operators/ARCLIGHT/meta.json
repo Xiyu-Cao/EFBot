@@ -1,0 +1,25 @@
+{
+  "id": "ARCLIGHT",
+  "slug": "arclight",
+  "name": "弧光",
+  "nameEn": "Arclight",
+  "rarity": 5,
+  "profession": "pioneer",
+  "professionLabel": "先锋",
+  "element": "emag",
+  "elementLabel": "电磁",
+  "weaponType": "sword",
+  "weaponTypeLabel": "单手剑",
+  "mainAttribute": "agility",
+  "mainAttributeLabel": "敏捷",
+  "subAttribute": "intellect",
+  "subAttributeLabel": "智识",
+  "avatar": "/avatars/ARCLIGHT/ARCLIGHT.webp",
+  "icons": {
+    "skill": "/avatars/ARCLIGHT/icon_skill_ikut_01_line.webp",
+    "link": "/avatars/ARCLIGHT/icon_combo_skill_ikut_01.webp",
+    "ultimate": "/avatars/ARCLIGHT/icon_ultimate_skill_ikut_01.webp",
+    "talent1": "/avatars/ARCLIGHT/icon_talent_ikut_01.webp",
+    "talent2": "/avatars/ARCLIGHT/icon_talent_ikut_02.webp"
+  }
+}

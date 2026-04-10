@@ -1,0 +1,25 @@
+{
+  "id": "DAPAN",
+  "slug": "da-pan",
+  "name": "大潘",
+  "nameEn": "Da Pan",
+  "rarity": 5,
+  "profession": "vanguard",
+  "professionLabel": "突击",
+  "element": "physical",
+  "elementLabel": "物理",
+  "weaponType": "claym",
+  "weaponTypeLabel": "双手剑",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/DAPAN/DAPAN.webp",
+  "icons": {
+    "skill": "/avatars/DAPAN/icon_skill_dapan_01.webp",
+    "link": "/avatars/DAPAN/icon_combo_skill_dapan_01.webp",
+    "ultimate": "/avatars/DAPAN/icon_ultimate_skill_dapan_01.webp",
+    "talent1": "/avatars/DAPAN/icon_talent_dapan_01.webp",
+    "talent2": "/avatars/DAPAN/icon_talent_dapan_02.webp"
+  }
+}

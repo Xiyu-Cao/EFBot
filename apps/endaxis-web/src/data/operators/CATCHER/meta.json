@@ -1,0 +1,25 @@
+{
+  "id": "CATCHER",
+  "slug": "catcher",
+  "name": "卡契尔",
+  "nameEn": "Catcher",
+  "rarity": 4,
+  "profession": "defender",
+  "professionLabel": "重装",
+  "element": "physical",
+  "elementLabel": "物理",
+  "weaponType": "claym",
+  "weaponTypeLabel": "双手剑",
+  "mainAttribute": "strength",
+  "mainAttributeLabel": "力量",
+  "subAttribute": "will",
+  "subAttributeLabel": "意志",
+  "avatar": "/avatars/CATCHER/CATCHER.webp",
+  "icons": {
+    "skill": "/avatars/CATCHER/icon_skill_meurs_01.webp",
+    "link": "/avatars/CATCHER/icon_combo_skill_meurs_01.webp",
+    "ultimate": "/avatars/CATCHER/icon_ultimate_skill_meurs_01.webp",
+    "talent1": "/avatars/CATCHER/icon_talent_meurs_01.webp",
+    "talent2": "/avatars/CATCHER/icon_talent_meurs_02.webp"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "天赋陷阵之志效果加强：庇护效果额外+20%，且在命中敌人后额外持续1.5秒",
+      "effects": [],
+      "name": "移动要塞"
+    },
+    {
+      "level": 2,
+      "description": "力量+20，意志+20",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "strength",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "will",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        }
+      ],
+      "name": "百战成钢"
+    },
+    {
+      "level": 3,
+      "description": "连携技前线援护会额外治疗小队内另一个生命值百分比最低的干员，效果为基础的50%",
+      "effects": [],
+      "name": "不屈阵线"
+    },
+    {
+      "level": 4,
+      "description": "终结技重燃誓约所需的终结技能量-15%",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ],
+      "name": "薪火不息"
+    },
+    {
+      "level": 5,
+      "description": "终结技重燃誓约提供的护盾效果变为1.2倍，且该护盾存在期间持有者攻击力+10%。",
+      "effects": [],
+      "name": "铁誓"
+    }
+  ]
+}

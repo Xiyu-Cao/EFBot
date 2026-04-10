@@ -1,0 +1,295 @@
+{
+  "total": 24,
+  "extracted_at": "2026-03-26T03:39:19.204Z",
+  "operators": [
+    {
+      "id": "AKEKURI",
+      "slug": "akekuri",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "ALESH",
+      "slug": "alesh",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "ANTAL",
+      "slug": "antal",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "ARCLIGHT",
+      "slug": "arclight",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "ARDELIA",
+      "slug": "ardelia",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "AVYWENNA",
+      "slug": "avywenna",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "CATCHER",
+      "slug": "catcher",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "CHEN_QIANYU",
+      "slug": "chen-qianyu",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "DA_PAN",
+      "slug": "da-pan",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "EMBER",
+      "slug": "ember",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "ENDMINISTRATOR",
+      "slug": "endministrator",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "ESTELLA",
+      "slug": "estella",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "FLUORITE",
+      "slug": "fluorite",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "GILBERTA",
+      "slug": "gilberta",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "LAEVATAIN",
+      "slug": "laevatain",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "LAST_RITE",
+      "slug": "last-rite",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "LIFENG",
+      "slug": "lifeng",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "PERLICA",
+      "slug": "perlica",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "POGRANICHNIK",
+      "slug": "pogranichnik",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "SNOWSHINE",
+      "slug": "snowshine",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "TANGTANG",
+      "slug": "tangtang",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "WULFGARD",
+      "slug": "wulfgard",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "XAIHI",
+      "slug": "xaihi",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "YVONNE",
+      "slug": "yvonne",
+      "skill_count": 4,
+      "skill_types": [
+        "normalAttack",
+        "skill",
+        "link",
+        "ultimate"
+      ],
+      "warnings": []
+    }
+  ],
+  "warnings": []
+}

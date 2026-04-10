@@ -1,0 +1,341 @@
+{
+  "_comment": "满配默认值计算依据：角色 Lv90 基础攻击（Excel）× 武器 large 攻击槽位 潜能5 (+25%) × 装备约 +15% ≈ ×1.44 四舍五入。暴击率：5%基础 + 武器暴击槽12.5% + 护手双词条精锻3 24.9% ≈ 42%（未含配件）。暴击伤害：50%基础仅供参考，无可靠装备数值故不叠加。元素伤害：按角色属性，武器 large 元素槽 潜能5 = 27.8%。",
+  "_stat_sources": {
+    "base_atk": "Excel 终末地干员数据 Lv90",
+    "weapon_atk_pct": "weaponCommonModifiers attack large[5] = 25%",
+    "weapon_crit_rate": "weaponCommonModifiers crit_rate large[5] = 12.5%",
+    "equip_crit_rate": "equipmentStatValues crit_rate glovesDual[3] = 24.9%",
+    "equip_skill_dmg": "equipmentStatValues skill_dmg_bonus glovesDual[3] = 44.9%",
+    "weapon_elem_dmg": "weaponCommonModifiers *_dmg large[5] = 27.8%"
+  },
+  "_potential_presets": {
+    "_comment": "独立存档的潜能配置，可切换不同等级做测试。tier = weaponCommonModifiers 数组下标+1（tier9=index8=满潜）。",
+    "weapon": {
+      "max": {
+        "label": "武器满潜（tier9=index8，当前默认）",
+        "tier": 9,
+        "attack_large": 39,
+        "crit_rate_large": 19.5,
+        "elem_dmg_large": 43.3,
+        "hp_large": 78
+      },
+      "p5": {
+        "label": "武器潜能5（tier6=index5）",
+        "tier": 6,
+        "attack_large": 25,
+        "crit_rate_large": 12.5,
+        "elem_dmg_large": 27.8,
+        "hp_large": 50
+      },
+      "p3": {
+        "label": "武器潜能3（tier4=index3）",
+        "tier": 4,
+        "attack_large": 17,
+        "crit_rate_large": 8.5,
+        "elem_dmg_large": 18.9,
+        "hp_large": 34
+      },
+      "p1": {
+        "label": "武器潜能1（tier2=index1）",
+        "tier": 2,
+        "attack_large": 9,
+        "crit_rate_large": 4.5,
+        "elem_dmg_large": 10,
+        "hp_large": 18
+      },
+      "p0_base": {
+        "label": "武器潜能0（无强化，tier1=index0）",
+        "tier": 1,
+        "attack_large": 5,
+        "crit_rate_large": 2.5,
+        "elem_dmg_large": 5.6,
+        "hp_large": 10
+      }
+    },
+    "character": {
+      "max": {
+        "label": "角色满潜（精英化4 潜能5）",
+        "elite_stage": 4,
+        "potential_level": 5,
+        "note": "当前 character_defaults 中角色数据均基于此配置"
+      },
+      "none": {
+        "label": "角色无潜能（精英化0）",
+        "elite_stage": 0,
+        "potential_level": 0,
+        "note": "基础状态，用于对比测试"
+      }
+    },
+    "equipment": {
+      "max_refine": {
+        "label": "装备满精锻（精锻3）",
+        "refine_tier": 3,
+        "crit_rate_gloves_dual": 24.9,
+        "skill_dmg_gloves_dual": 44.9
+      },
+      "no_refine": {
+        "label": "装备无精锻（精锻0）",
+        "refine_tier": 0,
+        "crit_rate_gloves_dual": 0,
+        "skill_dmg_gloves_dual": 0
+      }
+    },
+    "active": {
+      "weapon": "max",
+      "character": "max",
+      "equipment": "max_refine"
+    }
+  },
+  "characters": {
+    "ENDMINISTRATOR": {
+      "base_atk_lv90": 319,
+      "attack": 460,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "POGRANICHNK": {
+      "base_atk_lv90": 321,
+      "attack": 462,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "ARDELIA": {
+      "base_atk_lv90": 323,
+      "attack": 465,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "nature",
+      "nature_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "LASTRITE": {
+      "base_atk_lv90": 332,
+      "attack": 478,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "GILBERTA": {
+      "base_atk_lv90": 329,
+      "attack": 474,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "nature",
+      "nature_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "YVONNE": {
+      "base_atk_lv90": 321,
+      "attack": 462,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "LAEVATAIN": {
+      "base_atk_lv90": 318,
+      "attack": 458,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "blaze",
+      "blaze_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "LIFENG": {
+      "base_atk_lv90": 312,
+      "attack": 449,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "EMBER": {
+      "base_atk_lv90": 323,
+      "attack": 465,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "blaze",
+      "blaze_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "TANGTANG": {
+      "base_atk_lv90": 321,
+      "attack": 462,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "ROSSI": {
+      "base_atk_lv90": 315,
+      "attack": 454,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "XAIHI": {
+      "base_atk_lv90": 291,
+      "attack": 419,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "SNOWSHINE": {
+      "base_atk_lv90": 297,
+      "attack": 428,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "ARCLIGHT": {
+      "base_atk_lv90": 306,
+      "attack": 440,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "emag",
+      "emag_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "AVYWENNA": {
+      "base_atk_lv90": 312,
+      "attack": 449,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "emag",
+      "emag_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "DAPAN": {
+      "base_atk_lv90": 303,
+      "attack": 436,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "WULFGARD": {
+      "base_atk_lv90": 294,
+      "attack": 423,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "blaze",
+      "blaze_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "PERLICA": {
+      "base_atk_lv90": 303,
+      "attack": 436,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "emag",
+      "emag_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "CHENQIANYU": {
+      "base_atk_lv90": 297,
+      "attack": 428,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "ALESH": {
+      "base_atk_lv90": 309,
+      "attack": 445,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "CATCHER": {
+      "base_atk_lv90": 300,
+      "attack": 432,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "physical",
+      "physical_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "FLUORITE": {
+      "base_atk_lv90": 303,
+      "attack": 436,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "nature",
+      "nature_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "ANTAL": {
+      "base_atk_lv90": 297,
+      "attack": 428,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "emag",
+      "emag_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "ESTELLA": {
+      "base_atk_lv90": 312,
+      "attack": 449,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "cold",
+      "cold_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    },
+    "AKEKURI": {
+      "base_atk_lv90": 319,
+      "attack": 460,
+      "hp": 5495,
+      "crit_rate": 0.42,
+      "crit_dmg": 1.50,
+      "element": "blaze",
+      "blaze_dmg": 27.8,
+      "skill_dmg_bonus": 44.9
+    }
+  }
+}

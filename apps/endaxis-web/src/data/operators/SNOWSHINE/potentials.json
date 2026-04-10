@@ -1,0 +1,58 @@
+{
+  "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
+  "potentials": [
+    {
+      "level": 1,
+      "description": "战技饱和性防御的格挡效果持续期间，处于庇护状态的友方干员无法被施加法术附着效果",
+      "effects": [],
+      "name": "失温庇护所"
+    },
+    {
+      "level": 2,
+      "description": "终结技凛冽寒霜的影响范围+20%",
+      "effects": [],
+      "name": "暴风雪地带"
+    },
+    {
+      "level": 3,
+      "description": "终结技凛冽寒霜施加的冻结的持续时间+2秒",
+      "effects": [
+        {
+          "type": "duration_modifier",
+          "stat": "freeze",
+          "value": 2,
+          "unit": "flat_seconds",
+          "scope": "runtime_potential"
+        }
+      ],
+      "name": "极地生存指南"
+    },
+    {
+      "level": 4,
+      "description": "防御力+20，意志+20",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "will",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "defense",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        }
+      ],
+      "name": "冻土坚盾"
+    },
+    {
+      "level": 5,
+      "description": "战技饱和性防御成功反击敌人时，返还10点技力。",
+      "effects": [],
+      "name": "冰灾应对专家"
+    }
+  ]
+}

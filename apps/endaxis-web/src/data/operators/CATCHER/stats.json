@@ -1,0 +1,732 @@
+{
+  "_doc": "Per-level base attributes. Key = character level (1-90). Queried by resolveBaseStats().",
+  "promotionCaps": [
+    20,
+    40,
+    60,
+    80,
+    90
+  ],
+  "levels": {
+    "1": {
+      "strength": 21,
+      "agility": 9,
+      "intellect": 8,
+      "will": 11,
+      "attack": 30,
+      "hp": 500
+    },
+    "2": {
+      "strength": 23,
+      "agility": 10,
+      "intellect": 9,
+      "will": 12,
+      "attack": 33,
+      "hp": 556
+    },
+    "3": {
+      "strength": 25,
+      "agility": 11,
+      "intellect": 10,
+      "will": 13,
+      "attack": 36,
+      "hp": 612
+    },
+    "4": {
+      "strength": 26,
+      "agility": 12,
+      "intellect": 11,
+      "will": 14,
+      "attack": 39,
+      "hp": 668
+    },
+    "5": {
+      "strength": 28,
+      "agility": 13,
+      "intellect": 12,
+      "will": 15,
+      "attack": 42,
+      "hp": 724
+    },
+    "6": {
+      "strength": 30,
+      "agility": 14,
+      "intellect": 13,
+      "will": 16,
+      "attack": 45,
+      "hp": 781
+    },
+    "7": {
+      "strength": 32,
+      "agility": 15,
+      "intellect": 14,
+      "will": 17,
+      "attack": 48,
+      "hp": 837
+    },
+    "8": {
+      "strength": 33,
+      "agility": 16,
+      "intellect": 14,
+      "will": 18,
+      "attack": 51,
+      "hp": 893
+    },
+    "9": {
+      "strength": 35,
+      "agility": 17,
+      "intellect": 15,
+      "will": 20,
+      "attack": 54,
+      "hp": 949
+    },
+    "10": {
+      "strength": 37,
+      "agility": 18,
+      "intellect": 16,
+      "will": 21,
+      "attack": 57,
+      "hp": 1005
+    },
+    "11": {
+      "strength": 39,
+      "agility": 19,
+      "intellect": 17,
+      "will": 22,
+      "attack": 60,
+      "hp": 1061
+    },
+    "12": {
+      "strength": 40,
+      "agility": 20,
+      "intellect": 18,
+      "will": 23,
+      "attack": 63,
+      "hp": 1117
+    },
+    "13": {
+      "strength": 42,
+      "agility": 21,
+      "intellect": 19,
+      "will": 24,
+      "attack": 66,
+      "hp": 1173
+    },
+    "14": {
+      "strength": 44,
+      "agility": 22,
+      "intellect": 20,
+      "will": 25,
+      "attack": 69,
+      "hp": 1230
+    },
+    "15": {
+      "strength": 45,
+      "agility": 23,
+      "intellect": 21,
+      "will": 26,
+      "attack": 72,
+      "hp": 1286
+    },
+    "16": {
+      "strength": 47,
+      "agility": 24,
+      "intellect": 21,
+      "will": 27,
+      "attack": 75,
+      "hp": 1342
+    },
+    "17": {
+      "strength": 49,
+      "agility": 25,
+      "intellect": 22,
+      "will": 28,
+      "attack": 79,
+      "hp": 1398
+    },
+    "18": {
+      "strength": 51,
+      "agility": 26,
+      "intellect": 23,
+      "will": 29,
+      "attack": 82,
+      "hp": 1454
+    },
+    "19": {
+      "strength": 52,
+      "agility": 27,
+      "intellect": 24,
+      "will": 30,
+      "attack": 85,
+      "hp": 1510
+    },
+    "20": {
+      "strength": 54,
+      "agility": 28,
+      "intellect": 25,
+      "will": 31,
+      "attack": 88,
+      "hp": 1566
+    },
+    "21": {
+      "strength": 56,
+      "agility": 29,
+      "intellect": 26,
+      "will": 32,
+      "attack": 91,
+      "hp": 1622
+    },
+    "22": {
+      "strength": 58,
+      "agility": 30,
+      "intellect": 27,
+      "will": 33,
+      "attack": 94,
+      "hp": 1679
+    },
+    "23": {
+      "strength": 59,
+      "agility": 31,
+      "intellect": 28,
+      "will": 35,
+      "attack": 97,
+      "hp": 1735
+    },
+    "24": {
+      "strength": 61,
+      "agility": 32,
+      "intellect": 28,
+      "will": 36,
+      "attack": 100,
+      "hp": 1791
+    },
+    "25": {
+      "strength": 63,
+      "agility": 33,
+      "intellect": 29,
+      "will": 37,
+      "attack": 103,
+      "hp": 1847
+    },
+    "26": {
+      "strength": 65,
+      "agility": 34,
+      "intellect": 30,
+      "will": 38,
+      "attack": 106,
+      "hp": 1903
+    },
+    "27": {
+      "strength": 66,
+      "agility": 35,
+      "intellect": 31,
+      "will": 39,
+      "attack": 109,
+      "hp": 1959
+    },
+    "28": {
+      "strength": 68,
+      "agility": 36,
+      "intellect": 32,
+      "will": 40,
+      "attack": 112,
+      "hp": 2015
+    },
+    "29": {
+      "strength": 70,
+      "agility": 37,
+      "intellect": 33,
+      "will": 41,
+      "attack": 115,
+      "hp": 2071
+    },
+    "30": {
+      "strength": 72,
+      "agility": 38,
+      "intellect": 34,
+      "will": 42,
+      "attack": 118,
+      "hp": 2128
+    },
+    "31": {
+      "strength": 73,
+      "agility": 39,
+      "intellect": 35,
+      "will": 43,
+      "attack": 121,
+      "hp": 2184
+    },
+    "32": {
+      "strength": 75,
+      "agility": 40,
+      "intellect": 35,
+      "will": 44,
+      "attack": 124,
+      "hp": 2240
+    },
+    "33": {
+      "strength": 77,
+      "agility": 41,
+      "intellect": 36,
+      "will": 45,
+      "attack": 127,
+      "hp": 2296
+    },
+    "34": {
+      "strength": 79,
+      "agility": 42,
+      "intellect": 37,
+      "will": 46,
+      "attack": 130,
+      "hp": 2352
+    },
+    "35": {
+      "strength": 80,
+      "agility": 43,
+      "intellect": 38,
+      "will": 47,
+      "attack": 133,
+      "hp": 2408
+    },
+    "36": {
+      "strength": 82,
+      "agility": 44,
+      "intellect": 39,
+      "will": 48,
+      "attack": 136,
+      "hp": 2464
+    },
+    "37": {
+      "strength": 84,
+      "agility": 45,
+      "intellect": 40,
+      "will": 49,
+      "attack": 139,
+      "hp": 2520
+    },
+    "38": {
+      "strength": 85,
+      "agility": 46,
+      "intellect": 41,
+      "will": 51,
+      "attack": 142,
+      "hp": 2577
+    },
+    "39": {
+      "strength": 87,
+      "agility": 47,
+      "intellect": 42,
+      "will": 52,
+      "attack": 145,
+      "hp": 2633
+    },
+    "40": {
+      "strength": 89,
+      "agility": 47,
+      "intellect": 42,
+      "will": 53,
+      "attack": 148,
+      "hp": 2689
+    },
+    "41": {
+      "strength": 91,
+      "agility": 48,
+      "intellect": 43,
+      "will": 54,
+      "attack": 151,
+      "hp": 2745
+    },
+    "42": {
+      "strength": 92,
+      "agility": 49,
+      "intellect": 44,
+      "will": 55,
+      "attack": 154,
+      "hp": 2801
+    },
+    "43": {
+      "strength": 94,
+      "agility": 50,
+      "intellect": 45,
+      "will": 56,
+      "attack": 157,
+      "hp": 2857
+    },
+    "44": {
+      "strength": 96,
+      "agility": 51,
+      "intellect": 46,
+      "will": 57,
+      "attack": 160,
+      "hp": 2913
+    },
+    "45": {
+      "strength": 98,
+      "agility": 52,
+      "intellect": 47,
+      "will": 58,
+      "attack": 163,
+      "hp": 2969
+    },
+    "46": {
+      "strength": 99,
+      "agility": 53,
+      "intellect": 48,
+      "will": 59,
+      "attack": 166,
+      "hp": 3026
+    },
+    "47": {
+      "strength": 101,
+      "agility": 54,
+      "intellect": 49,
+      "will": 60,
+      "attack": 170,
+      "hp": 3082
+    },
+    "48": {
+      "strength": 103,
+      "agility": 55,
+      "intellect": 49,
+      "will": 61,
+      "attack": 173,
+      "hp": 3138
+    },
+    "49": {
+      "strength": 105,
+      "agility": 56,
+      "intellect": 50,
+      "will": 62,
+      "attack": 176,
+      "hp": 3194
+    },
+    "50": {
+      "strength": 106,
+      "agility": 57,
+      "intellect": 51,
+      "will": 63,
+      "attack": 179,
+      "hp": 3250
+    },
+    "51": {
+      "strength": 108,
+      "agility": 58,
+      "intellect": 52,
+      "will": 64,
+      "attack": 182,
+      "hp": 3306
+    },
+    "52": {
+      "strength": 110,
+      "agility": 59,
+      "intellect": 53,
+      "will": 66,
+      "attack": 185,
+      "hp": 3362
+    },
+    "53": {
+      "strength": 112,
+      "agility": 60,
+      "intellect": 54,
+      "will": 67,
+      "attack": 188,
+      "hp": 3418
+    },
+    "54": {
+      "strength": 113,
+      "agility": 61,
+      "intellect": 55,
+      "will": 68,
+      "attack": 191,
+      "hp": 3474
+    },
+    "55": {
+      "strength": 115,
+      "agility": 62,
+      "intellect": 56,
+      "will": 69,
+      "attack": 194,
+      "hp": 3531
+    },
+    "56": {
+      "strength": 117,
+      "agility": 63,
+      "intellect": 56,
+      "will": 70,
+      "attack": 197,
+      "hp": 3587
+    },
+    "57": {
+      "strength": 119,
+      "agility": 64,
+      "intellect": 57,
+      "will": 71,
+      "attack": 200,
+      "hp": 3643
+    },
+    "58": {
+      "strength": 120,
+      "agility": 65,
+      "intellect": 58,
+      "will": 72,
+      "attack": 203,
+      "hp": 3699
+    },
+    "59": {
+      "strength": 122,
+      "agility": 66,
+      "intellect": 59,
+      "will": 73,
+      "attack": 206,
+      "hp": 3755
+    },
+    "60": {
+      "strength": 124,
+      "agility": 67,
+      "intellect": 60,
+      "will": 74,
+      "attack": 209,
+      "hp": 3811
+    },
+    "61": {
+      "strength": 125,
+      "agility": 68,
+      "intellect": 61,
+      "will": 75,
+      "attack": 212,
+      "hp": 3867
+    },
+    "62": {
+      "strength": 127,
+      "agility": 69,
+      "intellect": 62,
+      "will": 76,
+      "attack": 215,
+      "hp": 3923
+    },
+    "63": {
+      "strength": 129,
+      "agility": 70,
+      "intellect": 63,
+      "will": 77,
+      "attack": 218,
+      "hp": 3980
+    },
+    "64": {
+      "strength": 131,
+      "agility": 71,
+      "intellect": 63,
+      "will": 78,
+      "attack": 221,
+      "hp": 4036
+    },
+    "65": {
+      "strength": 132,
+      "agility": 72,
+      "intellect": 64,
+      "will": 79,
+      "attack": 224,
+      "hp": 4092
+    },
+    "66": {
+      "strength": 134,
+      "agility": 73,
+      "intellect": 65,
+      "will": 81,
+      "attack": 227,
+      "hp": 4148
+    },
+    "67": {
+      "strength": 136,
+      "agility": 74,
+      "intellect": 66,
+      "will": 82,
+      "attack": 230,
+      "hp": 4204
+    },
+    "68": {
+      "strength": 138,
+      "agility": 75,
+      "intellect": 67,
+      "will": 83,
+      "attack": 233,
+      "hp": 4260
+    },
+    "69": {
+      "strength": 139,
+      "agility": 76,
+      "intellect": 68,
+      "will": 84,
+      "attack": 236,
+      "hp": 4316
+    },
+    "70": {
+      "strength": 141,
+      "agility": 77,
+      "intellect": 69,
+      "will": 85,
+      "attack": 239,
+      "hp": 4372
+    },
+    "71": {
+      "strength": 143,
+      "agility": 78,
+      "intellect": 70,
+      "will": 86,
+      "attack": 242,
+      "hp": 4429
+    },
+    "72": {
+      "strength": 145,
+      "agility": 79,
+      "intellect": 70,
+      "will": 87,
+      "attack": 245,
+      "hp": 4485
+    },
+    "73": {
+      "strength": 146,
+      "agility": 80,
+      "intellect": 71,
+      "will": 88,
+      "attack": 248,
+      "hp": 4541
+    },
+    "74": {
+      "strength": 148,
+      "agility": 81,
+      "intellect": 72,
+      "will": 89,
+      "attack": 251,
+      "hp": 4597
+    },
+    "75": {
+      "strength": 150,
+      "agility": 82,
+      "intellect": 73,
+      "will": 90,
+      "attack": 254,
+      "hp": 4653
+    },
+    "76": {
+      "strength": 152,
+      "agility": 83,
+      "intellect": 74,
+      "will": 91,
+      "attack": 257,
+      "hp": 4709
+    },
+    "77": {
+      "strength": 153,
+      "agility": 84,
+      "intellect": 75,
+      "will": 92,
+      "attack": 261,
+      "hp": 4765
+    },
+    "78": {
+      "strength": 155,
+      "agility": 85,
+      "intellect": 76,
+      "will": 93,
+      "attack": 264,
+      "hp": 4821
+    },
+    "79": {
+      "strength": 157,
+      "agility": 86,
+      "intellect": 77,
+      "will": 94,
+      "attack": 267,
+      "hp": 4878
+    },
+    "80": {
+      "strength": 159,
+      "agility": 87,
+      "intellect": 77,
+      "will": 96,
+      "attack": 270,
+      "hp": 4934
+    },
+    "81": {
+      "strength": 160,
+      "agility": 88,
+      "intellect": 78,
+      "will": 97,
+      "attack": 273,
+      "hp": 4990
+    },
+    "82": {
+      "strength": 162,
+      "agility": 89,
+      "intellect": 79,
+      "will": 98,
+      "attack": 276,
+      "hp": 5046
+    },
+    "83": {
+      "strength": 164,
+      "agility": 90,
+      "intellect": 80,
+      "will": 99,
+      "attack": 279,
+      "hp": 5102
+    },
+    "84": {
+      "strength": 165,
+      "agility": 91,
+      "intellect": 81,
+      "will": 100,
+      "attack": 282,
+      "hp": 5158
+    },
+    "85": {
+      "strength": 167,
+      "agility": 92,
+      "intellect": 82,
+      "will": 101,
+      "attack": 285,
+      "hp": 5214
+    },
+    "86": {
+      "strength": 169,
+      "agility": 93,
+      "intellect": 83,
+      "will": 102,
+      "attack": 288,
+      "hp": 5270
+    },
+    "87": {
+      "strength": 171,
+      "agility": 94,
+      "intellect": 84,
+      "will": 103,
+      "attack": 291,
+      "hp": 5327
+    },
+    "88": {
+      "strength": 172,
+      "agility": 95,
+      "intellect": 85,
+      "will": 104,
+      "attack": 294,
+      "hp": 5383
+    },
+    "89": {
+      "strength": 174,
+      "agility": 95,
+      "intellect": 85,
+      "will": 105,
+      "attack": 297,
+      "hp": 5439
+    },
+    "90": {
+      "strength": 176,
+      "agility": 96,
+      "intellect": 86,
+      "will": 106,
+      "attack": 300,
+      "hp": 5495
+    }
+  }
+}
