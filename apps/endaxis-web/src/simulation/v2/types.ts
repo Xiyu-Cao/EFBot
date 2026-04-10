@@ -96,8 +96,12 @@ export interface Hit {
 
 /** Damage component of a hit. */
 export interface DamageInfo {
-  /** Skill multiplier (percentage, e.g., 140 = 140%). */
-  multiplier: number;
+  /**
+   * Multiplier reference — resolved at runtime from skills.json level data.
+   * Use EITHER `multiplier` (fixed value) OR `multiplierRef` (level-dependent).
+   */
+  multiplier?: number;
+  multiplierRef?: MultiplierRef;
   /** Stagger value added to enemy stagger bar. */
   stagger: number;
   /** Damage element. */
@@ -108,6 +112,31 @@ export interface DamageInfo {
   school: DamageSchool;
   /** Source action type (for damage bonus zone routing). */
   sourceType: ActionType;
+}
+
+/**
+ * Reference to a level-dependent multiplier from skills.json.
+ *
+ * Each skill description has named multiplier rows (e.g., "初始爆炸伤害倍率")
+ * with 12 values (Rank1-9, M1-M3). At runtime, the kernel resolves the
+ * actual multiplier based on the actor's current skill level.
+ *
+ * Examples:
+ *   - Single hit using full value:  { label: "伤害倍率", share: 1 }
+ *   - 8 hits equally sharing:       { label: "持续伤害每段倍率", share: "equal", equalCount: 8 }
+ *   - Hit using 30% of a segment:   { label: "总伤害倍率", share: 0.3 }
+ */
+export interface MultiplierRef {
+  /** Label matching a row in skills.json levelData (e.g., "初始爆炸伤害倍率"). */
+  label: string;
+  /**
+   * How much of this multiplier row this hit uses:
+   * - number (0-1): fixed fraction (1 = full value)
+   * - "equal": evenly split among equalCount hits
+   */
+  share: number | "equal";
+  /** When share="equal", how many hits share this multiplier row. */
+  equalCount?: number;
 }
 
 /** An effect applied by a hit. */

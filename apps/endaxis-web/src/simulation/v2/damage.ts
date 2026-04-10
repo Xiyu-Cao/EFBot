@@ -7,13 +7,35 @@
  * Formula from: reports/kernel-mechanics-audit-2026-04-09.md §1
  */
 
-import type { DamageElement, DamageSchool, ActionType } from "./types";
+import type { DamageElement, DamageSchool, ActionType, MultiplierRef } from "./types";
 import type { BuildStats } from "./characterBuild";
 import { truncate1 } from "./characterBuild";
 
 // ═══════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve a MultiplierRef to an actual percentage value.
+ *
+ * @param ref - The multiplier reference
+ * @param lookupFn - Function that returns the raw value from skills.json
+ *                   for a given label at the current skill level.
+ *                   Should return the percentage number (e.g., 140 for 140%).
+ */
+export function resolveMultiplier(
+  ref: MultiplierRef,
+  lookupFn: (label: string) => number,
+): number {
+  const rawValue = lookupFn(ref.label);
+  if (ref.share === "equal" && ref.equalCount && ref.equalCount > 0) {
+    return rawValue / ref.equalCount;
+  }
+  if (typeof ref.share === "number") {
+    return rawValue * ref.share;
+  }
+  return rawValue;
+}
 
 /** All inputs needed to resolve a single damage instance. */
 export interface DamageContext {
