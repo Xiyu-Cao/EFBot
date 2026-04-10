@@ -328,6 +328,40 @@ on_effect_consumed       — 指定效果被消耗（effect_id，非自然到期
 **历史文件**（已迁移至 `Archived_Report/`）:
 - `pending-effects-audit.md`、`pending-skills-talents-2026-04-05.md`、`weapon-equipment-audit.md`、`skill-todo-2026-04-05.md` 等
 
+## V2 计算内核（开发中）
+
+位置: `apps/endaxis-web/src/simulation/v2/`
+
+**三层架构**:
+- Layer 1 (`characterBuild.ts`): 角色数据 → stat breakdown（战斗中不可变）
+- Layer 2 (`kernel.ts` + 模块): 接收技能序列 → 逐 hit 结算 → 产出 EventLog
+- Layer 3 (`projections.ts`): EventLog → UI 数据（纯投影，不参与计算）
+
+**核心原则**:
+- 所有效果基于具体 hit 触发，先特效后伤害
+- 天赋/武器效果通过 PassiveTrigger 事件驱动，不写在 hit 里
+- 不复用旧引擎代码，公式从审计报告实现
+- 可以不触发但绝不能错误触发
+
+**模块**:
+| 文件 | 功能 |
+|------|------|
+| `types.ts` | 类型定义（Skill, Hit, EventLog, PassiveTrigger） |
+| `characterBuild.ts` | stat breakdown，不预算最终值 |
+| `damage.ts` | 11 乘区伤害 + MultiplierRef + 暴击 |
+| `anomaly.ts` | 附着/反应/物理异常/破防/失衡 |
+| `resources.ts` | SP(trueSP/refundSP) + Gauge |
+| `effects.ts` | Buff 管理 + Stack buff + 变体选择 |
+| `triggers.ts` | 触发器处理器（immediate/deferred） |
+| `projections.ts` | 8 个投影函数 |
+| `kernel.ts` | 主循环 |
+
+**待完成**: 技能 hit 数据填充 → 天赋/武器触发器数据 → 前端集成
+
+**参考文档**:
+- 审计报告: `reports/kernel-mechanics-audit-2026-04-09.md`
+- 技能模板: `reports/v2-skill-hit-template.md`
+
 ## 其他注意事项
 
 - Python 后端 (`apps/python-app/`) 基本闲置，TypeScript 引擎已完全替代其计算职能
