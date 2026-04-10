@@ -231,6 +231,121 @@ export type PhysicalAnomalyType = "launch" | "knockdown" | "slam" | "armorBreak"
 export type BuffTarget = "self" | "team" | "enemy" | "others";
 
 // ═══════════════════════════════════════════════════════════════════
+// Trigger system (天赋/武器被动/套装效果)
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * A passive trigger registered on an actor (from talent, weapon, equipment set).
+ *
+ * After each hit's effects and damage are resolved, the kernel runs all
+ * active triggers. Triggers that match fire their action (which may
+ * produce more events/effects).
+ *
+ * Timing:
+ *   - immediate (deferred=false): fires right after the triggering event
+ *   - deferred (deferred=true): fires after the entire hit's processing
+ *     completes (effects + damage + immediate triggers), useful for
+ *     "xx后" (after X) semantics where the trigger should see the
+ *     result of the hit before acting.
+ *
+ * Example — 莱万汀"灼心":
+ *   listenTo: "heavy_attack_hit"
+ *   deferred: false (fires immediately on hit)
+ *   condition: enemy has blaze attachment
+ *   action: consume blaze attachment → add magma stacks
+ *
+ * Example — 别礼"低温症":
+ *   listenTo: "attachment_consumed"
+ *   deferred: true (fires after hit completes, including damage that
+ *            read the attachment for multiplier)
+ *   condition: consumed element was cold
+ *   action: apply cold fragility debuff
+ */
+export interface PassiveTrigger {
+  /** Unique id for this trigger (for tracking/debug). */
+  id: string;
+  /** Source of this trigger (e.g., "talent_灼心", "weapon_熔铸火焰"). */
+  source: string;
+  /** Which event type to listen for. */
+  listenTo: TriggerEventType;
+  /** If true, action fires after the hit's full processing completes. */
+  deferred: boolean;
+  /** Must the event source be this trigger's owner? Default true. */
+  sourceMustBeOwner?: boolean;
+  /** Internal cooldown id (for ICD tracking). */
+  cooldownId?: string;
+  /** ICD duration in seconds. */
+  cooldownDuration?: number;
+  /** Additional condition to check (return false to skip). */
+  condition?: TriggerCondition;
+  /** Effect(s) to produce when triggered. */
+  actions: HitEffect[];
+}
+
+/**
+ * Events that triggers can listen to.
+ * These are produced by the kernel during hit processing.
+ */
+export type TriggerEventType =
+  // Hit events
+  | "hit_damage"             // any damage dealt
+  | "hit_effect"             // any effect applied
+  // Specific action type hits
+  | "attack_hit"             // normal attack hit
+  | "heavy_attack_hit"       // heavy attack (last segment) hit
+  | "skill_hit"              // 战技 hit
+  | "link_hit"               // 连携技 hit
+  | "ultimate_hit"           // 终结技 hit
+  | "execution_hit"          // 处决 hit
+  // Attachment events
+  | "attachment_applied"     // magic attachment added/stacked
+  | "attachment_consumed"    // attachment consumed by reaction
+  | "magic_burst"            // same-element burst triggered
+  // Anomaly events
+  | "anomaly_applied"        // any spell anomaly applied (burn/freeze/conduction/corrosion)
+  | "burn_applied"
+  | "freeze_applied"
+  | "conduction_applied"
+  | "corrosion_applied"
+  | "anomaly_consumed"       // anomaly consumed/expired
+  // Physical events
+  | "physical_anomaly"       // any physical anomaly (launch/knockdown/slam/armorBreak)
+  | "break_applied"          // break stack added
+  | "break_consumed"         // break stacks consumed (slam/armorBreak)
+  // Stagger events
+  | "stagger_increased"      // stagger value increased
+  | "stagger_node_reached"   // stagger node threshold hit
+  | "stagger_full"           // entered stagger state
+  // Resource events
+  | "sp_restored"            // SP recovered
+  | "sp_consumed"            // SP spent
+  | "gauge_gained"           // ultimate gauge increased
+  // Stack buff events
+  | "stack_buff_gained"      // special layer buff gained
+  | "stack_buff_consumed"    // special layer buff consumed
+  // Buff events
+  | "buff_applied"           // any buff applied
+  | "buff_removed";          // any buff removed/expired
+
+/**
+ * Condition for trigger evaluation.
+ * Can check enemy state, actor state, or event properties.
+ */
+export interface TriggerCondition {
+  type: string;
+  params: Record<string, unknown>;
+}
+
+// Known condition types:
+// "enemy_has_attachment"     { element?: MagicElement }  — enemy has any/specific attachment
+// "enemy_has_anomaly"        { anomalyType: AnomalyType }
+// "enemy_has_break"          {}
+// "enemy_is_staggered"       {}
+// "actor_has_stack_buff"     { buffType: string, op: string, value: number }
+// "consumed_element"         { element: MagicElement }  — for attachment_consumed events
+// "source_action_type"       { actionType: ActionType }  — event came from this skill type
+
+// ═══════════════════════════════════════════════════════════════════
 // Event Log (kernel output)
 // ═══════════════════════════════════════════════════════════════════
 
