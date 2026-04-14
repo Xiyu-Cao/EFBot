@@ -20,8 +20,9 @@
  * 4. All subsequent damage is based on this floored ATK
  *
  * Status: working verified — validated with 伊冯+艺术暴君 and 莱万汀+熔铸火焰.
- * Note: "战斗内部是否也用 floor 后整数攻击力" 仍未最终确认,
- *       当前按 floor 实现, 与面板显示一致.
+ * Note: 管理员实测(2026-04-13)显示战斗内大概率使用浮点ATK而非floor后整数：
+ *       武器ATK为浮点(武器页面四舍五入, 角色面板取整), 战斗伤害与浮点ATK吻合。
+ *       当前仍按 floor 实现, 待更多干员数据确认后决定是否改为浮点。
  */
 
 import type { ActorStats } from "../compiler/types";

@@ -167,8 +167,10 @@ export const useTimelineStore = defineStore('timeline', () => {
         staggerNodeCount: 0,
         staggerNodeDuration: 2,
         staggerBreakDuration: 10,
-        executionRecovery: 25
+        executionRecovery: 100
     }
+
+    const EXECUTION_RECOVERY_BY_TIER = { boss: 100, head: 100, champion: 75, elite: 75, normal: 50 }
 
     const systemConstants = ref({ ...DEFAULT_SYSTEM_CONSTANTS })
     const customEnemyParams = ref({
@@ -176,7 +178,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         staggerNodeCount: 0,
         staggerNodeDuration: 2,
         staggerBreakDuration: 10,
-        executionRecovery: 25
+        executionRecovery: 100
     })
 
     watch(systemConstants, (newVal) => {
@@ -1528,7 +1530,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     /**
      * Switch main control to a specific track (F1-F4) or cycle to next (Q).
-     * Respects the 2s main control switch CD.
+     * Respects the 1s main control switch CD.
      */
     function switchMainControlTo(trackId) {
         if (timelineEditorMode.value !== 'realistic' || _warningActive) return
@@ -1710,7 +1712,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         const refTime = Math.max(lastAtkEnd, lastDodgeEnd)
         const idleTime = (playheadTime.value - refTime) - cumulOtherTime
         let startIdx = 0
-        if (prevSeqIdx > 0 && prevSeqIdx < total && idleTime <= 1) startIdx = prevSeqIdx
+        if (prevSeqIdx > 0 && prevSeqIdx < total && idleTime <= 0.5) startIdx = prevSeqIdx
 
         _playheadDirtyFlag = false
         commitState()
@@ -3252,7 +3254,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                 systemConstants.value.staggerNodeCount = enemy.staggerNodeCount
                 systemConstants.value.staggerNodeDuration = enemy.staggerNodeDuration
                 systemConstants.value.staggerBreakDuration = enemy.staggerBreakDuration
-                systemConstants.value.executionRecovery = enemy.executionRecovery
+                systemConstants.value.executionRecovery = enemy.executionRecovery ?? EXECUTION_RECOVERY_BY_TIER[enemy.tier] ?? 100
             }
         }
     }
@@ -3283,7 +3285,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     function setDraggingSkill(skill) { draggingSkillData.value = skill }
 
-    const MAIN_CONTROL_CD = 2  // seconds
+    const MAIN_CONTROL_CD = 1  // seconds
 
     // 计算在 baseEvents 下，每个 trackId 的"禁回"截止时间 Map<trackId, latestCooldownEnd>
     function _buildMainControlCooldowns(baseEvents) {
@@ -3782,7 +3784,7 @@ export const useTimelineStore = defineStore('timeline', () => {
             const refTime = Math.max(lastAtkEnd, lastDodgeEnd)
             const idleTime = (startTime - refTime) - cumulOtherTime
             let nextIdx = 0
-            if (prevSeqIdx > 0 && prevSeqIdx < total && idleTime <= 1) nextIdx = prevSeqIdx
+            if (prevSeqIdx > 0 && prevSeqIdx < total && idleTime <= 0.5) nextIdx = prevSeqIdx
 
             const seg = rawSegs[nextIdx]
             const seqIdx = nextIdx + 1

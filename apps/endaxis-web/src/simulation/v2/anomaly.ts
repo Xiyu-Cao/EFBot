@@ -21,6 +21,9 @@ export const ATTACHMENT_DURATION = 30;   // seconds
 export const BREAK_MAX_STACKS = 4;
 export const BREAK_DURATION = 30;        // seconds
 
+/** Bonus stagger applied by launch/knockdown, scaled by artsPowerStaggerMult. */
+export const LAUNCH_KNOCKDOWN_BONUS_STAGGER = 10;
+
 /** Cross-element reaction: incoming element → anomaly type. */
 export const CROSS_ELEMENT_ANOMALY: Record<MagicElement, AnomalyType> = {
   fire: "burning",
@@ -67,7 +70,11 @@ export function artsPowerDebuffMult(artsPower: number): number {
   return 1 + (2 * artsPower) / (300 + artsPower);
 }
 
-/** Arts power → stagger multiplier. */
+/**
+ * Arts power → stagger multiplier for launch/knockdown bonus stagger only.
+ * Every 2 points of artsPower = +1% (i.e., +0.1 stagger on the base 10).
+ * Does NOT affect skill hit stagger values.
+ */
 export function artsPowerStaggerMult(artsPower: number): number {
   return 1 + artsPower * 0.005;
 }

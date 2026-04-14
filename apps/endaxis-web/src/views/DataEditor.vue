@@ -1385,7 +1385,7 @@ function addNewEnemy() {
     staggerNodeCount: 0,
     staggerNodeDuration: 2,
     staggerBreakDuration: 10,
-    executionRecovery: 20,
+    executionRecovery: 100,
     category: '',
     tier: 'normal'
   }

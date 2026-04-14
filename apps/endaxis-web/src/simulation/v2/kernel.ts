@@ -7,11 +7,24 @@
  * Processing per skill:
  *   1. Variant selection (if conditions defined)
  *   2. Action start (SP cost, gauge cost, regen pause)
- *   3. For each hit (in checkpoint order):
- *      a. Effects first (attachments, anomalies, buffs, SP restore, etc.)
- *      b. Damage second (if hit has damage)
- *      c. Stagger update (if damage has stagger)
+ *   3. For each hit — four-phase execution model:
+ *      Phase 1: Effects (attachments, anomalies, buffs, SP restore, etc.)
+ *               Effects may produce sub-damages (slam, crystal shatter) and
+ *               deferred actions (buff removal, talent triggers).
+ *      Phase 2: Effect-generated damages resolved.
+ *               State from before consumption still applies (e.g., 现実静滞
+ *               fragility buff active during slam + crystal shatter damage).
+ *      Phase 3: Deferred actions executed (consumption cleanup, talent buffs).
+ *               Consumed buffs removed, new buffs applied.
+ *      Phase 4: Hit's own damage resolved.
+ *               Sees post-deferred state (e.g., 本質瓦解 ATK buff active,
+ *               现実静滞 already removed).
  *   4. Action end
+ *
+ * Key principle: effect chains fully resolve (including their damages and
+ * deferred cleanup) before the hit's own damage is calculated. This ensures
+ * consumption-triggered buffs affect the hit's damage while consumed debuffs
+ * only apply to effect-generated damages.
  *
  * The kernel is stateful during a run but produces an immutable EventLog.
  */
@@ -25,6 +38,7 @@ import type {
   SimEvent,
   SimulationResult,
   DamageElement,
+  DamageSchool,
   MagicElement,
   AnomalyType,
   ActionType,
@@ -43,6 +57,22 @@ import {
 } from "./anomaly";
 import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain, SP_CAP } from "./resources";
 import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState } from "./effects";
+
+// ═══════════════════════════════════════════════════════════════════
+// Effect damage — produced by effects during Phase 1, resolved in Phase 2
+// ═══════════════════════════════════════════════════════════════════
+
+/** A damage request produced by an effect (slam, crystal shatter, etc.). */
+interface EffectDamage {
+  sourceId: string;
+  actionId: string;
+  multiplier: number;
+  stagger: number;
+  element: DamageElement;
+  school: DamageSchool;
+  sourceType: ActionType;
+  canCrit: boolean;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Kernel input
@@ -327,7 +357,7 @@ export function simulate(
       gauge?.addBlockWindow(startTime, enhEnd);
     }
 
-    // ── 3. Process hits ──
+    // ── 3. Process hits (four-phase model) ──
     for (let hitIdx = 0; hitIdx < skill.hits.length; hitIdx++) {
       const hit = skill.hits[hitIdx];
       const hitTime = startTime + hit.offset;
@@ -337,12 +367,67 @@ export function simulate(
       // Advance enemy state
       enemy.advanceTime(hitTime);
 
-      // ── 3a. Effects first ──
+      // Queues populated during effect processing
+      const effectDamages: EffectDamage[] = [];
+      const deferredActions: (() => void)[] = [];
+
+      // ── Phase 1: Effects ──
+      // Process hit effects. Effects may push sub-damages into effectDamages
+      // and cleanup actions into deferredActions.
       for (const effect of hit.effects) {
-        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit);
+        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions);
       }
 
-      // ── 3b. Damage second ──
+      // ── Phase 2: Effect-generated damages ──
+      // Resolve damages produced by effects (slam, crystal shatter, etc.).
+      // Enemy state from before deferred cleanup still applies (e.g., fragility buffs).
+      for (const eDmg of effectDamages) {
+        const buffMods = getBuffModifiers(eDmg.sourceId, hitTime);
+        const eBuild = buildMap.get(eDmg.sourceId) || build;
+        const ctx: DamageContext = {
+          source: { buildStats: eBuild.buildStats, buffModifiers: buffMods },
+          target: {
+            defenseMultiplier: enemyConfig.defenseMultiplier,
+            resistPhysical: enemyConfig.basePhysicalResist,
+            resistBlaze: enemyConfig.baseMagicResist,
+            resistEmag: enemyConfig.baseMagicResist,
+            resistCold: enemyConfig.baseMagicResist,
+            resistNature: enemyConfig.baseMagicResist,
+            resistReduction: enemy.resistReduction,
+            isStaggered: enemy.isStaggered,
+            vulnerability: enemy.vulnerability,
+            physicalFragility: enemy.physicalFragility,
+            magicFragility: enemy.magicFragility,
+            elementFragility: { ...enemy.elementFragility },
+          },
+          multiplier: eDmg.multiplier,
+          element: eDmg.element,
+          school: eDmg.school,
+          sourceType: eDmg.sourceType,
+          canCrit: eDmg.canCrit,
+          critMode: config.critMode,
+          rng,
+        };
+        const result = resolveDamage(ctx);
+        emit({
+          type: "damage", time: hitTime,
+          sourceId: eDmg.sourceId, targetId: "boss",
+          damage: result.finalDamage, multiplier: eDmg.multiplier,
+          stagger: eDmg.stagger, isCrit: result.isCrit,
+          element: eDmg.element, school: eDmg.school,
+          actionId: eDmg.actionId, hitIndex: hitIdx,
+        });
+      }
+
+      // ── Phase 3: Deferred actions ──
+      // Consumption cleanup, talent buff application, etc.
+      // After this phase, consumed buffs are gone and new buffs are active.
+      for (const action of deferredActions) {
+        action();
+      }
+
+      // ── Phase 4: Hit's own damage ──
+      // Resolved last — sees post-deferred state.
       if (hit.damage) {
         const buffMods = getBuffModifiers(actorId, hitTime);
         const ctx: DamageContext = {
@@ -380,7 +465,7 @@ export function simulate(
           actionId, hitIndex: hitIdx,
         });
 
-        // ── 3c. Stagger ──
+        // Stagger from hit damage
         if (hit.damage.stagger > 0 && !enemy.isStaggered) {
           const staggerResult = resolveStagger(
             hit.damage.stagger, enemy.stagger,
@@ -460,6 +545,8 @@ export function simulate(
     hitIndex: number,
     build: CharacterBuild,
     emit: (e: SimEvent) => void,
+    effectDamages: EffectDamage[],
+    deferredActions: (() => void)[],
   ): void {
     switch (effect.type) {
       case "magic_attachment": {
@@ -534,22 +621,51 @@ export function simulate(
             stacks: enemy.breakStacks, prevStacks: prev,
           });
         } else if (outcome.type === "slam") {
+          // Phase 1: consume break stacks (state change)
+          const consumed = outcome.breakStacksConsumed;
           enemy.breakStacks = 0;
-          emit({ type: "break_change", time, stacks: 0, prevStacks: outcome.breakStacksConsumed });
-        } else if (outcome.type === "armorBreak") {
-          enemy.breakStacks = 0;
-          emit({ type: "break_change", time, stacks: 0, prevStacks: outcome.breakStacksConsumed });
-          // Apply physical vulnerability
+          emit({ type: "break_change", time, stacks: 0, prevStacks: consumed });
+          // Queue slam damage for Phase 2
           const artsPower = build.stats.originiumArtsPower;
-          const vuln = armorBreakVulnerability(outcome.breakStacksConsumed, artsPower);
-          const dur = armorBreakVulnDuration(outcome.breakStacksConsumed);
+          const mult = slamMult(consumed, 1, artsPower); // level=1 simplified
+          effectDamages.push({
+            sourceId: actorId, actionId,
+            multiplier: mult, stagger: 0,
+            element: "physical", school: "physical", sourceType: "skill",
+            canCrit: false,
+          });
+        } else if (outcome.type === "armorBreak") {
+          // Phase 1: consume break stacks + apply vulnerability
+          const consumed = outcome.breakStacksConsumed;
+          enemy.breakStacks = 0;
+          emit({ type: "break_change", time, stacks: 0, prevStacks: consumed });
+          const artsPower = build.stats.originiumArtsPower;
+          const vuln = armorBreakVulnerability(consumed, artsPower);
+          const dur = armorBreakVulnDuration(consumed);
           enemy.physicalFragility += vuln; // simplified: additive
+          // Queue armorBreak damage for Phase 2
+          const mult = armorBreakMult(consumed, 1, artsPower); // level=1 simplified
+          effectDamages.push({
+            sourceId: actorId, actionId,
+            multiplier: mult, stagger: 0,
+            element: "physical", school: "physical", sourceType: "skill",
+            canCrit: false,
+          });
         } else if (outcome.type === "launch" || outcome.type === "knockdown") {
-          // Add break stacks + refresh
+          // Launch/knockdown: don't consume break, add 1 stack
           const prev = enemy.breakStacks;
           enemy.breakStacks = Math.min(BREAK_MAX_STACKS, enemy.breakStacks + 1);
           enemy.breakExpiresAt = time + BREAK_DURATION;
           emit({ type: "break_change", time, stacks: enemy.breakStacks, prevStacks: prev });
+          // Queue launch/knockdown damage for Phase 2
+          const artsPower = build.stats.originiumArtsPower;
+          const mult = launchKnockdownMult(1, artsPower); // level=1 simplified
+          effectDamages.push({
+            sourceId: actorId, actionId,
+            multiplier: mult, stagger: 0,
+            element: "physical", school: "physical", sourceType: "skill",
+            canCrit: false,
+          });
         }
         break;
       }

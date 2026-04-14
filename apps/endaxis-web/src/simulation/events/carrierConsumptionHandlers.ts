@@ -272,7 +272,7 @@ export function applyEndminLinkedDebuff(ctx: SimulationContext): void {
           duration: 999999, // lives as long as crystal — removed on consumption
           startTime: ctx.state.getCurrentTime(),
           properties: {
-            dynamicBonuses: [{ stat: "physical_dmg", value: t1.value, zone: "fragility" }] as DynamicBonus[],
+            dynamicBonuses: [{ stat: "physical_dmg", value: t1.value, zone: "vulnerability" }] as DynamicBonus[],
             sourceActorId: "ENDMINISTRATOR",
           },
         }),
@@ -1074,7 +1074,7 @@ function registerLastritePhantom(
   const multRow = getSkillsJsonRowByLabel("LASTRITE", "skill", "幻影追击伤害倍率") ?? [];
   let baseMult = parseFloat(String(multRow[idx] ?? "320").replace("%", "")) / 100;
 
-  // P1 (守墓人之赠): phantom +20% damage + 5 stagger
+  // P1 (守墓人之赠): heavy attack +20% dmgBonus + 5 stagger (NOT phantom)
   // P5 (寒风再起): phantom ×1.2 + skill +5SP
   let hasP1 = false;
   let hasP5 = false;
@@ -1085,9 +1085,11 @@ function registerLastritePhantom(
   } catch { /* */ }
 
   let mult = baseMult;
-  if (hasP1) mult *= 1.2; // P1: +20% damage
+  // P1 affects heavy attack (dmgBonus +20%, stagger +5), not phantom.
+  // TODO: implement P1 as heavy attack buff when 低温灌注 is active.
+  // V1 lacks heavy attack detection hook — defer to v2 trigger system.
   if (hasP5) mult *= 1.2; // P5: phantom ×1.2
-  const phantomStagger = hasP1 ? 5 : 0; // P1: +5 stagger
+  const phantomStagger = 0;
 
   // Simplified: phantom attack fires when skill is used (default trigger,
   // since actual trigger = heavy attack after buff, but we don't have heavy attack detection)

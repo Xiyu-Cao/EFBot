@@ -356,7 +356,7 @@ const TALENT_CONDITIONAL_TRIGGERS: Record<string, TalentConditionalDescriptor[]>
     },
   ],
 
-  // 启动进程: link hit on cold-attached/frozen target → enemy cold fragility 7/10%, 5s
+  // 启动进程: link hit on cold-attached/frozen target → enemy cold vulnerability 7/10%, 5s
   XAIHI: [
     {
       effectMatch: { type: "damage_bonus", stat: "cold_dmg" },
@@ -372,7 +372,7 @@ const TALENT_CONDITIONAL_TRIGGERS: Record<string, TalentConditionalDescriptor[]>
       buffId: "xaihi_cold_fragility",
       duration: 5,
       target: "enemy",
-      bonusOverride: (value: number) => [{ stat: "cold_dmg", value, zone: "fragility" }],
+      bonusOverride: (value: number) => [{ stat: "cold_dmg", value, zone: "vulnerability" }],
     },
   ],
 
@@ -446,9 +446,9 @@ const TALENT_CONDITIONAL_TRIGGERS: Record<string, TalentConditionalDescriptor[]>
     })(),
   ],
 
-  // 斫痕: skill DAMAGE_TICK → enemy 爪印斫痕 (fragility debuff + DoT)
-  // P1: ATK 25% DoT, physical+blaze fragility +6%, 15s
-  // P2: ATK 30% DoT, physical+blaze fragility +12%, 25s
+  // 斫痕: skill DAMAGE_TICK → enemy 爪印斫痕 (vulnerability debuff + DoT)
+  // P1: ATK 25% DoT, physical+blaze vulnerability +6%, 15s
+  // P2: ATK 30% DoT, physical+blaze vulnerability +12%, 25s
   // talents.json value = ATK% for DoT (25 or 30).
   ROSSI: [
     (() => {
@@ -456,11 +456,11 @@ const TALENT_CONDITIONAL_TRIGGERS: Record<string, TalentConditionalDescriptor[]>
         // P1(value=25) → fragility 6%, duration 15s
         // P2(value=30) → fragility 12%, duration 25s
         return atkPct <= 25
-          ? { fragilityPct: 6, dotMult: atkPct / 100, dotDuration: 15 }
-          : { fragilityPct: 12, dotMult: atkPct / 100, dotDuration: 25 };
+          ? { vulnerabilityPct: 6, dotMult: atkPct / 100, dotDuration: 15 }
+          : { vulnerabilityPct: 12, dotMult: atkPct / 100, dotDuration: 25 };
       }
 
-      let _params = { fragilityPct: 6, dotMult: 0.25, dotDuration: 15 };
+      let _params = { vulnerabilityPct: 6, dotMult: 0.25, dotDuration: 15 };
 
       return {
         effectMatch: { type: "stat_bonus", stat: "attack_percent" },
@@ -476,8 +476,8 @@ const TALENT_CONDITIONAL_TRIGGERS: Record<string, TalentConditionalDescriptor[]>
         bonusOverride: (value: number) => {
           _params = deriveParams(value);
           return [
-            { stat: "physical_dmg" as const, value: _params.fragilityPct, zone: "fragility" as const },
-            { stat: "blaze_dmg" as const, value: _params.fragilityPct, zone: "fragility" as const },
+            { stat: "physical_dmg" as const, value: _params.vulnerabilityPct, zone: "vulnerability" as const },
+            { stat: "blaze_dmg" as const, value: _params.vulnerabilityPct, zone: "vulnerability" as const },
           ];
         },
         postAction: (_e: any, ctx: any, _actorId: string) => {
