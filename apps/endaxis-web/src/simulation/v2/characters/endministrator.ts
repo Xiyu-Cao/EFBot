@@ -232,15 +232,38 @@ const realityStasis: PassiveTrigger = {
   ],
 };
 
-const crystalConsumption: PassiveTrigger = {
-  id: "endmin_crystal_consumption",
-  source: "endmin_debuff_消耗",
+/**
+ * 源石结晶消耗 — 物理异常/破防触发
+ * 碎晶伤害来源 = 触发源的技能类型（如战技猛击触发 → sourceType=skill）
+ * 常规碎晶由物理异常触发，伤害来源视为连携技（结晶由连携技施加）
+ */
+const crystalConsumptionByAnomaly: PassiveTrigger = {
+  id: "endmin_crystal_consumption_anomaly",
+  source: "endmin_debuff_消耗(物理异常)",
   listenTo: "physical_anomaly",
   deferred: false,
   sourceMustBeOwner: false,
   condition: { type: "enemy_has_buff", params: { buffId: "endmin_debuff" } },
   actions: [
     { type: "buff_consume", params: { buffId: "endmin_debuff", stacks: "all" } },
+    // 碎晶伤害 sourceType 继承触发源，但倍率引用连携技的"击碎结晶伤害倍率"
+  ],
+};
+
+/**
+ * 源石结晶消耗 — 终结技命中触发
+ * 碎晶伤害来源 = ultimate（终结技增伤生效）
+ */
+const crystalConsumptionByUltimate: PassiveTrigger = {
+  id: "endmin_crystal_consumption_ultimate",
+  source: "endmin_debuff_消耗(终结技)",
+  listenTo: "ultimate_hit",
+  deferred: false,
+  sourceMustBeOwner: true,
+  condition: { type: "enemy_has_buff", params: { buffId: "endmin_debuff" } },
+  actions: [
+    { type: "buff_consume", params: { buffId: "endmin_debuff", stacks: "all" } },
+    // 碎晶伤害 sourceType = "ultimate"，吃终结技增伤
   ],
 };
 
@@ -258,5 +281,6 @@ export const skills = {
 export const triggers: PassiveTrigger[] = [
   essenceDissolve,
   realityStasis,
-  crystalConsumption,
+  crystalConsumptionByAnomaly,
+  crystalConsumptionByUltimate,
 ];

@@ -133,6 +133,8 @@ function moveTrackDown(index) {
 // 干员选择弹窗逻辑
 // ===================================================================================
 
+const V2_READY_CHARACTERS = new Set(['ENDMINISTRATOR', 'POGRANICHNK', 'LASTRITE'])
+
 const isSelectorVisible = ref(false)
 const targetTrackIndex = ref(null)
 const searchQuery = ref('')
@@ -2995,6 +2997,7 @@ onUnmounted(() => {
               </div>
               <div class="card-name">{{ char.name }}</div>
               <div v-if="store.tracks.some(t => t.id === char.id)" class="in-team-tag">{{ t('timelineGrid.operatorDialog.inTeam') }}</div>
+              <div v-if="!V2_READY_CHARACTERS.has(char.id)" class="pending-update-tag">待更新</div>
             </div>
           </div>
         </template>
@@ -4505,6 +4508,22 @@ body.capture-mode .davinci-range {
 
 .in-team-tag.weapon-equipped::before {
   content: 'EQUIPPED';
+}
+
+/* 待更新标签 */
+.pending-update-tag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(255, 80, 80, 0.85);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 5;
+  pointer-events: none;
+  line-height: 1.4;
 }
 
 .empty-roster {
