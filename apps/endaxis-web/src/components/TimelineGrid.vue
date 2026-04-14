@@ -13,6 +13,7 @@ import { useDragConnection } from '@/composables/useDragConnection.js'
 import { useI18n } from 'vue-i18n'
 import { snapMs } from '@/utils/precision.js'
 import { getRectPos } from '@/utils/layoutUtils.js'
+import { V2_READY_IDS } from '@/simulation/v2/characters/adapter'
 
 const store = useTimelineStore()
 const connectionHandler = useDragConnection()
@@ -133,7 +134,7 @@ function moveTrackDown(index) {
 // 干员选择弹窗逻辑
 // ===================================================================================
 
-const V2_READY_CHARACTERS = new Set(['ENDMINISTRATOR', 'POGRANICHNK', 'LASTRITE'])
+const V2_READY_CHARACTERS = V2_READY_IDS
 
 const isSelectorVisible = ref(false)
 const targetTrackIndex = ref(null)

@@ -11,6 +11,7 @@ import { compileScenario } from '@/simulation/compiler/compileScenario'
 import { simulate } from '@/simulation/simulator'
 import { ULTIMATE_ENHANCEMENT_EXTENDERS } from '@/simulation/compiler/enhancers'
 import { projectSpSeries } from '@/simulation/projection/projectSpSeries'
+import { applyV2Overrides, preloadV2Modules, V2_READY_IDS } from '@/simulation/v2/characters/adapter'
 import { projectStaggerSeries } from '@/simulation/projection/projectStaggerSeries'
 import { projectLinkTriggerSeries, computeLinkQueueAt } from '@/simulation/projection/projectLinkTriggerSeries'
 import { projectGaugeSeries as projGaugeSeries } from '@/simulation/projection/projectGaugeSeries'
@@ -8061,7 +8062,12 @@ export const useTimelineStore = defineStore('timeline', () => {
         if (data) {
             if (data.characterRoster) {
                 characterRoster.value = data.characterRoster.sort((a, b) => (b.rarity || 0) - (a.rarity || 0))
-                characterRoster.value.forEach(c => normalizeAttackSegmentsForCharacter(c))
+                // Apply v2 character data overrides before normalizing
+                await preloadV2Modules()
+                characterRoster.value.forEach(c => {
+                    applyV2Overrides(c)
+                    normalizeAttackSegmentsForCharacter(c)
+                })
             }
             if (data.ICON_DATABASE) {
                 iconDatabase.value = data.ICON_DATABASE
