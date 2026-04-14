@@ -85,10 +85,11 @@ export function convertSkillToLegacy(skill: Skill, animationTime?: number): Lega
   };
 }
 
-/** Convert v2 attack skills array into legacy attack_segments format */
+/** Convert v2 attack skills array into legacy attack_segments format.
+ *  Only includes normal attack segments (A1-AN), excludes execution and aerial. */
 export function convertAttackToSegments(attackSkills: Skill[]): any[] {
   return attackSkills
-    .filter(s => s.type === "attack" || s.type === "execution")
+    .filter(s => s.type === "attack" && !s.id.includes("execution") && !s.id.includes("aerial"))
     .map(skill => ({
       duration: skill.duration,
       gaugeGain: 0,
@@ -142,13 +143,27 @@ export function applyV2Overrides(char: any): boolean {
     char.ultimate_gaugeCost = skills.ultimate.gaugeCost;
   }
 
-  // ── Attack segments (普攻) ──
+  // ── Attack segments (普攻 A1-AN only) ──
   if (skills.attack) {
     const segments = convertAttackToSegments(skills.attack);
     char.attack_segments = segments;
-    // Also set total duration for the attack group
     const totalDur = segments.reduce((sum: number, s: any) => sum + (Number(s.duration) || 0), 0);
     char.attack_duration = totalDur;
+
+    // ── Execution (处决) — separate from attack segments ──
+    const execSkill = skills.attack.find((s: Skill) => s.type === "execution");
+    if (execSkill) {
+      const execLegacy = convertSkillToLegacy(execSkill);
+      char.execution_duration = execLegacy.duration;
+      char.execution_damage_ticks = execLegacy.damageTicks;
+    }
+
+    // ── Aerial attack (下落攻击) — separate from attack segments ──
+    const aerialSkill = skills.attack.find((s: Skill) => s.id.includes("aerial"));
+    if (aerialSkill) {
+      char.aerial_duration = aerialSkill.duration;
+      char.aerial_damage_ticks = convertHitsToTicks(aerialSkill);
+    }
   }
 
   return true;
