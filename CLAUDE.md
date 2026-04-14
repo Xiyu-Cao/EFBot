@@ -328,7 +328,7 @@ on_effect_consumed       — 指定效果被消耗（effect_id，非自然到期
 **历史文件**（已迁移至 `Archived_Report/`）:
 - `pending-effects-audit.md`、`pending-skills-talents-2026-04-05.md`、`weapon-equipment-audit.md`、`skill-todo-2026-04-05.md` 等
 
-## V2 计算内核（开发中）
+## V2 计算内核
 
 位置: `apps/endaxis-web/src/simulation/v2/`
 
@@ -337,11 +337,31 @@ on_effect_consumed       — 指定效果被消耗（effect_id，非自然到期
 - Layer 2 (`kernel.ts` + 模块): 接收技能序列 → 逐 hit 结算 → 产出 EventLog
 - Layer 3 (`projections.ts`): EventLog → UI 数据（纯投影，不参与计算）
 
+**四阶段 Hit 执行模型** (kernel.ts):
+```
+Phase 1: Effects（状态变更 + 收集 effectDamages 和 deferredActions）
+Phase 2: Effect damages（猛击/碎甲等效果伤害，享受消耗前的 buff 状态）
+Phase 3: Deferred actions（消耗清理、天赋 buff 施加）
+Phase 4: Hit 本体伤害（看到 deferred 后的状态）
+```
+
 **核心原则**:
 - 所有效果基于具体 hit 触发，先特效后伤害
+- 效果链完整结算后才轮到 hit 本体伤害
 - 天赋/武器效果通过 PassiveTrigger 事件驱动，不写在 hit 里
-- 不复用旧引擎代码，公式从审计报告实现
-- 可以不触发但绝不能错误触发
+- 战斗内 ATK 大概率使用浮点值（未取整），待更多数据确认
+
+**角色数据文件** (`v2/characters/`):
+每个角色一个 TypeScript 文件，包含:
+- Part 1: 静态数据（identity, levelStats, skillData, talents, potentials）
+- Part 2: 内核效果（skills 含 hit timing/duration/detach, triggers 含天赋/潜能触发）
+- 通过 `adapter.ts` 转换为前端管线格式，自动覆盖 gamedata.json 数据
+
+**武器数据** (`v2/weapons/`):
+- `types.ts`: WeaponDefinition, WeaponTrigger 类型
+- `definitions.ts`: 按需添加，当前已有 宏愿/不知归/赫拉芬格
+
+**V2-ready 角色**: ENDMINISTRATOR, POGRANICHNK, LASTRITE（其余显示"待更新"标签）
 
 **模块**:
 | 文件 | 功能 |
@@ -349,18 +369,22 @@ on_effect_consumed       — 指定效果被消耗（effect_id，非自然到期
 | `types.ts` | 类型定义（Skill, Hit, EventLog, PassiveTrigger） |
 | `characterBuild.ts` | stat breakdown，不预算最终值 |
 | `damage.ts` | 11 乘区伤害 + MultiplierRef + 暴击 |
-| `anomaly.ts` | 附着/反应/物理异常/破防/失衡 |
+| `anomaly.ts` | 附着/反应/物理异常/破防/失衡 + 击飞倒地额外10失衡(artsPower scaled) |
 | `resources.ts` | SP(trueSP/refundSP) + Gauge |
 | `effects.ts` | Buff 管理 + Stack buff + 变体选择 |
 | `triggers.ts` | 触发器处理器（immediate/deferred） |
 | `projections.ts` | 8 个投影函数 |
-| `kernel.ts` | 主循环 |
+| `kernel.ts` | 主循环（四阶段模型） |
+| `characters/` | 角色数据 + adapter.ts |
+| `weapons/` | 武器数据 |
 
-**待完成**: 技能 hit 数据填充 → 天赋/武器触发器数据 → 前端集成
+**打断优先级**: 终结技 > 闪避 > 连携技 > 战技（默认规则，角色例外在各自数据中标注）
 
 **参考文档**:
 - 审计报告: `reports/kernel-mechanics-audit-2026-04-09.md`
 - 技能模板: `reports/v2-skill-hit-template.md`
+- 已确认数据: `reports/v2-skill-hit-confirmed.md`
+- 战斗术语: `reports/v2-combat-glossary.md`
 
 ## 其他注意事项
 
