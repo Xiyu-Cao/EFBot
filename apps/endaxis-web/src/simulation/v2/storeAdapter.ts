@@ -46,7 +46,7 @@ interface StoreAction {
   instanceId: string;
   id: string;
   type: string; // 'attack' | 'skill' | 'link' | 'ultimate'
-  kind?: string; // 'attack_segment' | 'attack_group' | 'main_control'
+  kind?: string; // 'attack_segment' | 'attack_group' | 'main_control' | 'aerial'
   startTime: number;
   duration: number;
   trackId?: string;
@@ -384,6 +384,11 @@ function resolveSkillForAction(action: StoreAction, skills: any, _trackId: strin
   }
   if (actionType === "attack") {
     if (!Array.isArray(skills.attack)) return null;
+
+    // Aerial attack
+    if (action.kind === "aerial") {
+      return skills.attack.find((s: Skill) => s.id.includes("aerial")) || null;
+    }
 
     // If the action has a v2 skill ID, use it directly
     if (action._v2SkillId) {

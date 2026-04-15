@@ -551,7 +551,7 @@ function onNativeDragEnd() {
               <div class="card-edge"></div>
               <div class="card-body">
                 <div class="skill-meta">
-                  <span v-if="skill.kind !== 'attack_auto' && skill.kind !== 'main_control' && !skill.name.includes(getFullTypeName(skill.type))" class="skill-type">{{ getFullTypeName(skill.type) }}</span>
+                  <span v-if="skill.kind !== 'attack_auto' && skill.kind !== 'main_control' && skill.kind !== 'aerial' && !skill.name.includes(getFullTypeName(skill.type))" class="skill-type">{{ getFullTypeName(skill.type) }}</span>
                   <span v-else class="skill-type-empty"></span>
                   <span v-if="skill.kind !== 'attack_auto' && skill.kind !== 'main_control'" class="skill-time">{{ formatDurationLabel(skill.duration) }}s</span>
                 </div>

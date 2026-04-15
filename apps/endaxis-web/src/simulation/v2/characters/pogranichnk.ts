@@ -135,7 +135,7 @@ const a4: Skill = {
 };
 
 const a5: Skill = {
-  id: "pograni_a5", type: "attack", name: "A5（重击）",
+  id: "pograni_a5", type: "attack", name: "A5（重击）", isHeavyAttack: true,
   element: "physical", duration: f(69), spCost: 0, cooldown: 0,
   hits: [
     { offset: f(35), checkpointIndex: 0, damage: { multiplierRef: { label: "普攻第五段倍率", share: 1 }, stagger: 18, element: "physical", canCrit: true, school: "physical", sourceType: "attack" }, effects: [], standardLogic: true },

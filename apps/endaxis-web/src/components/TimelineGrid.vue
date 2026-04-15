@@ -13,7 +13,7 @@ import { useDragConnection } from '@/composables/useDragConnection.js'
 import { useI18n } from 'vue-i18n'
 import { snapMs } from '@/utils/precision.js'
 import { getRectPos } from '@/utils/layoutUtils.js'
-import { V2_READY_IDS } from '@/simulation/v2/characters/adapter'
+import { V2_READY_IDS, UNSUPPORTED_IDS } from '@/simulation/v2/characters/adapter'
 import { getBuffIcon } from '@/simulation/data/buffMetadata'
 
 const store = useTimelineStore()
@@ -2947,13 +2947,16 @@ onUnmounted(() => {
             <div class="rarity-line"></div>
           </div>
           <div class="roster-grid">
-            <div v-for="char in group.list" :key="char.id" class="roster-card" :class="[{ 'is-selected': store.tracks.some(t => t.id === char.id) }, `rarity-${char.rarity}-style`]" @click="confirmCharacterSelection(char.id)">
+            <div v-for="char in group.list" :key="char.id" class="roster-card"
+                 :class="[{ 'is-selected': store.tracks.some(t => t.id === char.id), 'is-unsupported': UNSUPPORTED_IDS.has(char.id) }, `rarity-${char.rarity}-style`]"
+                 @click="!UNSUPPORTED_IDS.has(char.id) && confirmCharacterSelection(char.id)">
               <div class="card-avatar-wrapper" :style="char.rarity === 6 ? {} : { borderColor: getRarityBaseColor(char.rarity) }">
                 <img :src="char.avatar" loading="lazy" /><div class="element-badge" :style="{ background: store.getColor(char.element) }"></div>
               </div>
               <div class="card-name">{{ char.name }}</div>
               <div v-if="store.tracks.some(t => t.id === char.id)" class="in-team-tag">{{ t('timelineGrid.operatorDialog.inTeam') }}</div>
-              <div v-if="!V2_READY_CHARACTERS.has(char.id)" class="pending-update-tag">待更新</div>
+              <div v-if="UNSUPPORTED_IDS.has(char.id)" class="unsupported-tag">不支持</div>
+              <div v-else-if="!V2_READY_CHARACTERS.has(char.id)" class="pending-update-tag">待更新</div>
             </div>
           </div>
         </template>
@@ -4480,6 +4483,29 @@ body.capture-mode .davinci-range {
   z-index: 5;
   pointer-events: none;
   line-height: 1.4;
+}
+.unsupported-tag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(100, 100, 100, 0.9);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 5;
+  pointer-events: none;
+  line-height: 1.4;
+}
+.roster-card.is-unsupported {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+.roster-card.is-unsupported:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .empty-roster {

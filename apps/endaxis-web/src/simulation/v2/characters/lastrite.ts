@@ -123,7 +123,7 @@ const a3: Skill = {
 };
 
 const a4: Skill = {
-  id: "lastrite_a4", type: "attack", name: "A4（重击）",
+  id: "lastrite_a4", type: "attack", name: "A4（重击）", isHeavyAttack: true,
   element: "cold", duration: f(130), spCost: 0, cooldown: 0,
   hits: [
     { offset: f(45), checkpointIndex: 0, damage: { multiplierRef: { label: "普攻第四段倍率", share: 1 }, stagger: 25, element: "cold", canCrit: true, school: "magic", sourceType: "attack" }, effects: [], standardLogic: true },

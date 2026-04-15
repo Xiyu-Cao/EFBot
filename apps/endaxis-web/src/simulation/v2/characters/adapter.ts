@@ -21,6 +21,9 @@ const V2_MODULES: Record<string, () => Promise<any>> = {
 
 export const V2_READY_IDS = new Set(Object.keys(V2_MODULES));
 
+/** Characters that require enemy attack/HP/healing systems — not supported yet. */
+export const UNSUPPORTED_IDS = new Set(["EMBER", "CATCHER", "SNOWSHINE"]);
+
 /** Cache for loaded modules */
 const moduleCache: Record<string, any> = {};
 

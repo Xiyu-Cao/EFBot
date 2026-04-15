@@ -182,6 +182,8 @@ export interface Skill {
   duration: number;
   spCost: number;
   cooldown: number;
+  /** True if this is the last normal attack segment (重击). */
+  isHeavyAttack?: boolean;
   /** All hits in chronological order. */
   hits: Hit[];
   /** Checkpoint segments for interrupt system. */
@@ -297,6 +299,7 @@ export type TriggerEventType =
   | "link_hit"               // 连携技 hit
   | "ultimate_hit"           // 终结技 hit
   | "execution_hit"          // 处决 hit
+  | "aerial_hit"             // 下落攻击 hit
   // Attachment events
   | "attachment_applied"     // magic attachment added/stacked
   | "attachment_consumed"    // attachment consumed by reaction

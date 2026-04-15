@@ -665,9 +665,14 @@ export function simulate(
           fireTriggers({ type: specificType as any, time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
         }
 
-        // Heavy attack trigger: last hit of an attack-type skill with stagger > 0
-        if (sourceType === "attack" && hit.damage.stagger > 0 && hitIdx === skill.hits.length - 1) {
+        // Heavy attack trigger: last hit of a heavy attack skill (普攻最后一段)
+        if (skill.isHeavyAttack && hitIdx === skill.hits.length - 1) {
           fireTriggers({ type: "heavy_attack_hit", time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
+        }
+
+        // Aerial attack trigger
+        if (sourceType === "attack" && skill.id.includes("aerial")) {
+          fireTriggers({ type: "aerial_hit" as any, time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
         }
 
         // Stagger trigger

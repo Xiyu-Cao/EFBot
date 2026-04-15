@@ -3092,9 +3092,17 @@ export const useTimelineStore = defineStore('timeline', () => {
             }
         }
 
+        // Aerial attack — use attack icon/element, only show if character has aerial data
+        const aerialSkill = activeChar.aerial_duration ? {
+            ...createBaseSkill('aerial', 'attack', '下落攻击'),
+            kind: 'aerial',
+            icon: activeChar.attack_icon || '',
+        } : null
+
         const standardSkills = [
             attackAutoSkill,
             attackGroupSkill,
+            ...(aerialSkill ? [aerialSkill] : []),
             createDodgeSkill(),
             createBaseSkill('execution', 'execution', getI18nSkillType('execution')),
             createBaseSkill('skill', 'skill', getI18nSkillType('skill')),
