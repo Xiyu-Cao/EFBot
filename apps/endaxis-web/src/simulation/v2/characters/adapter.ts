@@ -118,6 +118,7 @@ export function applyV2Overrides(char: any): boolean {
     char.skill_duration = legacy.duration;
     char.skill_damage_ticks = legacy.damageTicks;
     char.skill_spCost = skills.skill.spCost || char.skill_spCost;
+    char.skill_anomalies = [];  // V2: effects are in hit.effects, not anomaly arrays
   }
 
   // ── Link (连携技) ──
@@ -127,11 +128,11 @@ export function applyV2Overrides(char: any): boolean {
     const legacy = convertSkillToLegacy(primaryLink);
     char.link_duration = legacy.duration;
     char.link_damage_ticks = legacy.damageTicks;
-    // Store all link variants for later use
-    if (Array.isArray(skills.link)) {
-      char._v2LinkVariants = skills.link.map((l: Skill) => convertSkillToLegacy(l));
-    }
+    char.link_anomalies = [];  // V2: effects are in hit.effects
   }
+
+  // V2 characters: clear legacy variants — V2 kernel handles variant selection internally
+  char.variants = [];
 
   // ── Ultimate (终结技) ──
   if (skills.ultimate) {
@@ -141,6 +142,7 @@ export function applyV2Overrides(char: any): boolean {
     char.ultimate_damage_ticks = legacy.damageTicks;
     char.ultimate_animationTime = legacy.animationTime;
     char.ultimate_gaugeCost = skills.ultimate.gaugeCost;
+    char.ultimate_anomalies = [];  // V2: effects are in hit.effects
   }
 
   // ── Attack segments (普攻 A1-AN only) ──

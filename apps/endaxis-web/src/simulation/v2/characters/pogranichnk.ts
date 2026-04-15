@@ -325,6 +325,26 @@ export const interruptOverrides = {
   skillCanInterruptLink: true,  // 战技和连携可互相打断（非默认）
 };
 
+/**
+ * 铁誓消耗 — 袭扰 (by link): triggered by POGRANICHNK's own link hit.
+ */
+const ironOathRaidByLink: PassiveTrigger = {
+  ...ironOathRaid,
+  id: "pograni_iron_oath_raid_link",
+  listenTo: "link_hit",
+  sourceMustBeOwner: true,
+};
+
+/**
+ * 铁誓消耗 — 决胜 (by link): triggered when last 铁誓 consumed by link.
+ */
+const ironOathFinaleByLink: PassiveTrigger = {
+  ...ironOathFinale,
+  id: "pograni_iron_oath_finale_link",
+  listenTo: "link_hit",
+  sourceMustBeOwner: true,
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // Exports
 // ═══════════════════════════════════════════════════════════════════
@@ -339,6 +359,8 @@ export const skills = {
 export const triggers: PassiveTrigger[] = [
   ironOathRaid,
   ironOathFinale,
+  ironOathRaidByLink,
+  ironOathFinaleByLink,
   livingBanner,
   tacticalGuidance,
 ];

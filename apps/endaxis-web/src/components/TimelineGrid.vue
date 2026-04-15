@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { snapMs } from '@/utils/precision.js'
 import { getRectPos } from '@/utils/layoutUtils.js'
 import { V2_READY_IDS } from '@/simulation/v2/characters/adapter'
+import { getBuffIcon } from '@/simulation/data/buffMetadata'
 
 const store = useTimelineStore()
 const connectionHandler = useDragConnection()
@@ -728,6 +729,52 @@ function getSelfBuffBarWidth(bar) {
   return Math.max(0, totalWidth - ICON_SIZE)
 }
 
+// ── Consume marker icon resolver ──
+function getConsumeIcon(status) {
+  // consumedBy = physicalType like "slam", "armorBreak"
+  if (status.consumedBy) {
+    return getBuffIcon(status.consumedBy) || ''
+  }
+  return ''
+}
+
+// ── Merged buff bars: self-buff (StackBuffBar) + weapon-status (BuffStatus) ──
+const mergedBuffsByTrack = computed(() => {
+  const map = new Map()
+  // 1. Self-buff bars from V2 projections (already in SelfBuffBar format)
+  const selfBuffs = store.computedSelfBuffsByTrack
+  if (selfBuffs) {
+    for (const [trackId, bars] of selfBuffs) {
+      const arr = map.get(trackId) || []
+      arr.push(...bars)
+      map.set(trackId, arr)
+    }
+  }
+  // 2. Weapon/skill buff bars → convert to SelfBuffBar-like format
+  store.effectiveWeaponStatuses.forEach(status => {
+    if (status.type === 'set') return
+    if (!status.trackId) return
+    const endTime = status.startTime + (status.duration || 0)
+    const arr = map.get(status.trackId) || []
+    arr.push({
+      id: status.id,
+      type: status.type || 'buff',
+      name: status.name || '',
+      icon: status.icon || '',
+      stackIcon: status.icon || '',
+      startTime: status.startTime,
+      endTime,
+      stacks: status.stacks || 1,
+      maxStacks: status.maxStacks || 0,
+      color: status.color || '#52c41a',
+    })
+    map.set(status.trackId, arr)
+  })
+  // Sort each track's bars by startTime
+  map.forEach(arr => arr.sort((a, b) => a.startTime - b.startTime))
+  return map
+})
+
 function getWeaponStatusLeft(status) {
   const start = Number(status.startTime) || 0
   return store.timeToPx(start)
@@ -756,15 +803,10 @@ function getWeaponStatusTiming(status) {
 
 function getWeaponStatusBarStyle(status) {
   const { start, rawDuration, finalDuration } = getWeaponStatusTiming(status)
-  let width = finalDuration > 0 ? (store.timeToPx(start + finalDuration) - store.timeToPx(start)) : 0
-  if (width > 0) {
-    const ICON_SIZE = 20
-    const BAR_MARGIN = 2
-    width = Math.max(0, width - ICON_SIZE - BAR_MARGIN)
-  }
+  const width = finalDuration > 0 ? (store.timeToPx(start + finalDuration) - store.timeToPx(start)) : 0
   const color = status.color || '#b37feb'
   return {
-    width: `${width}px`,
+    width: `${Math.max(0, width)}px`,
     backgroundColor: color,
     display: (finalDuration > 0 || rawDuration > 0) ? 'flex' : 'none'
   }
@@ -1623,9 +1665,12 @@ function handleWheel(e) {
 
     const timeAtMouse = store.cursorCurrentTime
 
-    const zoomSpeed = 0.15
+    // Trackpad pinch fires many high-frequency events; use deltaY magnitude
+    // to scale the zoom step (clamped to avoid jumps from mouse wheel).
+    const baseFactor = 0.004
+    const absDelta = Math.min(Math.abs(e.deltaY), 30)
     const direction = e.deltaY < 0 ? 1 : -1
-    const delta = Math.round(store.timeBlockWidth * zoomSpeed * direction)
+    const delta = Math.round(store.timeBlockWidth * baseFactor * absDelta * direction) || direction
 
     adjustZoom(delta, timeAtMouse)
   }
@@ -2458,20 +2503,6 @@ onUnmounted(() => {
            @drop="onReorderDrop($event, index)"
            @dragend="onReorderDragEnd">
 
-        <div class="track-controls">
-           <div class="reorder-btn arrow-btn up-btn" @click.stop="moveTrackUp(index)" :class="{ disabled: index === 0 }" :title="t('common.moveUp')">
-              <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none"><polyline points="18 15 12 9 6 15"></polyline></svg>
-           </div>
-           
-           <div class="drag-handle" draggable="true" @dragstart="onReorderDragStart($event, index)">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="8" cy="4" r="2"></circle><circle cx="8" cy="12" r="2"></circle><circle cx="8" cy="20" r="2"></circle><circle cx="16" cy="4" r="2"></circle><circle cx="16" cy="12" r="2"></circle><circle cx="16" cy="20" r="2"></circle></svg>
-           </div>
-
-           <div class="reorder-btn arrow-btn down-btn" @click.stop="moveTrackDown(index)" :class="{ disabled: index === store.tracks.length - 1 }" :title="t('common.moveDown')">
-              <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>
-           </div>
-        </div>
-
         <div class="char-select-trigger">
           <div class="operator-row">
             <div class="trigger-avatar-box" @click.stop="openCharacterSelector(index)" :title="t('timelineGrid.track.changeOperatorTooltip')">
@@ -2528,19 +2559,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-if="track.id" class="self-buff-track-label"
-             @click.stop="toggleSelfBuffTrack(track.id)"
-             :class="{ 'is-collapsed': !selfBuffExpandedTracks.has(track.id) && (store.computedSelfBuffsByTrack.get(track.id)?.length > 3) }">
-          <span class="buff-collapse-arrow" v-if="store.computedSelfBuffsByTrack.get(track.id)?.length > 3">{{ selfBuffExpandedTracks.has(track.id) ? '▾' : '▸' }}</span>
-          <span>自身增益</span>
-          <span class="selfbuff-count-badge" v-if="store.computedSelfBuffsByTrack.get(track.id)?.length">{{ store.computedSelfBuffsByTrack.get(track.id).length }}</span>
-        </div>
-        <div v-if="track.id" class="state-sub-track-label">
-          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-          <span>状态</span>
-        </div>
+        <!-- self-buff-track-label and state-sub-track-label removed (V2 cleanup) -->
       </div>
 
       <!-- Layer 1: Attachment (always expanded) -->
@@ -2753,92 +2772,21 @@ onUnmounted(() => {
             </div>
             <div v-if="track.id" class="self-buff-track" :style="getTrackLaneStyle">
               <div class="self-buff-layer">
-                <!-- Expanded: full buff bars -->
-                <template v-if="selfBuffExpandedTracks.has(track.id) || !(store.computedSelfBuffsByTrack.get(track.id)?.length > 3)">
-                  <div
-                    v-for="bar in store.computedSelfBuffsByTrack.get(track.id) || []"
-                    :key="bar.id"
-                    class="self-buff-item"
-                    :class="{ 'is-pinned': pinnedBuffIds.has(bar.id), 'is-selected-buff': selectedBuffData?.id === bar.id }"
-                    :style="getSelfBuffItemStyle(bar)"
-                    :title="`${bar.name} ×${bar.stacks}`"
-                    @click.stop="selectBuff(bar, track.id)"
-                  >
-                    <img :src="bar.stackIcon || bar.icon" class="self-buff-icon" @error="e=>e.target.style.display='none'" />
-                    <div class="self-buff-bar" :style="{ background: bar.color + '22', borderColor: bar.color + 'aa', width: getSelfBuffBarWidth(bar) + 'px' }"></div>
-                  </div>
-                </template>
-                <!-- Collapsed: only show pinned buffs -->
-                <template v-else>
-                  <div
-                    v-for="bar in (store.computedSelfBuffsByTrack.get(track.id) || []).filter(b => pinnedBuffIds.has(b.id))"
-                    :key="bar.id"
-                    class="self-buff-item is-pinned"
-                    :style="getSelfBuffItemStyle(bar)"
-                    :title="`${bar.name} ×${bar.stacks} (pinned)`"
-                    @click.stop="selectBuff(bar, track.id)"
-                  >
-                    <img :src="bar.stackIcon || bar.icon" class="self-buff-icon" @error="e=>e.target.style.display='none'" />
-                    <div class="self-buff-bar" :style="{ background: bar.color + '22', borderColor: bar.color + 'aa', width: getSelfBuffBarWidth(bar) + 'px' }"></div>
-                  </div>
-                </template>
-              </div>
-              <div class="weapon-status-layer">
                 <div
-                  v-for="status in weaponStatusesByTrack.get(track.id) || []"
-                  :key="status.id"
-                  class="weapon-status-item"
-                  :class="{ 'is-selected': status.id === store.selectedWeaponStatusId, 'is-dragging': status.id === draggingWeaponStatusId }"
-                  :style="{ left: `${getWeaponStatusLeft(status)}px` }"
+                  v-for="bar in mergedBuffsByTrack.get(track.id) || []"
+                  :key="bar.id"
+                  class="self-buff-item"
+                  :class="{ 'is-selected-buff': selectedBuffData?.id === bar.id }"
+                  :style="getSelfBuffItemStyle(bar)"
+                  :title="`${bar.name}${bar.stacks > 1 ? ' ×' + bar.stacks : ''}`"
+                  @click.stop="selectBuff(bar, track.id)"
                 >
-                  <div class="weapon-status-icon-box"
-                       :class="{ 'is-connect-mode': connectionHandler.toolEnabled.value, 'is-linking': connectionHandler.isDragging.value, 'is-link-target-valid': connectionHandler.isNodeValid(status.id) }"
-                       @mousedown.stop="handleWeaponStatusIconMouseDown($event, status)"
-                       @mouseenter="handleWeaponStatusSnap(status.id)"
-                       @mouseup="handleWeaponStatusDrop(status.id)"
-                       @mouseleave="connectionHandler.clearSnap()">
-                    <img v-if="status.icon" :src="status.icon" @error="e=>e.target.style.display='none'" />
+                  <div class="self-buff-icon-box" :style="{ borderColor: bar.color || '#999' }">
+                    <img v-if="bar.stackIcon || bar.icon" :src="bar.stackIcon || bar.icon" @error="e=>e.target.style.display='none'" />
+                    <div v-if="bar.stacks > 1 && bar.maxStacks > 1" class="buff-stack-badge">{{ bar.stacks }}/{{ bar.maxStacks }}</div>
+                    <div v-else-if="bar.stacks > 1" class="buff-stack-badge">{{ bar.stacks }}</div>
                   </div>
-                  <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)" :class="{ 'is-consumed-bar': isWeaponStatusConsumed(status) }">
-                    <div class="striped-bg"></div>
-                    <span class="duration-text">{{ getWeaponStatusDurationLabel(status) }}</span>
-
-                    <div v-if="isWeaponStatusConsumed(status)"
-                         :id="`${status.id}_transfer`"
-                         class="transfer-node-wrapper">
-                      <div class="transfer-node"></div>
-                      <div class="transfer-line"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="set-status-layer">
-                <div
-                  v-for="status in setStatusesByTrack.get(track.id) || []"
-                  :key="status.id"
-                  class="weapon-status-item"
-                  :class="{ 'is-selected': status.id === store.selectedWeaponStatusId, 'is-dragging': status.id === draggingWeaponStatusId }"
-                  :style="{ left: `${getWeaponStatusLeft(status)}px` }"
-                >
-                  <div class="weapon-status-icon-box"
-                       :class="{ 'is-connect-mode': connectionHandler.toolEnabled.value, 'is-linking': connectionHandler.isDragging.value, 'is-link-target-valid': connectionHandler.isNodeValid(status.id) }"
-                       @mousedown.stop="handleWeaponStatusIconMouseDown($event, status)"
-                       @mouseenter="handleWeaponStatusSnap(status.id)"
-                       @mouseup="handleWeaponStatusDrop(status.id)"
-                       @mouseleave="connectionHandler.clearSnap()">
-                    <img v-if="status.icon" :src="status.icon" @error="e=>e.target.style.display='none'" />
-                  </div>
-                  <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)" :class="{ 'is-consumed-bar': isWeaponStatusConsumed(status) }">
-                    <div class="striped-bg"></div>
-                    <span class="duration-text">{{ getWeaponStatusDurationLabel(status) }}</span>
-
-                    <div v-if="isWeaponStatusConsumed(status)"
-                         :id="`${status.id}_transfer`"
-                         class="transfer-node-wrapper">
-                      <div class="transfer-node"></div>
-                      <div class="transfer-line"></div>
-                    </div>
-                  </div>
+                  <div class="self-buff-bar" :style="{ backgroundColor: bar.color || '#999', width: getSelfBuffBarWidth(bar) + 'px' }"></div>
                 </div>
               </div>
             </div>
@@ -2891,6 +2839,13 @@ onUnmounted(() => {
                 </div>
                 <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)">
                   <div class="striped-bg"></div>
+                </div>
+                <div v-if="status.consumed || status.consumedBy" class="consume-marker"
+                     :style="{ left: `${store.timeToPx(status.endTime) - store.timeToPx(status.startTime)}px` }">
+                  <div class="consume-marker-icon">
+                    <img v-if="getConsumeIcon(status)" :src="getConsumeIcon(status)" @error="e=>e.target.style.display='none'" />
+                    <span v-else style="font-size:7px;color:#ff7875">✕</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4692,6 +4647,24 @@ body.capture-mode .davinci-range {
 /* ==========================================================================
    12. Switch Marker Styles
    ========================================================================== */
+/* Trigger hit markers (phantom attacks etc.) */
+.trigger-hit-layer {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;
+}
+.trigger-hit-marker {
+  position: absolute; bottom: 100%; display: flex; flex-direction: column; align-items: center;
+  transform: translateX(-6px); pointer-events: auto; cursor: pointer;
+}
+.trigger-hit-diamond {
+  width: 10px; height: 10px; background: var(--hit-color, #999);
+  transform: rotate(45deg); border: 1px solid rgba(255,255,255,0.3);
+  margin-bottom: 2px;
+}
+.trigger-hit-label {
+  font-size: 8px; color: var(--hit-color, #ccc); white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
 .switch-marker-layer {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
 }
@@ -4767,17 +4740,75 @@ body.capture-mode .davinci-range {
   align-items: center;
 }
 
-.self-buff-icon {
+.self-buff-icon-box {
   width: 20px;
   height: 20px;
-  object-fit: cover;
+  background: #222;
+  border: 1.5px solid #999;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   flex-shrink: 0;
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 2;
+}
+.self-buff-icon-box img {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+}
+.buff-stack-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 7px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,0.7);
+  padding: 0 2px;
+  border-radius: 2px;
+  line-height: 1.2;
 }
 
 .self-buff-bar {
-  height: 20px;
-  border: 1px solid transparent;
-  border-left: none;
+  height: 16px;
+  border: none;
+  border-radius: 2px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+/* Consumption marker at bar end */
+.consume-marker {
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: center;
+  z-index: 3;
+}
+.consume-marker-icon {
+  width: 16px;
+  height: 16px;
+  background: #222;
+  border: 1.5px solid #ff7875;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-left: 2px;
+}
+.consume-marker-icon img {
+  width: 14px;
+  height: 14px;
+  object-fit: cover;
 }
 
 .self-buff-track-label {
@@ -5107,17 +5138,20 @@ body.capture-mode .davinci-range {
 .weapon-status-icon-box {
   width: 20px;
   height: 20px;
-  background-color: #333;
-  border: 1px solid #999;
+  background-color: #222;
+  border: 1.5px solid #999;
+  border-radius: 3px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 2;
   flex-shrink: 0;
   overflow: hidden;
   pointer-events: auto;
-  cursor: grab;
+  cursor: pointer;
   z-index: 10;
 }
 

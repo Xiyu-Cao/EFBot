@@ -48,7 +48,7 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
 
   // ── Control ──
   affix_slow:    { name: "缓速", icon: "/icons/icon_battle_affix_slow.webp" },
-  fluorite_bomb: { name: "粘性炸弹" },
+  fluorite_bomb: { name: "粘性炸弹", icon: "" },
   weak:          { name: "虚弱", icon: "/icons/icon_battle_affix_weak.webp" },
   combo:      { name: "连击", icon: "/icons/icon_battle_affix_combo.webp" },
 
@@ -68,6 +68,16 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
 
   // ── LASTRITE ──
   lastrite_buff: { name: "低温灌注", icon: "/avatars/LASTRITE/icon_battle_lastrite_buff.webp" },
+  lastrite_low_temp_infusion: { name: "低温灌注", icon: "/avatars/LASTRITE/icon_battle_lastrite_buff.webp" },
+
+  // ── Physical anomaly ──
+  break: { name: "破防", icon: "/icons/icon_battle_physical_no_guard.webp" },
+  break_apply: { name: "破防", icon: "/icons/icon_battle_physical_no_guard.webp" },
+  break_consume: { name: "消耗破防", icon: "/icons/icon_battle_physical_no_guard.webp" },
+  slam: { name: "猛击", icon: "/icons/icon_battle_physical_crush.webp" },
+  armorBreak: { name: "碎甲", icon: "/icons/icon_battle_physical_fracture.webp" },
+  launch: { name: "击飞", icon: "/icons/icon_battle_physical_airborne.webp" },
+  knockdown: { name: "倒地", icon: "/icons/icon_battle_physical_knockdown.webp" },
 
   // ── XAIHI ──
   skill_seraph: { name: "支援晶体", icon: "/avatars/XAIHI/icon_skill_seraph_01.webp" },

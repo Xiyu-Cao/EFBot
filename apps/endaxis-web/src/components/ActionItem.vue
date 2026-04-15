@@ -5,7 +5,7 @@ import { useDragConnection } from '../composables/useDragConnection.js'
 import ActionLinkPorts from './ActionLinkPorts.vue'
 import { getRectPos } from '@/utils/layoutUtils.js'
 import { useI18n } from 'vue-i18n'
-import { getSkillDisplayStatus } from '@/simulation/data/skillStatusRegistry'
+import { getBuffIcon } from '@/simulation/data/buffMetadata'
 
 const props = defineProps({
   action: { type: Object, required: true },
@@ -23,32 +23,55 @@ const isVariant = computed(() => {
 })
 
 // Skill status tag (supported / wip / null)
-const skillStatus = computed(() => {
-  const type = props.action.type
-  if (!type || type === 'attack' || type === 'dodge') return null
-  // Find the track/character ID for this action
+// Hit effect markers: effects that happen during this action's time range, from the same actor
+const hitEffectsForAction = computed(() => {
+  const all = store.v2HitEffects || []
+  const start = props.action.startTime
+  const end = start + (props.action.duration || 0)
+  // Find which track this action belongs to
   const track = store.tracks.find(t => t.actions?.some(a => a.instanceId === props.action.instanceId))
-  if (!track?.id) return null
-  return getSkillDisplayStatus(track.id, type)
+  const trackId = track?.id || ''
+  return all.filter(h => {
+    // Match by actionId (trigger hits know their parent action)
+    if (h.actionId === props.action.instanceId) return true
+    // Match by time range + sourceId must match this action's track
+    if (!h.actionId && h.sourceId === trackId && h.time >= start - 0.001 && h.time <= end + 0.001) return true
+    return false
+  })
 })
 
-// Tooltip for unsupported tag: distinguish "no damage skill" from "missing data"
-const unsupportedTooltip = computed(() => {
-  if (skillStatus.value !== 'unsupported') return ''
-  const ticks = props.action.damageTicks || []
-  if (ticks.length === 0) return '该技能为辅助/增幅型，不直接造成伤害'
-  return '该技能的伤害倍率数据暂缺'
+// Group non-trigger effects by time for vertical stacking above hits
+const groupedEffectIcons = computed(() => {
+  const effects = hitEffectsForAction.value.filter(h => !h.isTriggerHit)
+  const byTime = new Map()
+  for (const fx of effects) {
+    const key = Math.round(fx.time * 1000) // group by ms
+    if (!byTime.has(key)) byTime.set(key, [])
+    byTime.get(key).push(fx)
+  }
+  // Flatten with stack index
+  const result = []
+  for (const [, group] of byTime) {
+    group.forEach((fx, idx) => {
+      result.push({ ...fx, stackIndex: idx })
+    })
+  }
+  return result
 })
 
-// Legality issues for this action (from simulation engine)
-const legalityIssues = computed(() => store.legalityIssuesByAction.get(props.action.instanceId) ?? [])
-const hasLegalityError = computed(() => legalityIssues.value.some(i => i.severity === 'error'))
-const isLegalityBlocked = computed(() => legalityIssues.value.some(i => i.resolution === 'blocked'))
-const isAuditMode = computed(() => store.legalityPolicy === 'audit')
-const legalityTooltip = computed(() => {
-  if (!legalityIssues.value.length) return ''
-  return legalityIssues.value.map(i => `[${i.severity}] ${i.message}`).join('\n')
+// Trigger hits rendered as tick markers (like regular hits but different color)
+const triggerHitTicks = computed(() => {
+  return hitEffectsForAction.value.filter(h => h.isTriggerHit)
 })
+
+// Resolve effect icon from buffMetadata or iconDatabase
+function getEffectIcon(effectType) {
+  const fromMeta = getBuffIcon(effectType)
+  if (fromMeta) return fromMeta
+  return store.iconDatabase?.[effectType] || ''
+}
+
+// V1 legality removed — V2 kernel handles validation
 
 // 释放条件命中的结果（如有）
 const conditionResult = computed(() => store.computedActionConditionResults.get(props.action.instanceId) || null)
@@ -604,6 +627,23 @@ function handleEffectDrop(effectId) {
            :title="getDamageTickTitle(tick)">
         <div class="tick-marker"></div>
       </div>
+      <!-- Trigger hits as tick markers (same position as regular hits, different color) -->
+      <div v-for="hit in triggerHitTicks" :key="hit.id"
+           class="damage-tick-wrapper"
+           :style="{ left: `${store.timeToPx(hit.time) - store.timeToPx(action.startTime)}px` }"
+           :title="`${hit.name}${hit.damage ? ' (' + hit.damage + ')' : ''}`">
+        <div class="tick-marker" :style="{ background: store.getColor(hit.element) || '#4fc3f7' }"></div>
+      </div>
+      <!-- Effect icons above hits (stacked vertically) -->
+      <div v-for="fx in groupedEffectIcons" :key="fx.id"
+           class="hit-effect-marker"
+           :style="{ left: `${store.timeToPx(fx.time) - store.timeToPx(action.startTime)}px`, bottom: `calc(100% + ${fx.stackIndex * 18 + 2}px)` }"
+           :title="fx.name">
+        <div class="hit-effect-icon" :style="{ borderColor: store.getColor(fx.element) || '#999' }">
+          <img v-if="getEffectIcon(fx.effectType)" :src="getEffectIcon(fx.effectType)" @error="e=>e.target.style.display='none'" />
+          <span v-else class="hit-effect-letter">{{ fx.name?.charAt(0) || '?' }}</span>
+        </div>
+      </div>
     </div>
 
     <div v-if="action.triggerWindow && action.triggerWindow !== 0" class="trigger-window-bar bottom-bar" :style="triggerWindowStyle">
@@ -631,26 +671,13 @@ function handleEffectDrop(effectId) {
       </svg>
     </div>
 
-    <div v-if="legalityIssues.length > 0"
-         class="status-icon legality-badge"
-         :class="{
-           'legality-blocked': isLegalityBlocked,
-           'legality-error': hasLegalityError && !isLegalityBlocked,
-           'legality-audit': isAuditMode && !isLegalityBlocked,
-         }"
-         :title="legalityTooltip">
-      <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
-        <path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6zm-1 5v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
-      </svg>
-    </div>
-
     <template v-if="action.type === 'ultimate' && !action.isDisabled">
       <div class="ultimate-side-bar left-bar" :style="{ backgroundColor: themeColor }"></div>
       <div class="ultimate-side-bar right-bar" :style="{ backgroundColor: themeColor }"></div>
     </template>
 
     <div v-if="!isGhostMode" class="action-item-content drag-handle" :class="{ 'is-link-target-invalid': !isActionValidConnectionTarget && connectionSourceActionId !== action.instanceId }">
-      {{ displayLabel }}<span v-if="skillStatus === 'wip'" class="skill-wip-tag">处理中</span><span v-else-if="skillStatus === 'unsupported'" class="skill-unsupported-tag" :title="unsupportedTooltip">未支持</span>
+      {{ displayLabel }}
       <div v-if="animationTimeWidth > 0"
            class="animation-phase-overlay"
            :style="{ width: `${animationTimeWidth}px` }">
@@ -843,6 +870,39 @@ function handleEffectDrop(effectId) {
   justify-content: flex-end;
   pointer-events: auto;
   z-index: 20;
+}
+
+/* Hit effect icons (buff/attachment/anomaly applied at hit position) */
+.hit-effect-marker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-8px);
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 25;
+}
+.hit-effect-icon {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #999;
+  border-radius: 3px;
+  background: #222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.hit-effect-icon img {
+  width: 14px;
+  height: 14px;
+  object-fit: cover;
+}
+.hit-effect-letter {
+  font-size: 8px;
+  font-weight: 700;
+  color: #ccc;
 }
 
 .tick-marker {

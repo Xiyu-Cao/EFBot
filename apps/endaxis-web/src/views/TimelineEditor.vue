@@ -15,8 +15,7 @@ import TimelineGrid from '../components/TimelineGrid.vue'
 import ActionLibrary from '../components/ActionLibrary.vue'
 import PropertiesPanel from '../components/PropertiesPanel.vue'
 import ResourceMonitor from '../components/ResourceMonitor.vue'
-import DamageSummaryPanel from '../components/DamageSummaryPanel.vue'
-import LegalityIssuePanel from '../components/LegalityIssuePanel.vue'
+// V1 panels removed: DamageSummaryPanel, LegalityIssuePanel
 import AbilityExpansionOverlay from '../components/AbilityExpansionOverlay.vue'
 import StatsDetailOverlay from '../components/StatsDetailOverlay.vue'
 import ValidationResultDialog from '../components/ValidationResultDialog.vue'
@@ -667,12 +666,6 @@ onUnmounted(() => {
         <div class="header-controls">
           <input type="file" ref="fileInputRef" style="display: none" accept=".json,.png" @change="onFileSelected" />
 
-          <button class="ea-btn ea-btn--sm ea-btn--lift ea-btn--hover-gold" @click="store.runDamageStats(); store.manualSave()" title="计算伤害统计并保存 (Ctrl+S 仅保存)">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 12l4-5 3 3 2-4 3 6"/>
-            </svg>
-            伤害统计
-          </button>
           <button class="ea-btn ea-btn--sm ea-btn--lift ea-btn--hover-blue" @click="store.manualSave()" title="保存 (Ctrl+S)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -779,12 +772,10 @@ onUnmounted(() => {
       </header>
 
       <div class="timeline-workspace" style="position: relative;">
-        <DamageSummaryPanel />
         <div class="timeline-grid-container">
           <TimelineGrid/>
         </div>
         <div class="resource-monitor-panel"><ResourceMonitor/></div>
-        <LegalityIssuePanel />
 
         <!-- Ability Expansion panel: covers timeline grid area, below DamageSummary, above ResourceMonitor -->
         <div v-if="editorMode === 'abilityExpansion'" class="ae-workspace-panel">
@@ -1029,15 +1020,6 @@ onUnmounted(() => {
   overflow: auto;
 }
 
-
-.legality-mode-btn { position: relative; }
-.legality-issue-count {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 16px; height: 14px; padding: 0 3px;
-  border-radius: 7px; font-size: 9px; font-weight: 700;
-  background: #555; color: #fff; margin-left: 4px;
-}
-.legality-issue-count.has-errors { background: #ff4d4f; }
 
 /* Editor Mode Switch */
 .editor-mode-switch {

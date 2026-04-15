@@ -368,6 +368,10 @@ export interface DamageEvent extends BaseEvent {
   school: DamageSchool;
   actionId: string;
   hitIndex: number;
+  /** True if this damage was produced by a trigger (phantom attack, iron oath, etc.) */
+  fromTrigger?: boolean;
+  /** Display name for trigger-produced damage (e.g., "幻影追击") */
+  triggerName?: string;
 }
 
 /** Gauge change (charge or consume). */
@@ -429,6 +433,8 @@ export interface AttachmentEvent extends BaseEvent {
   stacks: number;
   prevElement: MagicElement | null;
   prevStacks: number;
+  /** Actor who caused this change. */
+  sourceId?: string;
 }
 
 /** Anomaly status change. */
@@ -444,6 +450,10 @@ export interface BreakEvent extends BaseEvent {
   type: "break_change";
   stacks: number;
   prevStacks: number;
+  /** Physical anomaly type that caused this change (slam/armorBreak/launch/knockdown). */
+  physicalType?: string;
+  /** Actor who caused this change. */
+  sourceId?: string;
 }
 
 /** Stagger value change. */
@@ -501,6 +511,15 @@ export type SimEvent =
   | ConditionResultEvent
   | ConvertEvent;
 
+/** Validation error — returned when a skill's conditions are not met. */
+export interface ValidationError {
+  actorId: string;
+  actionId: string;
+  code: string;
+  message: string;
+  time: number;
+}
+
 /** Complete simulation output. */
 export interface SimulationResult {
   events: SimEvent[];
@@ -513,4 +532,6 @@ export interface SimulationResult {
       anomalies: Record<AnomalyType, boolean>;
     };
   };
+  /** Set when validation aborts due to unmet conditions. Events are still populated up to the failure point. */
+  validationError?: ValidationError;
 }

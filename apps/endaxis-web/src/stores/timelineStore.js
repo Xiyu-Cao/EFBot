@@ -11,13 +11,17 @@ import { compileScenario } from '@/simulation/compiler/compileScenario'
 import { simulate } from '@/simulation/simulator'
 import { ULTIMATE_ENHANCEMENT_EXTENDERS } from '@/simulation/compiler/enhancers'
 import { projectSpSeries } from '@/simulation/projection/projectSpSeries'
-import { applyV2Overrides, preloadV2Modules, V2_READY_IDS } from '@/simulation/v2/characters/adapter'
+import { applyV2Overrides, preloadV2Modules, V2_READY_IDS, getV2Module } from '@/simulation/v2/characters/adapter'
 import { projectStaggerSeries } from '@/simulation/projection/projectStaggerSeries'
 import { projectLinkTriggerSeries, computeLinkQueueAt } from '@/simulation/projection/projectLinkTriggerSeries'
 import { projectGaugeSeries as projGaugeSeries } from '@/simulation/projection/projectGaugeSeries'
 import { projectWeaponBuffTimeline } from '@/simulation/projection/projectWeaponBuffTimeline'
 import { projectSelfBuffTimeline } from '@/simulation/projection/projectSelfBuffTimeline'
 import { CATEGORY_TO_SET_ID } from '@/simulation/equipment/registry'
+import { simulate as simulateV2 } from '@/simulation/v2/kernel'
+import { projectBuffBars, projectStackBuffBars, projectAnomalyBars, projectAttachmentBars, projectBreakBars, projectHitEffects, projectSpSeries as v2ProjectSpSeries, projectGaugeSeries as v2ProjectGaugeSeries } from '@/simulation/v2/projections'
+import { buildV2Inputs } from '@/simulation/v2/storeAdapter'
+import { adaptAllProjections } from '@/simulation/v2/v2ProjectionAdapter'
 import { checkConditionsMet } from '@/simulation/legality/checkActionLegality'
 import { i18n } from '@/i18n'
 import { snapMs } from '@/utils/precision.js'
@@ -197,7 +201,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     const BASE_BLOCK_WIDTH = ref(50)
     const ZOOM_LIMITS = {
         MIN: 15,
-        MAX: 1200
+        MAX: 250
     }
     const TOTAL_DURATION = 120
     const MAX_SCENARIOS = 14
@@ -278,7 +282,11 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     /** 附着类：duration 为 0 时仍显示在 Boss 减益行（条带拉到时间轴末尾） */
     const ATTACH_LIKE_DEBUFF_TYPES = new Set([
-        'blaze_attach', 'cold_attach', 'emag_attach', 'nature_attach',
+        'blaze_attach', 'cold_attach', 'emag_attach', 'nature_attach', 'break',
+    ])
+    // 异常（燃烧/冻结/导电/腐蚀）不在附着行，只在 debuff 行
+    const ANOMALY_DEBUFF_TYPES = new Set([
+        'burning', 'frozen', 'conductive', 'corrosion',
     ])
 
     const DEBUFF_STACK_CAP = 4
@@ -1206,6 +1214,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     const validationResult = ref(null)        // { passed: bool, issues: [] }
     const validationDialogVisible = ref(false)
     const validationPassed = ref(false)       // gate for future feature pages
+    const _v2ValidationResult = ref(null)     // V2 SimulationResult from last validation (for buff display)
 
     function setTimelineEditorMode(mode) {
         if (mode !== 'free' && mode !== 'realistic') return
@@ -4072,6 +4081,8 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     function _autoGenerateBuffs(trackId, action) {
+        // Free mode: no auto buff generation — only show after validation
+        if (timelineEditorMode.value === 'free') return
         const track = tracks.value.find(t => t.id === trackId)
         if (!track) return
 
@@ -5271,6 +5282,10 @@ export const useTimelineStore = defineStore('timeline', () => {
     });
 
     const simulation = computed(() => {
+        // V1 simulation disabled — all computation goes through V2 kernel
+        // Legacy code preserved below for reference only
+        return null;
+        /* eslint-disable no-unreachable */
         const scenario = compiledScenario.value;
         if (!scenario) return null;
         const { timeline, teamConfig, enemyConfig, actors } = scenario;
@@ -5350,6 +5365,46 @@ export const useTimelineStore = defineStore('timeline', () => {
         }
     });
 
+    // ── V2 Kernel Simulation ──
+    // Auto simulation disabled — only runs via validateTimeline()
+    const v2Simulation = computed(() => {
+        return null
+        /* eslint-disable no-unreachable */
+        try {
+            const inputs = buildV2Inputs(
+                tracks.value,
+                characterRoster.value,
+                weaponDatabase.value,
+                systemConstants.value,
+                resolveTrackConfiguredStats,
+                getTrackGaugeMax,
+            )
+            if (!inputs) return null
+            return simulateV2(inputs.builds, inputs.skills, inputs.enemyConfig, inputs.config, inputs.triggersByActor)
+        } catch (err) {
+            console.error('[v2 simulation] runtime error:', err)
+            return null
+        }
+    })
+
+    // ── V2 Projected data (buff/debuff/anomaly/attachment) ──
+    // Sources: auto simulation (non-free mode) OR validation result (free mode)
+    const _v2ProjectedData = computed(() => {
+        const sim = v2Simulation.value || _v2ValidationResult.value
+        if (!sim?.events?.length) return null
+        const endTime = viewDuration.value
+
+        const buffBars = projectBuffBars(sim.events, endTime)
+        const stackBars = projectStackBuffBars(sim.events, endTime)
+        const anomalyBars = projectAnomalyBars(sim.events, endTime)
+        const attachBars = projectAttachmentBars(sim.events, endTime)
+        const breakBars = projectBreakBars(sim.events, endTime)
+        const hitEffects = projectHitEffects(sim.events)
+
+        const adapted = adaptAllProjections(buffBars, stackBars, anomalyBars, attachBars, breakBars)
+        return { ...adapted, hitEffects }
+    })
+
     /**
      * Legality issues grouped by action instanceId.
      * Map<actionId, LegalityIssue[]>
@@ -5372,27 +5427,61 @@ export const useTimelineStore = defineStore('timeline', () => {
         })
     }
 
-    const legalityIssuesByAction = computed(() => {
-        const issues = _filterGaugeIssues(simulation.value?.legalityIssues ?? [])
-        const map = new Map()
-        for (const issue of issues) {
-            if (!map.has(issue.actionId)) {
-                map.set(issue.actionId, [])
-            }
-            map.get(issue.actionId).push(issue)
-        }
-        return map
-    })
-
-    /** Flat list of all legality issues, sorted by time. For panel/list views. */
-    const sortedLegalityIssues = computed(() => {
-        const issues = _filterGaugeIssues(simulation.value?.legalityIssues ?? [])
-        return [...issues].sort((a, b) => a.time - b.time)
-    })
+    // V1 legality disabled — V2 kernel handles validation via validateTimeline()
+    const legalityIssuesByAction = computed(() => new Map())
+    const sortedLegalityIssues = computed(() => [])
 
     // ── Validation (Free Mode) ──
 
     function validateTimeline() {
+        // ── Try V2 kernel first ──
+        const v2Inputs = buildV2Inputs(
+            tracks.value,
+            characterRoster.value,
+            weaponDatabase.value,
+            systemConstants.value,
+            resolveTrackConfiguredStats,
+            getTrackGaugeMax,
+        )
+        if (v2Inputs) {
+            try {
+                const result = simulateV2(
+                    v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
+                    { ...v2Inputs.config, validateConditions: true },
+                    v2Inputs.triggersByActor,
+                )
+                // Store result for buff display (even on partial failure)
+                _v2ValidationResult.value = result
+
+                if (result.validationError) {
+                    const err = result.validationError
+                    validationResult.value = {
+                        passed: false,
+                        issues: [{
+                            actorId: err.actorId,
+                            actionId: err.actionId,
+                            code: err.code,
+                            message: err.message,
+                            time: err.time,
+                            severity: 'error',
+                            resolution: 'block',
+                        }],
+                    }
+                    validationPassed.value = false
+                } else {
+                    validationResult.value = { passed: true, issues: [] }
+                    validationPassed.value = true
+                }
+            } catch (err) {
+                console.error('[validateTimeline V2] runtime error:', err)
+                validationResult.value = { passed: false, issues: [], error: String(err) }
+                validationPassed.value = false
+            }
+            validationDialogVisible.value = true
+            return
+        }
+
+        // ── Fallback: V1 engine ──
         const scenario = compiledScenario.value
         if (!scenario) {
             validationResult.value = { passed: true, issues: [] }
@@ -5456,8 +5545,6 @@ export const useTimelineStore = defineStore('timeline', () => {
                 enhancedActionIds: enhancedIds.size > 0 ? enhancedIds : undefined,
                 skillLevelMap,
             })
-            // Filter GAUGE_INSUFFICIENT: always re-verify with store's calculateGaugeData
-            // (authoritative source that accounts for all gaugeGain + efficiency)
             const rawIssues = result.legalityIssues ?? []
             const issues = _filterGaugeIssues(rawIssues)
             validationResult.value = {
@@ -5480,7 +5567,10 @@ export const useTimelineStore = defineStore('timeline', () => {
      * Filters compiled timeline actions to those starting <= targetTime,
      * then runs the full simulation pipeline.
      */
-    function _runSimulationUpTo(targetTime) {
+    function _runSimulationUpTo(_targetTime) {
+        // V1 playhead simulation disabled — V2 kernel handles this
+        return null
+        /* eslint-disable no-unreachable */
         const scenario = compiledScenario.value
         if (!scenario) return null
         const { timeline, teamConfig, enemyConfig, actors } = scenario
@@ -5722,43 +5812,19 @@ export const useTimelineStore = defineStore('timeline', () => {
         return { available, reasons }
     }
 
+    // SP series from V2 kernel events
     const spSeries = computed(() => {
-        if (!simulation.value) return [];
-        return projectSpSeries(simulation.value.simLog, simulation.value.state.getInitialSnapshot());
+        const sim = _v2ValidationResult.value
+        if (!sim?.events?.length) return []
+        return v2ProjectSpSeries(sim.events, systemConstants.value.initialSp, viewDuration.value)
     });
+    const staggerSeries = computed(() => []);
+    const _projectedBuffs = computed(() => null);
 
-    const staggerSeries = computed(() => {
-        if (!simulation.value) return [];
-        return projectStaggerSeries(simulation.value.simLog, simulation.value.state.getInitialSnapshot(), compiledScenario.value.enemyConfig);
-    });
-
-    // ── Phase 4: Projected weapon/team/debuff buffs from simLog ──
-    const _projectedBuffs = computed(() => {
-        const sim = simulation.value
-        if (!sim?.simLog?.length) return null
-        const tIds = tracks.value.filter(t => t.id).map(t => t.id)
-        const icons = {}
-        for (const w of weaponDatabase.value) { if (w.id && w.icon) icons[w.id] = w.icon }
-        return projectWeaponBuffTimeline(sim.simLog, tIds, icons)
-    })
-
-    // Effective statuses: prefer sim-projected, fallback to store auto-generated
-    // Until engine weapon triggers cover all weapons, keep store's _autoGenerateBuffs results
-    const effectiveWeaponStatuses = computed(() => {
-        const projected = _projectedBuffs.value?.weaponStatuses || []
-        // Use projected if available, otherwise all store statuses
-        return projected.length > 0
-            ? [...projected, ...weaponStatuses.value.filter(s => s.type === 'set')]
-            : weaponStatuses.value
-    })
-    const effectiveTeamBuffStatuses = computed(() => {
-        const projected = _projectedBuffs.value?.teamBuffStatuses || []
-        return projected.length > 0 ? projected : teamBuffStatuses.value
-    })
-    const effectiveDebuffStatuses = computed(() => {
-        const projected = _projectedBuffs.value?.debuffStatuses || []
-        return projected.length > 0 ? projected : debuffStatuses.value
-    })
+    // Effective statuses: V2 only (no V1 fallback)
+    const effectiveWeaponStatuses = computed(() => _v2ProjectedData.value?.weaponStatuses || [])
+    const effectiveTeamBuffStatuses = computed(() => _v2ProjectedData.value?.teamBuffStatuses || [])
+    const effectiveDebuffStatuses = computed(() => _v2ProjectedData.value?.debuffStatuses || [])
 
     const timeContext = computed(() => compiledTimeline.value.timeContext);
 
@@ -6311,18 +6377,18 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     const gaugeSeriesByTrackId = computed(() => {
-        const sim = simulation.value
+        const sim = _v2ValidationResult.value
         const map = new Map()
         for (const track of tracks.value) {
             if (!track?.id) continue
-            if (sim?.simLog?.length) {
-                // Phase 1: project gauge from simLog (authoritative kernel)
+            if (sim?.events?.length) {
+                // V2 kernel gauge projection
                 const charInfo = characterRoster.value.find(c => c.id === track.id)
                 const maxGauge = charInfo ? resolveGaugeMax(track.id, track, charInfo) : 100
-                const initialGauge = Number(track.initialGauge) || 0
-                map.set(track.id, projGaugeSeries(sim.simLog, track.id, initialGauge, maxGauge, viewDuration.value))
+                const initialGauge = (systemConstants.value.initialGaugeFull) ? maxGauge : 0
+                map.set(track.id, v2ProjectGaugeSeries(sim.events, track.id, initialGauge, maxGauge, viewDuration.value))
             } else {
-                // Fallback when simulation not available
+                // Fallback: manual calculation
                 map.set(track.id, calculateGaugeData(track.id))
             }
         }
@@ -6424,7 +6490,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         // 排序所有变动事件
         events.sort((a, b) => a.time - b.time);
 
-        const initialGauge = Number(track.initialGauge) || 0;
+        const initialGauge = systemConstants.value.initialGaugeFull ? GAUGE_MAX : (Number(track.initialGauge) || 0);
         let currentGauge = initialGauge > GAUGE_MAX ? GAUGE_MAX : initialGauge;
         const points = [{ time: 0, val: currentGauge, ratio: currentGauge / GAUGE_MAX }];
 
@@ -6902,6 +6968,9 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     const computedPhysicalVulnerable = computed(() => {
+        // V1 manual computation disabled — V2 projections handle this
+        return []
+        /* eslint-disable no-unreachable */
         const viewDur = viewDuration.value
         const vulIcon = iconDatabase.value['break'] || iconDatabase.value['physical_vulnerable'] || ''
         const raw = []
@@ -6935,6 +7004,9 @@ export const useTimelineStore = defineStore('timeline', () => {
     })
 
     const computedAnomalyDebuffs = computed(() => {
+        // V1 manual anomaly computation disabled — V2 projections handle this
+        return []
+        /* eslint-disable no-unreachable */
         const viewDur = viewDuration.value
         const raw = []
 
@@ -7054,6 +7126,9 @@ export const useTimelineStore = defineStore('timeline', () => {
      * 将二者合并计算以消除循环依赖：自身 buff 堆叠状态 → 条件判断 → 消耗 buff / 选用变体 physicalAnomaly
      */
     const computedSelfBuffSimulation = computed(() => {
+        // V1 manual self-buff computation disabled — V2 projections handle this
+        return { selfBuffsByTrack: new Map(), conditionResultsByAction: new Map(), convertEvents: [] }
+        /* eslint-disable no-unreachable */
         const viewDur = viewDuration.value
         const selfBuffsByTrack = new Map()
         const conditionResultsByAction = new Map()
@@ -7257,17 +7332,9 @@ export const useTimelineStore = defineStore('timeline', () => {
         return { selfBuffsByTrack, conditionResultsByAction, convertEvents }
     })
 
+    // V2 only — no V1 fallback
     const computedSelfBuffsByTrack = computed(() => {
-        const sim = simulation.value
-        if (sim?.simLog?.length) {
-            // Phase 2.3: project self-buffs from simLog (authoritative)
-            const exclusiveMap = new Map()
-            for (const c of characterRoster.value) {
-                if (c.exclusive_buffs?.length) exclusiveMap.set(c.id, c.exclusive_buffs)
-            }
-            return projectSelfBuffTimeline(sim.simLog, exclusiveMap, viewDuration.value)
-        }
-        return computedSelfBuffSimulation.value.selfBuffsByTrack
+        return _v2ProjectedData.value?.selfBuffsByTrack || new Map()
     })
     const computedActionConditionResults = computed(() => computedSelfBuffSimulation.value.conditionResultsByAction)
     const computedConvertEvents = computed(() => computedSelfBuffSimulation.value.convertEvents)
@@ -7277,7 +7344,28 @@ export const useTimelineStore = defineStore('timeline', () => {
      * 在 computedAnomalyDebuffs 基础上应用 blaze_to_magma 转化消耗：
      * 在转化命中时刻将 blaze_attach 层数减少对应量。
      */
+    // Element color mapping for anomaly/attachment types
+    const ANOMALY_ELEMENT_COLORS = {
+        blaze_attach: '#ff6b35', blaze_burst: '#ff6b35', burning: '#ff6b35',
+        cold_attach: '#4fc3f7', cold_burst: '#4fc3f7', frozen: '#4fc3f7', ice_shatter: '#4fc3f7',
+        emag_attach: '#ab47bc', emag_burst: '#ab47bc', conductive: '#ab47bc',
+        nature_attach: '#66bb6a', nature_burst: '#66bb6a', corrosion: '#66bb6a',
+    }
+
     const computedAnomalyDebuffsEffective = computed(() => {
+        // V2 data: attachment + anomaly debuffs from kernel events
+        const v2 = _v2ProjectedData.value
+        if (v2) {
+            const all = [...(v2.attachmentDebuffs || []), ...(v2.anomalyDebuffs || []), ...(v2.breakDebuffs || [])]
+            const FALLBACK_ICONS = { break: '/icons/icon_battle_physical_no_guard.webp' }
+            for (const d of all) {
+                if (!d.icon) d.icon = iconDatabase.value[d.anomalyType] || FALLBACK_ICONS[d.anomalyType] || ''
+                if (!d.color) d.color = ANOMALY_ELEMENT_COLORS[d.anomalyType] || '#999'
+            }
+            return all
+        }
+        return []
+        /* eslint-disable no-unreachable */
         const base = computedAnomalyDebuffs.value
         const converts = computedSelfBuffSimulation.value.convertEvents
         if (!converts.length) return base
@@ -7555,6 +7643,9 @@ export const useTimelineStore = defineStore('timeline', () => {
      * 结果写入 damageStatsSnapshot，DamageSummaryPanel 读取。
      */
     function runDamageStats() {
+        // V1 damage stats disabled — V2 projectDamageSummary handles this
+        // TODO: wire V2 damage summary
+        return
         const sim = simulation.value
         const scenario = compiledScenario.value
         if (!sim || !scenario) {
@@ -8307,6 +8398,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         computedActionConditionResults,
         computedConvertEvents,
         computedAnomalyDebuffsEffective,
+        v2HitEffects: computed(() => _v2ProjectedData.value?.hitEffects || []),
         computedEffectiveActions,
         misc,
         prepDuration, prepExpanded, viewDuration, prepZoneWidthPx, totalTimelineWidthPx,

@@ -311,6 +311,74 @@ export function projectAnomalyBars(
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Break stack timeline
+// ═══════════════════════════════════════════════════════════════════
+
+export interface BreakBar {
+  id: string;
+  stacks: number;
+  startTime: number;
+  endTime: number;
+  physicalType?: string;
+  /** What consumed this break (slam/armorBreak), or undefined if expired naturally. */
+  consumedBy?: string;
+}
+
+const BREAK_DURATION = 30;
+
+/**
+ * Project break stack bars from break_change events.
+ */
+export function projectBreakBars(
+  events: SimEvent[],
+  endTime: number,
+): BreakBar[] {
+  const bars: BreakBar[] = [];
+  let current: { stacks: number; startTime: number; physicalType?: string } | null = null;
+  let counter = 0;
+
+  for (const e of events) {
+    if (e.type !== "break_change") continue;
+    const bk = e as BreakEvent;
+
+    // Close previous bar
+    if (current && current.stacks > 0) {
+      counter++;
+      // If stacks dropped to 0, this was consumed by the current event's physicalType
+      const consumed = bk.stacks === 0 && bk.physicalType ? bk.physicalType : undefined;
+      bars.push({
+        id: `break_${counter}`,
+        stacks: current.stacks,
+        startTime: current.startTime,
+        endTime: bk.time,
+        physicalType: current.physicalType,
+        consumedBy: consumed,
+      });
+    }
+
+    // Open new bar if stacks > 0
+    if (bk.stacks > 0) {
+      current = { stacks: bk.stacks, startTime: bk.time, physicalType: bk.physicalType };
+    } else {
+      current = null;
+    }
+  }
+
+  // Close unclosed (cap at startTime + BREAK_DURATION)
+  if (current && current.stacks > 0) {
+    counter++;
+    bars.push({
+      id: `break_${counter}`,
+      stacks: current.stacks,
+      startTime: current.startTime,
+      endTime: Math.min(endTime, current.startTime + BREAK_DURATION),
+    });
+  }
+
+  return bars;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Attachment timeline
 // ═══════════════════════════════════════════════════════════════════
 
@@ -320,6 +388,8 @@ export interface AttachmentBar {
   stacks: number;
   startTime: number;
   endTime: number;
+  /** True if consumed by reaction/skill (not natural expiry). */
+  consumed?: boolean;
 }
 
 /**
@@ -340,12 +410,15 @@ export function projectAttachmentBars(
     // Close previous bar
     if (current) {
       counter++;
+      // Consumed if: element changed or cleared (not just stacks changed on same element)
+      const isConsumed = ae.element !== current.element || ae.stacks === 0;
       bars.push({
         id: `attach_${counter}`,
         element: current.element,
         stacks: current.stacks,
         startTime: current.startTime,
         endTime: ae.time,
+        consumed: isConsumed && ae.time < current.startTime + 30 - 0.01, // not expired naturally
       });
       current = null;
     }
@@ -407,6 +480,114 @@ export function projectStaggerSeries(
 
   points.push({ time: endTime, value: current, maxStagger, isStaggered });
   return points;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Hit effect markers (all visible effects at hit positions)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface HitEffectMarker {
+  id: string;
+  time: number;
+  sourceId: string;
+  actionId: string;
+  /** Effect category for icon/color selection */
+  effectType: string;
+  /** Display name */
+  name: string;
+  /** Damage value (for trigger damage markers) */
+  damage?: number;
+  /** Element for coloring */
+  element?: DamageElement | string;
+  /** Whether this is a trigger-produced extra hit */
+  isTriggerHit?: boolean;
+}
+
+/**
+ * Extract all visible effects from events as markers at hit positions.
+ * Includes: attachments, buffs, anomalies, break changes, trigger hits.
+ */
+export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
+  const markers: HitEffectMarker[] = [];
+  let counter = 0;
+  const id = () => `hfx_${++counter}`;
+
+  for (const e of events) {
+    switch (e.type) {
+      case "attachment_change": {
+        const ae = e as AttachmentEvent;
+        // Only show application events (stacks > 0), not expiry/clear
+        if (ae.stacks > 0 && ae.element) {
+          const elementNames: Record<string, string> = { fire: "灼热附着", cold: "寒冷附着", electro: "电磁附着", nature: "自然附着" };
+          markers.push({
+            id: id(), time: ae.time, sourceId: ae.sourceId || "", actionId: "",
+            effectType: `${ae.element}_attach`,
+            name: elementNames[ae.element] || `${ae.element}附着`,
+            element: ae.element,
+          });
+        }
+        break;
+      }
+      case "buff_apply": {
+        const be = e as BuffEvent;
+        markers.push({
+          id: id(), time: be.time, sourceId: be.actorId, actionId: "",
+          effectType: be.buffId,
+          name: be.buffName,
+          element: be.target === "enemy" ? undefined : undefined,
+        });
+        break;
+      }
+      case "break_change": {
+        const bk = e as BreakEvent;
+        const physType = bk.physicalType || (bk.stacks > bk.prevStacks ? "break_apply" : "break_consume");
+        const physNames: Record<string, string> = { slam: "猛击", armorBreak: "碎甲", launch: "击飞", knockdown: "倒地", break_apply: "破防", break_consume: "消耗破防" };
+        markers.push({
+          id: id(), time: bk.time, sourceId: bk.sourceId || "", actionId: "",
+          effectType: physType,
+          name: physNames[physType] || physType,
+        });
+        break;
+      }
+      case "anomaly_apply": {
+        const an = e as AnomalyEvent;
+        const anomalyNames: Record<string, string> = { burning: "燃烧", frozen: "冻结", conduction: "导电", corrosion: "腐蚀" };
+        markers.push({
+          id: id(), time: an.time, sourceId: an.sourceId, actionId: "",
+          effectType: an.anomalyType,
+          name: anomalyNames[an.anomalyType] || an.anomalyType,
+        });
+        break;
+      }
+      case "stack_change": {
+        const se = e as StackBuffEvent;
+        if (se.stacks > se.prevStacks) {
+          markers.push({
+            id: id(), time: se.time, sourceId: se.actorId, actionId: "",
+            effectType: se.buffType,
+            name: se.buffType,
+          });
+        }
+        break;
+      }
+      case "damage": {
+        const de = e as DamageEvent;
+        if (de.fromTrigger) {
+          markers.push({
+            id: id(), time: de.time, sourceId: de.sourceId, actionId: de.actionId,
+            effectType: "trigger_damage",
+            name: de.triggerName || "追加攻击",
+            damage: de.damage,
+            element: de.element,
+            isTriggerHit: true,
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  return markers;
 }
 
 // ═══════════════════════════════════════════════════════════════════

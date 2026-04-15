@@ -3,14 +3,11 @@ import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import vueDevTools from 'vite-plugin-vue-devtools'
-
 const isTauri = !!process.env.TAURI_ENV_PLATFORM
 
 export default defineConfig({
   plugins: [
     vue(),
-    ...(!isTauri ? [vueDevTools()] : []),
   ],
   base: '/',
   resolve: {

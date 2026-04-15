@@ -260,6 +260,10 @@ const transformStyle = computed(() => {
                 <label>{{ t('resourceMonitor.labels.spPerSecond') }}</label>
                 <CustomNumberInput v-model="store.systemConstants.spRegenRate" :step="0.5" :min="0" active-color="#ffd700" class="standard-input" />
               </div>
+              <div class="control-row-mini" style="display:flex;align-items:center;gap:8px;">
+                <label>开局满终结技能量</label>
+                <input type="checkbox" v-model="store.systemConstants.initialGaugeFull" style="width:14px;height:14px;cursor:pointer;" />
+              </div>
             </div>
           </div>
       </div>

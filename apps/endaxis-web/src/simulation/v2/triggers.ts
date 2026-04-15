@@ -45,9 +45,13 @@ export interface TriggerState {
     breakStacks: number;
     isStaggered: boolean;
     anomalies: Record<AnomalyType, boolean>;
+    /** Active buff IDs on enemy (from BuffManager). */
+    activeBuffIds: Set<string>;
   };
   actor: {
     stackBuffs: Record<string, number>;
+    /** Active buff IDs on any actor (from BuffManager). */
+    activeBuffIds: Set<string>;
   };
   /** The event that triggered this evaluation. */
   event: TriggerEvent;
@@ -197,6 +201,18 @@ export class TriggerProcessor {
           case "!=": return stacks !== value;
           default: return false;
         }
+      }
+      case "actor_has_buff": {
+        const buffId = cond.params.buffId as string;
+        return state.actor.activeBuffIds.has(buffId);
+      }
+      case "enemy_has_buff": {
+        const buffId = cond.params.buffId as string;
+        return state.enemy.activeBuffIds.has(buffId);
+      }
+      case "consumed_buff": {
+        const buffId = cond.params.buffId as string;
+        return (state.event.data.consumedBuffType as string) === buffId;
       }
       case "consumed_element": {
         const el = cond.params.element as MagicElement;
