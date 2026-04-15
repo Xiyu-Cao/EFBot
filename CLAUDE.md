@@ -337,54 +337,90 @@ on_effect_consumed       — 指定效果被消耗（effect_id，非自然到期
 - Layer 2 (`kernel.ts` + 模块): 接收技能序列 → 逐 hit 结算 → 产出 EventLog
 - Layer 3 (`projections.ts`): EventLog → UI 数据（纯投影，不参与计算）
 
-**四阶段 Hit 执行模型** (kernel.ts):
+**完整管线架构** (2026-04-15):
 ```
-Phase 1: Effects（状态变更 + 收集 effectDamages 和 deferredActions）
-Phase 2: Effect damages（猛击/碎甲等效果伤害，享受消耗前的 buff 状态）
-Phase 3: Deferred actions（消耗清理、天赋 buff 施加）
-Phase 4: Hit 本体伤害（看到 deferred 后的状态）
+Store 状态 → storeAdapter.ts → V2 Kernel simulate() → SimEvent[]
+                                                           ↓
+                                                projections.ts (11 个投影)
+                                                           ↓
+                                            v2ProjectionAdapter.ts → UI 格式
+                                                           ↓
+                                                   Vue 组件纯渲染
 ```
+
+所有计算集中在 V2 kernel。前端只做：放置技能 + 角色配置 + 渲染 kernel 输出。
+V1 所有计算路径已禁用（代码保留但 return null/empty）。
+
+**Hit 执行模型** (kernel.ts):
+```
+Phase A: 按技能 startTime 处理技能级操作（SP/gauge/variant/interrupt/action_start）
+         收集所有 hit 到 globalHits[]
+Phase B: globalHits 按绝对时间排序，逐个处理:
+  Phase 1: Effects（状态变更 + 收集 effectDamages 和 deferredActions）
+  Phase 2: Effect damages（猛击/碎甲等效果伤害）
+  Phase 3: Deferred actions（消耗清理、天赋 buff 施加）
+  Phase 4: Hit 本体伤害 + 失衡
+  Phase 5: Trigger evaluation（触发器事件 + immediate/deferred trigger 执行）
+```
+
+**processEffect 支持的 effect types** (13 种):
+`magic_attachment`, `physical_anomaly`, `break_apply`, `stack_buff_apply`,
+`stack_buff_consume`, `sp_restore`, `gauge_gain`, `blaze_to_magma`,
+`buff_apply`, `buff_consume`, `consume_attachment`, `delayed_damage`, `sp_consume`
+
+**trigger 事件类型**: hit_damage, attack_hit, skill_hit, link_hit, ultimate_hit,
+execution_hit, aerial_hit, heavy_attack_hit, stagger_increased, physical_anomaly,
+stack_buff_gained, stack_buff_consumed, sp_restored, attachment_consumed 等
+
+**trigger 条件类型**: enemy_has_attachment, enemy_has_anomaly, enemy_has_break,
+enemy_is_staggered, actor_has_stack_buff, actor_has_buff, enemy_has_buff,
+consumed_buff, consumed_element, source_action_type
 
 **核心原则**:
 - 所有效果基于具体 hit 触发，先特效后伤害
 - 效果链完整结算后才轮到 hit 本体伤害
-- 天赋/武器效果通过 PassiveTrigger 事件驱动，不写在 hit 里
-- 战斗内 ATK 大概率使用浮点值（未取整），待更多数据确认
+- 天赋/武器效果通过 PassiveTrigger 事件驱动
+- 前端显示 = kernel 计算结果的投影，不做任何前端独立计算
+- 修复在 kernel 不在投影层（状态过期等逻辑都在 kernel 处理）
+- 全局 hit 排序确保跨技能 hit 按真实时间顺序处理
 
 **角色数据文件** (`v2/characters/`):
 每个角色一个 TypeScript 文件，包含:
 - Part 1: 静态数据（identity, levelStats, skillData, talents, potentials）
 - Part 2: 内核效果（skills 含 hit timing/duration/detach, triggers 含天赋/潜能触发）
 - 通过 `adapter.ts` 转换为前端管线格式，自动覆盖 gamedata.json 数据
-
-**武器数据** (`v2/weapons/`):
-- `types.ts`: WeaponDefinition, WeaponTrigger 类型
-- `definitions.ts`: 按需添加，当前已有 宏愿/不知归/赫拉芬格
+- 新角色只需: 写 characters/xxx.ts + adapter.ts 注册 V2_MODULES + buffMetadata 加图标
+- `Skill.isHeavyAttack` 标记重击段（普攻最后一段）
 
 **V2-ready 角色**: ENDMINISTRATOR, POGRANICHNK, LASTRITE（其余显示"待更新"标签）
+**不支持角色**: EMBER, CATCHER, SNOWSHINE（需敌方攻击/治疗系统，显示"不支持"标签）
 
 **模块**:
 | 文件 | 功能 |
 |------|------|
-| `types.ts` | 类型定义（Skill, Hit, EventLog, PassiveTrigger） |
+| `types.ts` | 类型定义（Skill, Hit, EventLog, PassiveTrigger, ValidationError） |
 | `characterBuild.ts` | stat breakdown，不预算最终值 |
 | `damage.ts` | 11 乘区伤害 + MultiplierRef + 暴击 |
-| `anomaly.ts` | 附着/反应/物理异常/破防/失衡 + 击飞倒地额外10失衡(artsPower scaled) |
+| `anomaly.ts` | 附着/反应/物理异常/破防/失衡 |
 | `resources.ts` | SP(trueSP/refundSP) + Gauge |
 | `effects.ts` | Buff 管理 + Stack buff + 变体选择 |
-| `triggers.ts` | 触发器处理器（immediate/deferred） |
-| `projections.ts` | 8 个投影函数 |
-| `kernel.ts` | 主循环（四阶段模型） |
-| `characters/` | 角色数据 + adapter.ts |
-| `weapons/` | 武器数据 |
+| `triggers.ts` | 触发器处理器（immediate/deferred + ICD + 10种条件） |
+| `projections.ts` | 11 个投影函数（buff/stack/anomaly/attachment/break/hitEffects/SP/gauge/stagger/triggerHits/damage） |
+| `kernel.ts` | 主循环（全局 hit 排序 + 5 阶段模型 + 条件校验 + 打断） |
+| `storeAdapter.ts` | Store → kernel 输入桥接（build/skills/enemy/config/triggers/resolveRef） |
+| `v2ProjectionAdapter.ts` | V2 投影 → UI 格式适配（颜色/图标/格式转换） |
+| `characters/` | 角色数据 + adapter.ts（V2_MODULES 注册 + UNSUPPORTED_IDS） |
 
-**打断优先级**: 终结技 > 闪避 > 连携技 > 战技（默认规则，角色例外在各自数据中标注）
+**打断优先级**: 终结技(5) > 闪避(4) > 连携技(3) > 战技(2) > 普攻(1)
 
 **参考文档**:
 - 审计报告: `reports/kernel-mechanics-audit-2026-04-09.md`
 - 技能模板: `reports/v2-skill-hit-template.md`
 - 已确认数据: `reports/v2-skill-hit-confirmed.md`
 - 战斗术语: `reports/v2-combat-glossary.md`
+- Buff 前端显示计划: `reports/buff-frontend-display-plan-2026-04-14.md`
+- 项目实现计划: `reports/project-implementation-plan-2026-04-14.md`
+- 本次改动报告: `reports/session-report-2026-04-14-15.md`
 
 ## 其他注意事项
 
