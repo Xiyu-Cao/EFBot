@@ -37,6 +37,7 @@ Archived_Report/
 reports/*
 !reports/v2-skill-hit-confirmed.md
 
+ui-ref/
 # Logs
 *.log
 npm-debug.log*
