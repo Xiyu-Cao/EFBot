@@ -28,8 +28,8 @@ __pycache__/
 .venv/
 venv/
 
-# Tauri
-apps/tauri-ui/src-tauri/target/
+# Tauri / Rust build artifacts
+**/src-tauri/target/
 
 # Logs
 *.log
