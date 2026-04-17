@@ -35,6 +35,7 @@ import type {
   SkillVariant,
   Hit,
   HitEffect,
+  MultiplierRef,
   SimEvent,
   SimulationResult,
   ValidationError,
@@ -58,9 +59,51 @@ import {
   corrosionParams,
 } from "./anomaly";
 import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain, SP_CAP } from "./resources";
-import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef } from "./effects";
+import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef, type BuffModifierDef } from "./effects";
 import { getBuffMeta } from "../data/buffMetadata";
 import { TriggerProcessor, type TriggerEvent, type TriggerState } from "./triggers";
+
+// ═══════════════════════════════════════════════════════════════════
+// Stat+Zone → BuffModifiers field mapping (for weapon/equipment buffs)
+// ═══════════════════════════════════════════════════════════════════
+
+const STAT_ZONE_TO_MODIFIER: Record<string, Record<string, keyof BuffModifiers>> = {
+  // dmgBonus zone — stat determines which damage types
+  dmgBonus: {
+    physical_dmg: "physicalDmg",
+    arts_dmg: "artsDmg",
+    blaze_dmg: "blazeDmg",
+    cold_dmg: "coldDmg",
+    emag_dmg: "emagDmg",
+    nature_dmg: "natureDmg",
+    attack_dmg_bonus: "attackDmgBonus",
+    skill_dmg_bonus: "skillDmgBonus",
+    link_dmg_bonus: "linkDmgBonus",
+    ultimate_dmg_bonus: "ultimateDmgBonus",
+    all_skill_dmg_bonus: "allSkillDmgBonus",
+    broken_dmg_bonus: "brokenDmgBonus",
+    all_dmg: "damageBonus",
+  },
+  // Direct zone mappings (stat-agnostic)
+  amplify: { _default: "amplify" },
+  combo: { _default: "combo" },
+  attackPercent: { _default: "attackPercent", all_dmg: "attackPercent" },
+  attackFlat: { _default: "attackFlat" },
+};
+
+/**
+ * Map weapon/equipment stat + zone to a BuffModifiers field name.
+ * Returns null if the mapping is unknown.
+ */
+function resolveBuffModifierZone(stat: string, zone: string): keyof BuffModifiers | null {
+  // Crit is special — stat determines rate vs damage
+  if (zone === "crit" || stat === "crit_rate") return "critRateBonus";
+  if (stat === "crit_dmg") return "critDamageBonus";
+
+  const zoneMap = STAT_ZONE_TO_MODIFIER[zone];
+  if (!zoneMap) return null;
+  return (zoneMap[stat] || zoneMap._default) ?? null;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Effect damage — produced by effects during Phase 1, resolved in Phase 2
@@ -103,10 +146,47 @@ export interface EnemyConfig {
 }
 
 /** Simulation configuration. */
-/** Action type priority for interrupt system. */
-const ACTION_PRIORITY: Record<string, number> = {
-  attack: 1, skill: 2, link: 3, dodge: 4, ultimate: 5, execution: 5,
+
+// ── Skill category & interrupt matrix ──
+
+type SkillCategory = "regular_attack" | "heavy_attack" | "execution" | "aerial"
+  | "skill" | "link" | "dodge" | "ultimate";
+
+function getSkillCategory(skill: { type: string; isHeavyAttack?: boolean; id: string }): SkillCategory {
+  if (skill.type === "execution") return "execution";
+  if (skill.type === "attack") {
+    if (skill.isHeavyAttack) return "heavy_attack";
+    if (skill.id.includes("aerial")) return "aerial";
+    return "regular_attack";
+  }
+  return skill.type as SkillCategory;
+}
+
+/** For each active category, which incoming categories can interrupt it. */
+const DEFAULT_INTERRUPTIBLE_BY: Record<SkillCategory, ReadonlySet<SkillCategory>> = {
+  regular_attack: new Set(["skill", "link", "dodge", "ultimate"]),
+  heavy_attack:   new Set(["link", "dodge", "ultimate"]),
+  execution:      new Set(["ultimate"]),
+  aerial:         new Set(["ultimate"]),
+  skill:          new Set(["link", "dodge", "ultimate"]),
+  link:           new Set(["dodge", "ultimate"]),
+  dodge:          new Set(["ultimate"]),
+  ultimate:       new Set(),
 };
+
+/** Check if incoming skill can interrupt the currently active skill (per-actor). */
+function canInterrupt(activeSkill: Skill, incomingSkill: Skill): boolean {
+  // Per-skill override (character exceptions, e.g. 骏卫)
+  if (activeSkill.interruptibleBy) {
+    return activeSkill.interruptibleBy.includes(incomingSkill.type);
+  }
+  return DEFAULT_INTERRUPTIBLE_BY[getSkillCategory(activeSkill)].has(getSkillCategory(incomingSkill));
+}
+
+/** Whether this skill requires the actor to be the main control character. */
+function needsMainControl(skill: Skill): boolean {
+  return skill.type === "attack" || skill.type === "execution" || skill.type === "dodge";
+}
 
 export interface KernelConfig {
   initialSP: number;
@@ -156,8 +236,8 @@ class EnemyState {
 
   buffManager = new BuffManager();
 
-  advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: boolean; staggerExpired?: boolean } {
-    const changes: { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: boolean; staggerExpired?: boolean } = {};
+  advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: boolean; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[] } {
+    const changes: { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: boolean; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[] } = {};
     // Expire attachment
     if (this.attachment.element && time >= this.attachment.expiresAt) {
       changes.attachmentExpired = { element: this.attachment.element, stacks: this.attachment.stacks, expiresAt: this.attachment.expiresAt };
@@ -173,6 +253,15 @@ class EnemyState {
       changes.staggerExpired = true;
       this.isStaggered = false;
       this.stagger = 0;
+    }
+    // Expire anomalies
+    for (const [aType, aState] of Object.entries(this.anomalies) as [AnomalyType, { active: boolean; level: number; expiresAt: number; sourceId: string }][]) {
+      if (aState.active && time >= aState.expiresAt) {
+        if (!changes.anomaliesExpired) changes.anomaliesExpired = [];
+        changes.anomaliesExpired.push({ type: aType, level: aState.level, expiresAt: aState.expiresAt });
+        aState.active = false;
+        aState.level = 0;
+      }
     }
     // Sweep buff expiry
     this.buffManager.sweepExpired(time);
@@ -192,17 +281,42 @@ const DAMAGE_ELEMENT_TO_MAGIC: Record<string, MagicElement | null> = {
 // Kernel
 // ═══════════════════════════════════════════════════════════════════
 
+/** Extract stagger windows from simulation events (for two-pass execution detection). */
+export function extractStaggerWindows(events: SimEvent[], breakDuration: number): { start: number; end: number }[] {
+  const windows: { start: number; end: number }[] = [];
+  for (const e of events) {
+    if (e.type === "stagger_change" && (e as StaggerEvent).isFullStagger) {
+      windows.push({ start: e.time, end: e.time + breakDuration });
+    }
+  }
+  return windows;
+}
+
 export function simulate(
   builds: CharacterBuild[],
   skills: PlacedSkill[],
   enemyConfig: EnemyConfig,
   config: KernelConfig,
   triggersByActor?: Map<string, PassiveTrigger[]>,
+  executionSkillByActor?: Map<string, Skill>,
+  /** Pre-computed stagger windows from a prior simulation pass. When provided,
+   *  attacks during these windows are auto-converted to execution. */
+  knownStaggerWindows?: { start: number; end: number }[],
 ): SimulationResult {
   const events: SimEvent[] = [];
   const emit = (e: SimEvent) => events.push(e);
   const rng = config.rng || Math.random;
   const resolveRef = config.resolveRef || (() => 0);
+
+  /** Resolve a hit's multiplier from either fixed value or multiplierRef. */
+  function resolveMultiplier(actorId: string, damage: { multiplier?: number; multiplierRef?: MultiplierRef }): number {
+    if (damage.multiplier !== undefined) return damage.multiplier;
+    if (!damage.multiplierRef) return 0;
+    const ref = damage.multiplierRef;
+    const rawValue = resolveRef(actorId, ref.label);
+    if (ref.share === "equal") return rawValue / (ref.equalCount || 1);
+    return rawValue * ref.share;
+  }
 
   // ── Initialize state ──
   const sp = new SpState(config.initialSP);
@@ -229,6 +343,17 @@ export function simulate(
     }
   }
 
+  // ── Pending weapon charges (consumeOnAction buffs) ──
+  // Map<actorId, Array<{ chargeBuffId, activateBuffId, stat, zone, value, consumeOnAction }>>
+  interface PendingCharge {
+    chargeBuffId: string;
+    stat: string;
+    zone: string;
+    value: number;
+    consumeOnAction: string[];
+  }
+  const pendingCharges = new Map<string, PendingCharge[]>();
+
   // ── Sort skills by start time ──
   const sorted = [...skills].sort((a, b) => a.startTime - b.startTime);
 
@@ -240,6 +365,13 @@ export function simulate(
   const activeActions = new Map<string, { placed: PlacedSkill; skill: Skill; endTime: number }>();
   // Track link cooldowns per actor: Map<actorId, cooldownExpiresAt>
   const linkCooldowns = new Map<string, number>();
+
+  // ── Main control & interrupt tracking ──
+  let currentMainControl: string | null = null;
+  /** actionId → time at which the action was interrupted */
+  const interruptInfo = new Map<string, number>();
+  /** Deferred action_end records (emitted after Phase A when all interrupts are resolved) */
+  const actionEndRecords: { actionId: string; actorId: string; naturalEnd: number; skillType: ActionType; variantId?: string; displayDuration?: number; hitOffsets?: number[] }[] = [];
 
   // ── Track ultimate enhancement windows (for variant condition) ──
   const ultWindows: { actorId: string; start: number; end: number }[] = [];
@@ -271,6 +403,37 @@ export function simulate(
   }
   const globalHits: GlobalHit[] = [];
 
+  // ── Helper: sweep expired stack buffs for all actors and emit events ──
+  function sweepStackBuffExpiry(time: number) {
+    for (const [actorId, tracker] of stackBuffs) {
+      const changes = tracker.sweepExpired(time);
+      for (const ch of changes) {
+        emit({
+          type: "stack_change", time, actorId,
+          buffType: ch.buffType,
+          stacks: ch.current, prevStacks: ch.prev,
+          reason: "expired",
+        });
+      }
+    }
+  }
+
+  // ── Stagger pre-scan: check if enemy is staggered at a given time ──
+  // Phase B hasn't run yet, so we simulate stagger from collected globalHits.
+  // Returns { isStaggered, windowStart } or null.
+  // ── Stagger window lookup (from knownStaggerWindows, populated by a prior simulation pass) ──
+  function isInStaggerWindow(atTime: number): { isStaggered: boolean; windowStart: number } {
+    if (!knownStaggerWindows) return { isStaggered: false, windowStart: 0 };
+    for (const w of knownStaggerWindows) {
+      if (atTime >= w.start && atTime < w.end) return { isStaggered: true, windowStart: w.start };
+    }
+    return { isStaggered: false, windowStart: 0 };
+  }
+
+  // Track execution usage per stagger window (keyed by window start time).
+  // Once an execution fires in a window, no more can fire (even if interrupted).
+  const executionUsedInWindow = new Set<number>();
+
   // ── Phase A: Process each skill (skill-level ops + collect hits) ──
   for (const placed of sorted) {
     if (validationError) break; // stop processing after first error
@@ -281,7 +444,6 @@ export function simulate(
     if (!build) continue;
 
     const time = startTime;
-    const skillPriority = ACTION_PRIORITY[skill.type] || 0;
 
     // Advance enemy state + emit expiry events
     const expiryChanges = enemy.advanceTime(time);
@@ -294,21 +456,56 @@ export function simulate(
     if (expiryChanges.staggerExpired) {
       emit({ type: "stagger_change", time, amount: 0, total: 0, maxStagger: enemyConfig.maxStagger, nodeReached: false, isFullStagger: false });
     }
+    if (expiryChanges.anomaliesExpired) {
+      for (const a of expiryChanges.anomaliesExpired) {
+        emit({ type: "anomaly_remove", time: a.expiresAt, anomalyType: a.type, level: a.level, sourceId: "" });
+      }
+    }
     // Advance SP regen to action start
     sp.advanceRegen(time);
+    sweepStackBuffExpiry(time);
 
-    // ── 0a. Interrupt check ──
-    // If this actor has an active action, check priority
+    // ── Auto-convert first attack during stagger → execution ──
+    let autoConvertedToExecution = false;
+    if (skill.type === "attack" && executionSkillByActor?.has(actorId)) {
+      const scan = isInStaggerWindow(time);
+      if (scan.isStaggered && !executionUsedInWindow.has(scan.windowStart)) {
+        skill = executionSkillByActor.get(actorId)!;
+        executionUsedInWindow.add(scan.windowStart);
+        autoConvertedToExecution = true;
+      }
+    }
+
+    // ── 0a. Check if action can proceed (switch + per-actor interrupt) ──
     const activeAct = activeActions.get(actorId);
     if (activeAct && time < activeAct.endTime) {
-      const activePriority = ACTION_PRIORITY[activeAct.skill.type] || 0;
-      if (skillPriority <= activePriority) {
-        // Cannot interrupt: lower or equal priority → skip this action
-        continue;
+      const isSwitch = needsMainControl(skill) && currentMainControl !== null && actorId !== currentMainControl;
+      // Switch can interrupt anything except ultimate animation
+      const switchCanInterrupt = isSwitch && activeAct.skill.type !== "ultimate";
+      const perActorCanInterrupt = canInterrupt(activeAct.skill, skill);
+      if (!switchCanInterrupt && !perActorCanInterrupt) {
+        continue; // blocked — skip this action
       }
-      // Higher priority → interrupt the active action at this time
-      // (hits with offset >= interrupt time won't execute — handled in Phase 3 loop)
-      activeAct.endTime = time; // truncate
+    }
+
+    // ── 0b. Main control switch ──
+    if (needsMainControl(skill) && actorId !== currentMainControl) {
+      if (currentMainControl !== null) {
+        // Interrupt old main's active action (unless ultimate animation)
+        const oldActive = activeActions.get(currentMainControl);
+        if (oldActive && time < oldActive.endTime && oldActive.skill.type !== "ultimate") {
+          interruptInfo.set(oldActive.placed.actionId, time);
+          oldActive.endTime = time;
+        }
+      }
+      currentMainControl = actorId;
+    }
+
+    // ── 0c. Per-actor interrupt ──
+    // If we reach here, canInterrupt or switchCanInterrupt was true (checked in 0a)
+    if (activeAct && time < activeAct.endTime) {
+      interruptInfo.set(activeAct.placed.actionId, time);
+      activeAct.endTime = time;
     }
 
     // ── 0b. Condition check (validation mode) ──
@@ -338,6 +535,27 @@ export function simulate(
           };
           break;
         }
+      }
+      // Execution validation (only for manually placed executions, not auto-converted attacks)
+      if (skill.type === "execution" && !autoConvertedToExecution) {
+        const scan = isInStaggerWindow(time);
+        if (!scan.isStaggered) {
+          validationError = {
+            actorId, actionId, time,
+            code: "ISSUE_NOT_STAGGERED",
+            message: `处决失败: 敌人未处于失衡状态`,
+          };
+          break;
+        }
+        if (executionUsedInWindow.has(scan.windowStart)) {
+          validationError = {
+            actorId, actionId, time,
+            code: "ISSUE_EXECUTION_USED",
+            message: `处决失败: 本次失衡已触发过处决`,
+          };
+          break;
+        }
+        executionUsedInWindow.add(scan.windowStart);
       }
       // Link CD check
       if (skill.type === "link") {
@@ -416,11 +634,13 @@ export function simulate(
         reason: "skill_cost", sourceId: actionId,
       });
 
-      // Gauge charge from trueSP consumed → all actors
+      // Gauge charge from trueSP consumed → all actors (unless gaugeFromSelfOnly)
       if (consumed.trueSPConsumed > 0) {
         for (const [aid, gauge] of gauges) {
           const actorBuild = buildMap.get(aid);
           if (!actorBuild) continue;
+          // gaugeFromSelfOnly: skip gauge from other actors' SP consumption
+          if (actorBuild.gaugeFromSelfOnly && aid !== actorId) continue;
           const charge = computeGaugeChargeFromSP(consumed.trueSPConsumed, actorBuild.stats.ultChargeEff);
           const actual = gauge.modify(charge, time);
           if (actual !== 0) {
@@ -450,19 +670,17 @@ export function simulate(
       }
     }
 
-    // Team gauge gain on cast
-    if (skill.teamGaugeGain && skill.teamGaugeGain > 0) {
-      for (const [aid, gauge] of gauges) {
-        if (aid === actorId) continue;
-        const actorBuild = buildMap.get(aid);
-        if (!actorBuild) continue;
-        const gain = computeDirectGaugeGain(skill.teamGaugeGain, actorBuild.stats.ultChargeEff);
+    // Link cast → 10 gauge to caster only (global rule)
+    if (skill.type === "link") {
+      const gauge = gauges.get(actorId);
+      if (gauge) {
+        const gain = computeDirectGaugeGain(10, build.stats.ultChargeEff);
         const actual = gauge.modify(gain, time);
         if (actual !== 0) {
           emit({
-            type: "gauge_change", time, actorId: aid,
+            type: "gauge_change", time, actorId,
             change: actual, gauge: gauge.getGauge(),
-            reason: "team_gauge_gain",
+            reason: "link_cast",
           });
         }
       }
@@ -481,27 +699,44 @@ export function simulate(
       gauge?.addBlockWindow(startTime, enhEnd);
     }
 
-    // ── 3. Collect hits for global processing ──
-    const effectiveEnd = activeActions.get(actorId)?.endTime ?? (startTime + skill.duration);
+
+
+    // ── 3. Collect all hits (interrupt filtering deferred to Phase B) ──
     for (let hitIdx = 0; hitIdx < skill.hits.length; hitIdx++) {
       const hit = skill.hits[hitIdx];
       const hitTime = startTime + hit.offset;
-      if (hitTime >= effectiveEnd) break;
       globalHits.push({ hit, hitTime, hitIdx, actorId, actionId, build, skill, selectedVariant });
     }
 
-    // ── 4. Action end ──
+    // ── 4. Track action end + link cooldown (action_end emitted after Phase A) ──
     const endTime = startTime + skill.duration;
 
-    // Track link cooldown
     if (skill.type === "link" && skill.cooldown > 0) {
       linkCooldowns.set(actorId, endTime + skill.cooldown);
     }
 
+    actionEndRecords.push({
+      actionId, actorId, naturalEnd: endTime,
+      skillType: skill.type, variantId: selectedVariant?.id,
+      displayDuration: skill.displayDuration,
+      hitOffsets: skill.hits.map(h => h.offset),
+    });
+  }
+
+  // ── Emit deferred action_end events (with correct interrupted flag) ──
+  for (const rec of actionEndRecords) {
+    const intTime = interruptInfo.get(rec.actionId);
+    const interrupted = intTime !== undefined;
     emit({
-      type: "action_end", time: endTime, actorId, actionId,
-      skillType: skill.type,
-      variantId: selectedVariant?.id,
+      type: "action_end",
+      time: interrupted ? intTime : rec.naturalEnd,
+      actorId: rec.actorId,
+      actionId: rec.actionId,
+      skillType: rec.skillType,
+      variantId: rec.variantId,
+      interrupted,
+      displayDuration: rec.displayDuration,
+      hitOffsets: rec.hitOffsets,
     });
   }
 
@@ -511,15 +746,73 @@ export function simulate(
 
   globalHits.sort((a, b) => a.hitTime - b.hitTime);
 
+  // Track which actions have been seen (for consumeOnAction first-hit detection)
+  const seenActions = new Set<string>();
+
   for (const { hit, hitTime, hitIdx, actorId, actionId, build, skill } of globalHits) {
     if (validationError) break;
 
+    // ── Activate pending weapon charges on first hit of a new action ──
+    if (!seenActions.has(actionId)) {
+      seenActions.add(actionId);
+      const charges = pendingCharges.get(actorId);
+      if (charges && charges.length > 0) {
+        const remaining: PendingCharge[] = [];
+        for (const charge of charges) {
+          const buffMgr = actorBuffs.get(actorId);
+          if (buffMgr && buffMgr.getStacks(charge.chargeBuffId, hitTime) > 0
+              && charge.consumeOnAction.includes(skill.type)) {
+            buffMgr.removeById(charge.chargeBuffId);
+            emit({
+              type: "buff_remove", time: hitTime, actorId, targetId: actorId,
+              buffId: charge.chargeBuffId, buffName: charge.chargeBuffId,
+              target: "self", stacks: 0, duration: 0, reason: "consumed",
+            });
+            const modZone = resolveBuffModifierZone(charge.stat, charge.zone);
+            const activeDef: BuffDef = {
+              id: `${charge.chargeBuffId}_active`,
+              name: `${charge.chargeBuffId}_active`,
+              target: "self",
+              duration: skill.duration + 0.001,
+              maxStacks: 1,
+              stackBehavior: "replace",
+              modifiers: modZone ? [{ zone: modZone, valuePerStack: charge.value }] : [],
+            };
+            buffMgr.apply(activeDef, actorId, hitTime);
+            emit({
+              type: "buff_apply", time: hitTime, actorId, targetId: actorId,
+              buffId: activeDef.id, buffName: activeDef.id, target: "self",
+              stacks: 1, duration: activeDef.duration, reason: "weapon_charge",
+            });
+          } else {
+            remaining.push(charge);
+          }
+        }
+        if (remaining.length > 0) pendingCharges.set(actorId, remaining);
+        else pendingCharges.delete(actorId);
+      }
+    }
+
+    // ── Hit interrupt filter ──
+    const intTime = interruptInfo.get(actionId);
+    if (intTime !== undefined && hitTime >= intTime) {
+      // Check if this hit is protected by detach
+      const isProtected = skill.detach !== undefined && hit.offset >= skill.detach;
+      if (!isProtected) continue; // hit cancelled by interrupt
+    }
+
     // Advance SP regen to hit time
     sp.advanceRegen(hitTime);
+    sweepStackBuffExpiry(hitTime);
     // Advance enemy state + emit expiry events
     const hitExpiryChanges = enemy.advanceTime(hitTime);
     if (hitExpiryChanges.attachmentExpired) {
       emit({ type: "attachment_change", time: hitExpiryChanges.attachmentExpired.expiresAt, element: null, stacks: 0, prevElement: hitExpiryChanges.attachmentExpired.element, prevStacks: hitExpiryChanges.attachmentExpired.stacks });
+    }
+    if (hitExpiryChanges.anomaliesExpired) {
+      for (const a of hitExpiryChanges.anomaliesExpired) {
+        emit({ type: "anomaly_remove", time: hitTime, anomalyType: a.type, level: a.level, sourceId: "" });
+      }
     }
 
       // Queues populated during effect processing
@@ -531,7 +824,7 @@ export function simulate(
       // Process hit effects. Effects may push sub-damages into effectDamages
       // and cleanup actions into deferredActions.
       for (const effect of hit.effects) {
-        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents);
+        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type);
       }
 
       // ── Phase 2: Effect-generated damages ──
@@ -585,6 +878,7 @@ export function simulate(
       // ── Phase 4: Hit's own damage ──
       // Resolved last — sees post-deferred state.
       if (hit.damage) {
+        const mult = resolveMultiplier(actorId, hit.damage);
         const buffMods = getBuffModifiers(actorId, hitTime);
         const ctx: DamageContext = {
           source: { buildStats: build.buildStats, buffModifiers: buffMods },
@@ -602,7 +896,7 @@ export function simulate(
             magicFragility: enemy.magicFragility,
             elementFragility: { ...enemy.elementFragility },
           },
-          multiplier: hit.damage.multiplier,
+          multiplier: mult,
           element: hit.damage.element,
           school: hit.damage.school,
           sourceType: hit.damage.sourceType,
@@ -615,7 +909,7 @@ export function simulate(
         emit({
           type: "damage", time: hitTime,
           sourceId: actorId, targetId: "boss",
-          damage: result.finalDamage, multiplier: hit.damage.multiplier,
+          damage: result.finalDamage, multiplier: mult,
           stagger: hit.damage.stagger, isCrit: result.isCrit,
           element: hit.damage.element, school: hit.damage.school,
           actionId, hitIndex: hitIdx,
@@ -689,9 +983,15 @@ export function simulate(
   }  // end globalHits for loop
 
   // ── Final expiry sweep: expire any remaining timed states ──
+  sweepStackBuffExpiry(Infinity);
   const finalExpiry = enemy.advanceTime(Infinity);
   if (finalExpiry.attachmentExpired) {
     emit({ type: "attachment_change", time: finalExpiry.attachmentExpired.expiresAt, element: null, stacks: 0, prevElement: finalExpiry.attachmentExpired.element, prevStacks: finalExpiry.attachmentExpired.stacks });
+  }
+  if (finalExpiry.anomaliesExpired) {
+    for (const a of finalExpiry.anomaliesExpired) {
+      emit({ type: "anomaly_remove", time: a.expiresAt, anomalyType: a.type, level: a.level, sourceId: "" });
+    }
   }
 
   // ── Build final state ──
@@ -864,6 +1164,8 @@ export function simulate(
     effectDamages: EffectDamage[],
     deferredActions: (() => void)[],
     hitTriggerEvents?: TriggerEvent[],
+    /** Action type context for trigger event data. */
+    skillType?: ActionType,
   ): void {
     switch (effect.type) {
       case "magic_attachment": {
@@ -887,6 +1189,10 @@ export function simulate(
                 element: outcome.element, stacks: outcome.newStacks,
                 prevElement: prev > 0 ? enemy.attachment.element : null, prevStacks: prev,
               });
+              hitTriggerEvents?.push({
+                type: "attachment_applied", time: attachTime, sourceActorId: actorId,
+                data: { element: p.element, stacks: outcome.newStacks, actionType: skillType },
+              });
             } else if (outcome.type === "burst") {
               // Burst damage (magic burst)
               const artsPower = build.stats.originiumArtsPower;
@@ -898,6 +1204,10 @@ export function simulate(
                 multiplier: burstMult * 100, stagger: 0,
                 isCrit: false, element: p.element, school: "magic",
                 actionId, hitIndex,
+              });
+              hitTriggerEvents?.push({
+                type: "magic_burst", time: attachTime, sourceActorId: actorId,
+                data: { element: p.element, stacks: outcome.stacks, actionType: skillType },
               });
             } else if (outcome.type === "reaction") {
               // Clear attachment
@@ -918,8 +1228,24 @@ export function simulate(
               };
               emit({
                 type: "anomaly_apply", time: attachTime,
-                anomalyType, level, sourceId: actorId,
+                anomalyType, level, sourceId: actorId, duration,
               });
+              hitTriggerEvents?.push({
+                type: "anomaly_applied", time: attachTime, sourceActorId: actorId,
+                data: { anomalyType, level, actionType: skillType },
+              });
+              // Specific anomaly type trigger events
+              const anomalyTypeMap: Record<string, TriggerEventType> = {
+                burning: "burn_applied", frozen: "freeze_applied",
+                conduction: "conduction_applied", corrosion: "corrosion_applied",
+              };
+              const specificAnomalyEvent = anomalyTypeMap[anomalyType];
+              if (specificAnomalyEvent) {
+                hitTriggerEvents?.push({
+                  type: specificAnomalyEvent, time: attachTime, sourceActorId: actorId,
+                  data: { anomalyType, level, actionType: skillType },
+                });
+              }
             }
           }
         }
@@ -1001,18 +1327,28 @@ export function simulate(
         enemy.breakStacks = Math.min(BREAK_MAX_STACKS, enemy.breakStacks + (p.stacks || 1));
         enemy.breakExpiresAt = time + BREAK_DURATION;
         emit({ type: "break_change", time, sourceId: actorId, stacks: enemy.breakStacks, prevStacks: prev });
+        hitTriggerEvents?.push({
+          type: "break_applied", time, sourceActorId: actorId,
+          data: { stacks: enemy.breakStacks, prevStacks: prev, actionType: skillType },
+        });
         break;
       }
 
       case "stack_buff_apply": {
-        const p = effect.params as { buffType: string; stacks: number; expiresAt?: number; durationRef?: string; maxStacks?: number };
+        const p = effect.params as { buffType: string; stacks: number; expiresAt?: number; durationRef?: string; duration?: number; maxStacks?: number };
         const tracker = stackBuffs.get(actorId);
         if (tracker) {
           // Register with correct maxStacks from params or buffMetadata
           const meta = getBuffMeta(p.buffType);
           const maxStacks = p.maxStacks || meta?.maxLayers || 4;
           tracker.register(p.buffType, maxStacks);
-          const result = tracker.addStacks(p.buffType, p.stacks || 1, p.expiresAt ?? null);
+          // Resolve expiry: explicit expiresAt > durationRef > duration > null (permanent)
+          let expiresAt = p.expiresAt ?? null;
+          if (expiresAt == null) {
+            const dur = p.duration || (p.durationRef ? resolveRef(actorId, p.durationRef) : 0);
+            if (dur > 0) expiresAt = time + dur;
+          }
+          const result = tracker.addStacks(p.buffType, p.stacks || 1, expiresAt);
           emit({
             type: "stack_change", time, actorId,
             buffType: p.buffType,
@@ -1137,28 +1473,58 @@ export function simulate(
       case "buff_apply": {
         const p = effect.params as {
           buffId: string;
-          target?: BuffTarget | "mainControl" | "trigger_source";
+          target?: BuffTarget | "mainControl" | "trigger_source" | "others";
           duration?: number;
           durationRef?: string;
           stat?: string;
           zone?: string;
+          value?: number;
           valueRef?: string;
           valuePerLayerRef?: string;
           maxStacks?: number;
           stackBehavior?: string;
+          // consumeOnAction stored buff metadata
+          consumeOnAction?: string[];
+          activateStat?: string;
+          activateZone?: string;
+          activateValue?: number;
         };
         const duration = p.duration || (p.durationRef ? resolveRef(actorId, p.durationRef) : 0) || 15;
+
+        // If this is a consumeOnAction charge buff, register it
+        if (p.consumeOnAction?.length && p.activateStat && p.activateZone) {
+          const charges = pendingCharges.get(actorId) || [];
+          charges.push({
+            chargeBuffId: p.buffId,
+            stat: p.activateStat,
+            zone: p.activateZone,
+            value: p.activateValue || 0,
+            consumeOnAction: p.consumeOnAction,
+          });
+          pendingCharges.set(actorId, charges);
+        }
+
+        // Resolve stat modifiers from stat/zone/value params
+        const modifiers: BuffModifierDef[] = [];
+        if (p.stat && p.zone) {
+          const modZone = resolveBuffModifierZone(p.stat, p.zone);
+          const modValue = p.value ?? (p.valueRef ? resolveRef(actorId, p.valueRef) : 0);
+          if (modZone && modValue) {
+            modifiers.push({ zone: modZone, valuePerStack: modValue });
+          }
+        }
+
         const buffDef: BuffDef = {
           id: p.buffId,
           name: p.buffId,
-          target: (p.target === "mainControl" || p.target === "trigger_source") ? "self" : (p.target || "self"),
+          target: (p.target === "mainControl" || p.target === "trigger_source" || p.target === "others") ? "self" : (p.target || "self"),
           duration,
           maxStacks: p.maxStacks || 1,
           stackBehavior: (p.stackBehavior as any) || "refresh",
-          modifiers: [], // stat modifiers resolved from zone/valueRef if present
+          modifiers,
         };
 
-        // Determine target BuffManager
+        // Determine target BuffManager(s)
         const targetStr = p.target || "self";
         if (targetStr === "enemy") {
           const result = enemy.buffManager.apply(buffDef, actorId, time);
@@ -1169,15 +1535,21 @@ export function simulate(
               stacks: enemy.buffManager.getStacks(p.buffId, time),
               duration, reason: "effect",
             });
+            // Push trigger event for enemy buff application (used by weapons like 宏愿)
+            hitTriggerEvents?.push({
+              type: "anomaly_applied", time, sourceActorId: actorId,
+              data: { buffType: p.buffId, actionType: skillType },
+            });
           }
-        } else if (targetStr === "team") {
+        } else if (targetStr === "team" || targetStr === "others") {
           for (const [aid, mgr] of actorBuffs) {
+            if (targetStr === "others" && aid === actorId) continue;
             const cloneDef = { ...buffDef, target: "self" as BuffTarget };
             mgr.apply(cloneDef, actorId, time);
           }
           emit({
-            type: "buff_apply", time, actorId, targetId: "team",
-            buffId: p.buffId, buffName: p.buffId, target: "team",
+            type: "buff_apply", time, actorId, targetId: targetStr,
+            buffId: p.buffId, buffName: p.buffId, target: targetStr as any,
             stacks: 1, duration, reason: "effect",
           });
         } else {
@@ -1253,7 +1625,7 @@ export function simulate(
           school?: DamageSchool;
         };
         const delay = p.delay || 0;
-        const mult = p.multiplier || (p.multiplierRef ? resolveRef(actorId, p.multiplierRef) / 100 : 0);
+        const mult = p.multiplier || (p.multiplierRef ? resolveRef(actorId, p.multiplierRef) : 0);
         const dmgTime = time + delay;
 
         if (mult > 0) {

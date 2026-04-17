@@ -17,6 +17,7 @@ const V2_MODULES: Record<string, () => Promise<any>> = {
   ENDMINISTRATOR: () => import("./endministrator"),
   POGRANICHNK: () => import("./pogranichnk"),
   LASTRITE: () => import("./lastrite"),
+  LIFENG: () => import("./lifeng"),
 };
 
 export const V2_READY_IDS = new Set(Object.keys(V2_MODULES));

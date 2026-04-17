@@ -724,9 +724,13 @@ function getSelfBuffItemStyle(bar) {
 }
 
 function getSelfBuffBarWidth(bar) {
-  const ICON_SIZE = 20
   const totalWidth = store.timeToPx(bar.endTime) - store.timeToPx(bar.startTime)
-  return Math.max(0, totalWidth - ICON_SIZE)
+  // Only reserve space for consume icon when one is actually rendered
+  if (bar.consumed || bar.consumedBy) {
+    const ICON_SIZE = 20
+    return Math.max(0, totalWidth - ICON_SIZE)
+  }
+  return Math.max(0, totalWidth)
 }
 
 // ── Consume marker icon resolver ──
@@ -825,13 +829,24 @@ function getWeaponStatusDurationLabel(status) {
   return store.formatTimeLabel(baseDuration)
 }
 
-/** Boss 减益层数：异常派生条显示 x/4；武器写入的减益仅多层时显示数字 */
+/** Boss 减益层数显示：
+ *  - 附着/破防: 显示实际层数（1层不显示）
+ *  - 法术异常: 显示等级（即 level，1级不显示）
+ *  - 物理异常(猛击/碎甲): 显示等级（1级不显示）
+ *  - 武器/套装减益: 多层时显示数字
+ */
 function getDebuffStackLabel(status) {
-  if (status.type !== 'debuff') return ''
+  const s = Number(status.stacks) || 0
+  // V2 anomaly/attachment/break debuffs (from kernel projection)
+  if (!status.type || status.type !== 'debuff') {
+    if (s > 1) return `${s}`
+    return ''
+  }
+  // Legacy debuff statuses (weapon/equipment)
   const cap = Number(status.maxStacks) || store.DEBUFF_STACK_CAP
-  const s = Math.min(cap, Math.max(1, Number(status.stacks) || 1))
-  if (status.isAnomalyDebuff) return `${s}/${cap}`
-  if (s > 1) return `${s}`
+  const clamped = Math.min(cap, Math.max(1, s || 1))
+  if (status.isAnomalyDebuff) return `${clamped}/${cap}`
+  if (clamped > 1) return `${clamped}`
   return ''
 }
 
@@ -2359,9 +2374,6 @@ onUnmounted(() => {
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M5 4h14c3 0 3 8 0 8h-14c-3 0-3 8 0 8h14" /><circle cx="5" cy="4" r="2" fill="currentColor"/><circle cx="19" cy="20" r="2" fill="currentColor"/></svg>
           </button>
 
-          <button class="mini-tool-btn" :class="{ 'is-active': store.useNewCompiler }" @click="store.toggleNewCompiler" :title="t('timelineGrid.toolbar.compilerToggle')">
-            <span class="btn-text">{{ store.useNewCompiler ? t('common.new') : t('common.old') }}</span>
-          </button>
         </div>
         
         <div class="corner-zoom-row">

@@ -482,6 +482,93 @@ export function projectStaggerSeries(
   return points;
 }
 
+// ── Stagger series for ResourceMonitor (with lock/node segments) ──
+
+export interface StaggerMonitorPoint {
+  time: number;
+  val: number;
+}
+
+export interface LockSegment {
+  start: number;
+  end: number;
+}
+
+export interface NodeSegment {
+  start: number;
+  end: number;
+  thresholdVal: number;
+}
+
+export interface StaggerMonitorData {
+  points: StaggerMonitorPoint[];
+  lockSegments: LockSegment[];
+  nodeSegments: NodeSegment[];
+  nodeStep: number;
+}
+
+/**
+ * Project stagger events into the format expected by ResourceMonitor:
+ * points (time/val pairs), lockSegments (full stagger windows),
+ * and nodeSegments (node threshold windows).
+ */
+export function projectStaggerMonitorSeries(
+  events: SimEvent[],
+  maxStagger: number,
+  staggerBreakDuration: number,
+  staggerNodeDuration: number,
+  staggerNodes: number[],
+  endTime: number,
+): StaggerMonitorData {
+  const points: StaggerMonitorPoint[] = [{ time: 0, val: 0 }];
+  const lockSegments: LockSegment[] = [];
+  const nodeSegments: NodeSegment[] = [];
+
+  let current = 0;
+  let lockedUntil = -1;
+
+  for (const e of events) {
+    if (e.type !== "stagger_change") continue;
+    const se = e as StaggerEvent;
+
+    // Skip events during stagger lock
+    if (se.time < lockedUntil - 0.0001) continue;
+
+    // Step to pre-change value
+    points.push({ time: se.time, val: current });
+
+    current = se.total;
+
+    if (se.isFullStagger) {
+      current = 0;
+      const lockEnd = se.time + staggerBreakDuration;
+      lockedUntil = lockEnd;
+      lockSegments.push({ start: se.time, end: lockEnd });
+      points.push({ time: se.time, val: 0 });
+    } else {
+      if (se.nodeReached && se.nodeIndex != null && se.nodeIndex < staggerNodes.length) {
+        const nodeEnd = se.time + staggerNodeDuration;
+        nodeSegments.push({
+          start: se.time,
+          end: nodeEnd,
+          thresholdVal: staggerNodes[se.nodeIndex],
+        });
+      }
+      points.push({ time: se.time, val: current });
+    }
+  }
+
+  if (points[points.length - 1].time < endTime) {
+    points.push({ time: endTime, val: current });
+  }
+
+  const nodeStep = staggerNodes.length > 0
+    ? maxStagger / (staggerNodes.length + 1)
+    : 0;
+
+  return { points, lockSegments, nodeSegments, nodeStep };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // Hit effect markers (all visible effects at hit positions)
 // ═══════════════════════════════════════════════════════════════════
@@ -588,6 +675,58 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
   }
 
   return markers;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Action bars (duration + interrupt info from kernel events)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface ActionBarInfo {
+  actionId: string;
+  actorId: string;
+  startTime: number;
+  endTime: number;
+  interrupted: boolean;
+  /** The skill type used by the kernel (may differ from store action type, e.g., attack → execution). */
+  skillType?: string;
+  /** Visual duration override (e.g., internal CD indicator when kernel duration=0). */
+  displayDuration?: number;
+  /** Hit offsets from the V2 Skill (seconds from action start). */
+  hitOffsets?: number[];
+}
+
+/**
+ * Extract action duration info from kernel action_start / action_end events.
+ * Returns Map<actionId, ActionBarInfo>.
+ * When interrupted=true, endTime is the interrupt time (shorter than natural duration).
+ */
+export function projectActionBars(events: SimEvent[]): Map<string, ActionBarInfo> {
+  const starts = new Map<string, { actorId: string; time: number }>();
+  const result = new Map<string, ActionBarInfo>();
+
+  for (const e of events) {
+    if (e.type === "action_start") {
+      const ae = e as ActionEvent;
+      starts.set(ae.actionId, { actorId: ae.actorId, time: ae.time });
+    } else if (e.type === "action_end") {
+      const ae = e as ActionEvent;
+      const start = starts.get(ae.actionId);
+      if (start) {
+        result.set(ae.actionId, {
+          actionId: ae.actionId,
+          actorId: start.actorId,
+          startTime: start.time,
+          endTime: ae.time,
+          interrupted: ae.interrupted || false,
+          skillType: ae.skillType,
+          displayDuration: ae.displayDuration,
+          hitOffsets: ae.hitOffsets,
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════

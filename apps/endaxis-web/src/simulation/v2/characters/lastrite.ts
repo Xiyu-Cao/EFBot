@@ -27,6 +27,9 @@ export const identity = {
   maxPotential: 5,
 };
 
+/** LASTRITE only gains gauge from her own skill/link SP consumption. */
+export const gaugeFromSelfOnly = true;
+
 export const promotionCaps = [20, 40, 60, 80, 90];
 
 export { default as levelStats } from "../../../data/operators/LASTRITE/stats.json";
@@ -169,16 +172,23 @@ const skill: Skill = {
   checkpoints: [],
 };
 
-// Skill special properties
-export const skillModes = {
-  /** 主控非普攻连段: duration=103f, detach=14f, buff at 71f */
-  normal: { duration: f(103), detachOffset: f(14) },
-  /** 主控普攻连段中: duration=0f, buff immediately */
-  inAttackChain: { duration: 0, detachOffset: 0 },
-  /** 非主控: duration=125f, buff immediately */
-  nonMainControl: { duration: f(125), detachOffset: 0 },
-  /** 内置CD: 主控70f, 非主控125f */
-  internalCooldown: { mainControl: f(70), nonMainControl: f(125) },
+/** In-attack-chain variant: instant cast, buff at 4f, visual 75f CD indicator */
+const skillInChain: Skill = {
+  id: "lastrite_skill_chain", type: "skill", name: "塞什卡的秘传",
+  element: "cold", duration: 0, spCost: 100, cooldown: 0,
+  displayDuration: f(75),
+  hits: [
+    {
+      offset: f(4), checkpointIndex: 0,
+      damage: null,
+      effects: [
+        { type: "sp_restore", params: { amountRef: "返还技力", isTrueSP: false } },
+        { type: "buff_apply", params: { buffId: "lastrite_low_temp_infusion", target: "mainControl", durationRef: "持续时间（秒）" } },
+      ],
+      standardLogic: true,
+    },
+  ],
+  checkpoints: [],
 };
 
 // ── Link (连携技: 噬冬) ──
@@ -275,6 +285,7 @@ const coldInfusionPhantom: PassiveTrigger = {
 export const skills = {
   attack: [a1, a2, a3, a4, execution, aerialAttack],
   skill,
+  skillInChain,
   link,
   ultimate,
 };

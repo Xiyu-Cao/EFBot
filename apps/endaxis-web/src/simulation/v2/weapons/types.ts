@@ -18,6 +18,8 @@ export interface WeaponTrigger {
   listenTo: TriggerEventType;
   /** Additional condition */
   condition?: TriggerCondition;
+  /** Must the event source be the trigger owner? Default true. */
+  sourceMustBeOwner?: boolean;
   /** Buff target */
   target: "self" | "team" | "others";
   /** Buff stat and zone */

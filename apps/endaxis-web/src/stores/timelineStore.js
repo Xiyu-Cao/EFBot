@@ -18,8 +18,8 @@ import { projectGaugeSeries as projGaugeSeries } from '@/simulation/projection/p
 import { projectWeaponBuffTimeline } from '@/simulation/projection/projectWeaponBuffTimeline'
 import { projectSelfBuffTimeline } from '@/simulation/projection/projectSelfBuffTimeline'
 import { CATEGORY_TO_SET_ID } from '@/simulation/equipment/registry'
-import { simulate as simulateV2 } from '@/simulation/v2/kernel'
-import { projectBuffBars, projectStackBuffBars, projectAnomalyBars, projectAttachmentBars, projectBreakBars, projectHitEffects, projectSpSeries as v2ProjectSpSeries, projectGaugeSeries as v2ProjectGaugeSeries } from '@/simulation/v2/projections'
+import { simulate as simulateV2, extractStaggerWindows } from '@/simulation/v2/kernel'
+import { projectBuffBars, projectStackBuffBars, projectAnomalyBars, projectAttachmentBars, projectBreakBars, projectHitEffects, projectActionBars, projectSpSeries as v2ProjectSpSeries, projectGaugeSeries as v2ProjectGaugeSeries, projectStaggerMonitorSeries } from '@/simulation/v2/projections'
 import { buildV2Inputs } from '@/simulation/v2/storeAdapter'
 import { adaptAllProjections } from '@/simulation/v2/v2ProjectionAdapter'
 import { checkConditionsMet } from '@/simulation/legality/checkActionLegality'
@@ -1215,6 +1215,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     const validationDialogVisible = ref(false)
     const validationPassed = ref(false)       // gate for future feature pages
     const _v2ValidationResult = ref(null)     // V2 SimulationResult from last validation (for buff display)
+    const _v2AttackSegmentMap = ref(null)    // Map<actionInstanceId, 1-based segIdx> from V2 combo re-evaluation
 
     function setTimelineEditorMode(mode) {
         if (mode !== 'free' && mode !== 'realistic') return
@@ -4664,18 +4665,22 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     const nodeRects = computed(() => {
-        return useNewCompiler.value ? newNodeRects.value : legacyNodeRects.value;
-    });
-
-    const newNodeRects = computed(() => {
         const rects = {}
         const ACTION_BORDER = 2
         const LINE_GAP = 6
         const LINE_HEIGHT = 2
+        const v2Bars = _v2ProjectedData.value?.actionBars
 
         compiledTimeline.value.actions.forEach(resAction => {
+            // V2 kernel provides authoritative duration (handles combo variants, interrupts, displayDuration).
+            // Compiler duration is the fallback when V2 hasn't run yet.
+            const v2Bar = v2Bars?.get(resAction.id)
+            const effectiveDuration = v2Bar
+                ? (v2Bar.displayDuration ?? (v2Bar.endTime - v2Bar.startTime))
+                : resAction.realDuration
+
             const left = timeToPx(resAction.realStartTime)
-            const width = timeToPx(resAction.realStartTime + resAction.realDuration) - timeToPx(resAction.realStartTime)
+            const width = timeToPx(resAction.realStartTime + effectiveDuration) - timeToPx(resAction.realStartTime)
             const finalWidth = width < 2 ? 2 : width
             const trackRect = trackLaneRects.value[resAction.trackIndex]
 
@@ -4737,90 +4742,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         return rects
     });
 
-    const legacyNodeRects = computed(() => {
-        const rects = {}
-        const ACTION_BORDER = 2
-        const LINE_GAP = 6
-        const LINE_HEIGHT = 2
-
-        actionMap.value.forEach(action => {
-            const effectiveDuration = computedEffectiveActions.value.get(action.id)?.duration ?? action.node.duration
-            const end = getShiftedEndTime(action.node.startTime, effectiveDuration, action.id)
-            const start = action.node.startTime || 0
-            const left = timeToPx(start)
-            const width = timeToPx(end) - timeToPx(start)
-            const finalWidth = width < 2 ? 2 : width
-            const trackRect = trackLaneRects.value[action.trackIndex]
-
-            let y = 0
-            if (trackRect) {
-                y = trackRect.top
-            }
-
-            const rect = {
-                left,
-                width: finalWidth,
-                right: left + finalWidth,
-                height: trackRect?.height ?? 0,
-                top: y - timelineRect.value.top,
-            }
-
-            // 计算触发窗口布局
-            const rawTw = action.node.triggerWindow || 0
-            const snappedWindow = Math.round(Math.abs(rawTw) * 10) / 10
-            let triggerWindowLayout = null
-
-            // 相对动作底部的位移
-            const barYRelative = ACTION_BORDER + LINE_GAP - LINE_HEIGHT / 2
-            const leftEdge = -ACTION_BORDER
-            const rightEdge = leftEdge + finalWidth + ACTION_BORDER
-
-            // 相对时间轴的位移
-            // rect.top 包含一个 ACTION_BORDER，所以这里要减去
-            const barY = rect.top + rect.height + barYRelative - ACTION_BORDER
-
-            if (snappedWindow > 0) {
-                const twStart = Math.max(0, start - snappedWindow)
-                const twWidth = timeToPx(start) - timeToPx(twStart)
-
-                const triggerBarRight = rect.left + leftEdge
-                const triggerBarLeft = triggerBarRight - twWidth
-
-                triggerWindowLayout = {
-                    rect: {
-                        left: triggerBarLeft,
-                        right: triggerBarRight,
-                        top: barY,
-                        height: LINE_HEIGHT,
-                        width: twWidth
-                    },
-                    localTransform: `translate(${leftEdge - twWidth}px, ${barYRelative}px)`,
-                    hasWindow: true
-                }
-            } else {
-                triggerWindowLayout = { hasWindow: false }
-            }
-
-            rects[action.id] = {
-                rect,
-                bar: {
-                    top: barY,
-                    relativeY: barYRelative,
-                    leftEdge,
-                    rightEdge
-                },
-                triggerWindow: triggerWindowLayout
-            }
-        })
-
-        return rects
-    })
-
     const effectLayouts = computed(() => {
-        return useNewCompiler.value ? newEffectLayouts.value : legacyEffectLayouts.value;
-    });
-
-    const newEffectLayouts = computed(() => {
         const layoutMap = new Map()
         const ICON_SIZE = 20
         const BAR_MARGIN = 2
@@ -4892,139 +4814,6 @@ export const useTimelineStore = defineStore('timeline', () => {
 
         return layoutMap;
     });
-
-    const legacyEffectLayouts = computed(() => {
-        const layoutMap = new Map()
-        const consumptionMap = new Map()
-
-        connections.value.forEach(conn => {
-            if (conn.isConsumption) {
-                const fromEffectId = conn.fromEffectId || (conn.fromNodeType === 'effect' ? conn.fromNodeId : null)
-                if (fromEffectId) {
-                    consumptionMap.set(fromEffectId, conn)
-                }
-            }
-        })
-
-        const ICON_SIZE = 20
-        const BAR_MARGIN = 2
-        const VERTICAL_GAP = 3
-        const ACTION_BORDER = 2
-
-        actionMap.value.forEach(action => {
-            const actionRect = nodeRects.value[action.id]?.rect
-
-            if (!actionRect) return
-
-            // 非攻击分段动作：若有变体条件结果，用变体的 physicalAnomaly 覆盖
-            let _effectivePhysAnom = action.node.physicalAnomaly
-            if (action.node.kind !== 'attack_segment') {
-                const _condRes = computedActionConditionResults.value.get(action.id)
-                if (_condRes?.variantId) {
-                    const _charInfo = characterRoster.value.find(c => c.id === action.trackId)
-                    const _variantSuffix = _condRes.variantId.replace(`${action.trackId}_variant_`, '')
-                    const _variant = _charInfo?.variants?.find(v => v.id === _variantSuffix)
-                    if (_variant?.physicalAnomaly !== undefined) _effectivePhysAnom = _variant.physicalAnomaly
-                }
-            }
-            if (_effectivePhysAnom && _effectivePhysAnom.length > 0) {
-                const rows = Array.isArray(_effectivePhysAnom[0])
-                    ? _effectivePhysAnom
-                    : [_effectivePhysAnom];
-
-                let globalFlatIndex = 0
-
-                rows.forEach((row, rowIndex) => {
-                    row.forEach((effect, colIndex) => {
-                        if (isDebuffAnomalyType(effect?.type)) return
-
-                        const effectId = ensureEffectId(effect);
-                        const myEffectIndex = globalFlatIndex++;
-
-                        const originalOffset = Number(effect.offset) || 0;
-
-                        // 计算图标的起始现实位置
-                        const shiftedStartTimestamp = getShiftedEndTime(action.node.startTime, originalOffset, action.id);
-                        const effectLeft = timeToPx(shiftedStartTimestamp);
-
-                        // 相对动作的位置
-                        const relativeX = effectLeft - actionRect.left
-                        const relativeY = (rowIndex * (VERTICAL_GAP + ICON_SIZE)) + VERTICAL_GAP + ACTION_BORDER;
-                        const localTransform = `translate(${relativeX}px, ${-relativeY}px)`
-
-                        // 相对时间轴的位置
-                        const absoluteTop = actionRect.top - relativeY - ICON_SIZE + ACTION_BORDER;
-                        const absoluteLeft = effectLeft + 1
-
-                        const iconRect = {
-                            left: absoluteLeft,
-                            width: ICON_SIZE,
-                            right: absoluteLeft + ICON_SIZE,
-                            height: ICON_SIZE,
-                            top: absoluteTop
-                        };
-
-                        // 计算 Buff 的偏移后总时长
-                        let finalDuration = getShiftedEndTime(shiftedStartTimestamp, effect.duration, action.id) - shiftedStartTimestamp;
-                        let isConsumed = false
-
-                        // 连线消耗逻辑
-                        let conn = consumptionMap.get(effectId) || consumptionMap.get(`${action.id}_${myEffectIndex}`);
-
-                        if (conn && conn.isConsumption) {
-                            const targetTrack = tracks.value.find(t => t.actions.some(a => a.instanceId === conn.to));
-                            const targetAction = targetTrack?.actions.find(a => a.instanceId === conn.to);
-                            if (targetAction) {
-                                const consumptionTime = targetAction.startTime - (conn.consumptionOffset || 0);
-                                const cutDuration = consumptionTime - shiftedStartTimestamp;
-                                const snappedCutDuration = snapMs(cutDuration);
-                                if (snappedCutDuration >= 0) {
-                                    finalDuration = Math.min(finalDuration, snappedCutDuration);
-                                    isConsumed = true
-                                }
-                            }
-                        }
-
-                        let finalBarWidth = finalDuration > 0 ? (timeToPx(shiftedStartTimestamp + finalDuration) - timeToPx(shiftedStartTimestamp)) : 0;
-                        if (finalBarWidth > 0) {
-                            finalBarWidth = Math.max(0, finalBarWidth - ICON_SIZE - BAR_MARGIN)
-                        }
-
-
-                        layoutMap.set(effectId, {
-                            rect: iconRect,
-                            localTransform,
-                            barData: {
-                                width: finalBarWidth,
-                                isConsumed,
-                                displayDuration: finalDuration,
-                                extensionAmount: snapMs(finalDuration - effect.duration)
-                            },
-                            data: effect,
-                            actionId: action.id,
-                            flatIndex: myEffectIndex
-                        })
-
-                        if (isConsumed) {
-                            const barLeft = absoluteLeft + ICON_SIZE + BAR_MARGIN;
-                            const barRight = barLeft + finalBarWidth;
-
-                            // 时间条末端位置
-                            const transferRect = {
-                                left: barRight,
-                                width: 0,
-                                right: barRight,
-                                height: ICON_SIZE,
-                                top: absoluteTop
-                            };
-                            layoutMap.set(`${effectId}_transfer`, { rect: transferRect })
-                        }
-                    })
-                })
-            }
-        })
-        return layoutMap
-    })
 
     const statusNodeRects = computed(() => {
         const map = new Map()
@@ -5221,12 +5010,6 @@ export const useTimelineStore = defineStore('timeline', () => {
     // ===================================================================================
     // 监控数据计算 (Monitor Data)
     // ===================================================================================
-    const useNewCompiler = ref(false);
-
-    function toggleNewCompiler() {
-        useNewCompiler.value = !useNewCompiler.value;
-    }
-
     // ── Build simulation-ready tracks: inject final stats (base + weapon/equipment deltas) ──
     // Also carries growth.skillLevels for future per-level multiplier selection.
     function buildSimulationTracks() {
@@ -5386,9 +5169,16 @@ export const useTimelineStore = defineStore('timeline', () => {
                 systemConstants.value,
                 resolveTrackConfiguredStats,
                 getTrackGaugeMax,
+                getActiveSetBonusCategories,
             )
             if (!inputs) return null
-            return simulateV2(inputs.builds, inputs.skills, inputs.enemyConfig, inputs.config, inputs.triggersByActor)
+            // Two-pass: first pass gets stagger windows, second pass does execution conversion
+            const pass1 = simulateV2(inputs.builds, inputs.skills, inputs.enemyConfig, inputs.config, inputs.triggersByActor)
+            const windows = extractStaggerWindows(pass1.events, inputs.enemyConfig.staggerBreakDuration)
+            if (windows.length > 0 && inputs.executionSkillByActor.size > 0) {
+                return simulateV2(inputs.builds, inputs.skills, inputs.enemyConfig, inputs.config, inputs.triggersByActor, inputs.executionSkillByActor, windows)
+            }
+            return pass1
         } catch (err) {
             console.error('[v2 simulation] runtime error:', err)
             return null
@@ -5408,9 +5198,10 @@ export const useTimelineStore = defineStore('timeline', () => {
         const attachBars = projectAttachmentBars(sim.events, endTime)
         const breakBars = projectBreakBars(sim.events, endTime)
         const hitEffects = projectHitEffects(sim.events)
+        const actionBars = projectActionBars(sim.events)
 
         const adapted = adaptAllProjections(buffBars, stackBars, anomalyBars, attachBars, breakBars)
-        return { ...adapted, hitEffects }
+        return { ...adapted, hitEffects, actionBars }
     })
 
     /**
@@ -5450,16 +5241,27 @@ export const useTimelineStore = defineStore('timeline', () => {
             systemConstants.value,
             resolveTrackConfiguredStats,
             getTrackGaugeMax,
+            getActiveSetBonusCategories,
         )
         if (v2Inputs) {
             try {
+                // Two-pass: first pass determines stagger windows, second pass uses them for execution
+                const pass1 = simulateV2(
+                    v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
+                    v2Inputs.config,
+                    v2Inputs.triggersByActor,
+                )
+                const staggerWindows = extractStaggerWindows(pass1.events, v2Inputs.enemyConfig.staggerBreakDuration)
                 const result = simulateV2(
                     v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
                     { ...v2Inputs.config, validateConditions: true },
                     v2Inputs.triggersByActor,
+                    v2Inputs.executionSkillByActor,
+                    staggerWindows,
                 )
                 // Store result for buff display (even on partial failure)
                 _v2ValidationResult.value = result
+                _v2AttackSegmentMap.value = v2Inputs.attackSegmentMap
 
                 if (result.validationError) {
                     const err = result.validationError
@@ -5820,13 +5622,27 @@ export const useTimelineStore = defineStore('timeline', () => {
         return { available, reasons }
     }
 
-    // SP series from V2 kernel events
-    const spSeries = computed(() => {
+    // SP series: use store-based calculation (handles regen, pause windows, time extensions correctly)
+    const spSeries = computed(() => calculateGlobalSpData());
+
+    // Stagger series from V2 kernel events
+    const staggerSeries = computed(() => {
         const sim = _v2ValidationResult.value
-        if (!sim?.events?.length) return []
-        return v2ProjectSpSeries(sim.events, systemConstants.value.initialSp, viewDuration.value)
+        if (!sim?.events?.length) return { points: [], lockSegments: [], nodeSegments: [], nodeStep: 0 }
+        const {
+            maxStagger, staggerNodeCount, staggerNodeDuration, staggerBreakDuration
+        } = systemConstants.value
+        const staggerNodes = []
+        if (staggerNodeCount > 0 && maxStagger > 0) {
+            for (let i = 1; i <= staggerNodeCount; i++) {
+                staggerNodes.push(Math.round(maxStagger * i / (staggerNodeCount + 1)))
+            }
+        }
+        return projectStaggerMonitorSeries(
+            sim.events, maxStagger, staggerBreakDuration, staggerNodeDuration, staggerNodes, viewDuration.value
+        )
     });
-    const staggerSeries = computed(() => []);
+
     const _projectedBuffs = computed(() => null);
 
     // Effective statuses: V2 only (no V1 fallback)
@@ -5836,58 +5652,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     const timeContext = computed(() => compiledTimeline.value.timeContext);
 
-    const legacyGlobalExtensions = computed(() => {
-        const sources = [];
-        tracks.value.forEach(track => {
-            track.actions.forEach(action => {
-                if (action.isDisabled || (action.triggerWindow || 0) < 0) return;
-                if (action.type === 'link' || action.type === 'ultimate') {
-                    sources.push({
-                        logicalTime: action.logicalStartTime ?? action.startTime,
-                        startTime: action.startTime,
-                        type: action.type,
-                        instanceId: action.instanceId,
-                        animationTime: Number(action.animationTime) || 1.5
-                    });
-                }
-            });
-        });
-        sources.sort((a, b) => a.logicalTime - b.logicalTime);
-
-        const extensions = [];
-        let cumulativeTime = 0;
-        for (let i = 0; i < sources.length; i++) {
-            const current = sources[i];
-            const next = sources[i + 1];
-            let amount = 0;
-
-            if (current.type === 'ultimate') {
-                amount = current.animationTime;
-            } else {
-                if (next) {
-                    const gap = next.logicalTime - current.logicalTime;
-                    amount = Math.min(0.5, Math.max(0.1, snapMs(gap)));
-                } else {
-                    amount = 0.5;
-                }
-            }
-            const gameTime = current.startTime - cumulativeTime;
-            extensions.push({
-                time: current.startTime,
-                gameTime: gameTime,
-                amount: amount,
-                sourceId: current.instanceId,
-                logicalTime: current.logicalTime,
-                cumulativeFreezeTime: cumulativeTime
-            });
-            cumulativeTime += amount;
-        }
-        return extensions;
-    });
-
-    const globalExtensions = computed(() => {
-        return useNewCompiler.value ? compiledTimeline.value.timeExtensions : legacyGlobalExtensions.value;
-    });
+    const globalExtensions = computed(() => compiledTimeline.value.timeExtensions);
 
     function refreshAllActionShifts(excludeIds = []) {
         const excludeSet = new Set(Array.isArray(excludeIds) ? excludeIds : [excludeIds]);
@@ -5946,25 +5711,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     function getShiftedEndTime(startTime, duration, excludeActionId = null) {
-        if (useNewCompiler.value) {
-            return timeContext.value.getShiftedEndTime(startTime, duration, excludeActionId);
-        }
-
-        let currentTimeLimit = startTime + duration;
-        let processedExtensions = new Set();
-        let changed = true;
-        while (changed) {
-            changed = false;
-            globalExtensions.value.forEach(ext => {
-                if (ext.sourceId !== excludeActionId && !processedExtensions.has(ext.sourceId) &&
-                    ext.time >= startTime && ext.time < currentTimeLimit) {
-                    currentTimeLimit += ext.amount;
-                    processedExtensions.add(ext.sourceId);
-                    changed = true;
-                }
-            });
-        }
-        return currentTimeLimit;
+        return timeContext.value.getShiftedEndTime(startTime, duration, excludeActionId);
     }
 
     const ultimateEnhancementMetricsMap = computed(() => {
@@ -6023,50 +5770,11 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     function toGameTime(realTimeS) {
-        if (useNewCompiler.value) {
-            return timeContext.value.toGameTime(realTimeS);
-        }
-
-        const extensions = globalExtensions.value;
-
-        for (const ext of extensions) {
-            const freezeRealStart = ext.gameTime + ext.cumulativeFreezeTime;
-
-            const freezeRealEnd = freezeRealStart + ext.amount;
-
-            if (realTimeS >= freezeRealStart && realTimeS < freezeRealEnd) {
-                return ext.gameTime;
-            }
-
-            if (realTimeS < freezeRealStart) {
-                return realTimeS - ext.cumulativeFreezeTime;
-            }
-        }
-
-        const last = extensions[extensions.length - 1];
-        if (last) {
-            const totalOffset = last.cumulativeFreezeTime + last.amount;
-            return realTimeS - totalOffset;
-        }
-
-        return realTimeS;
+        return timeContext.value.toGameTime(realTimeS);
     }
 
     function toRealTime(gameTimeS) {
-        if (useNewCompiler.value) {
-            return timeContext.value.toRealTime(gameTimeS);
-        }
-
-        const extensions = globalExtensions.value;
-        const breakPoint = extensions.toReversed().find(e => e.gameTime <= gameTimeS);
-
-        if (!breakPoint) return gameTimeS;
-
-        if (gameTimeS === breakPoint.gameTime) {
-            return gameTimeS + breakPoint.cumulativeFreezeTime;
-        }
-
-        return gameTimeS + breakPoint.cumulativeFreezeTime + breakPoint.amount;
+        return timeContext.value.toRealTime(gameTimeS);
     }
 
     function pushSubsequentActions(triggerTime, amount, excludeIds = []) {
@@ -6250,7 +5958,10 @@ export const useTimelineStore = defineStore('timeline', () => {
                     instantEvents.push({ time: snapMs(actualEndTime), change: Number(action.spGain) });
                 }
 
-                if (action.type === 'execution') {
+                // Check if kernel converted this action to execution (auto-convert during stagger)
+                const v2Bar = _v2ProjectedData.value?.actionBars?.get(action.instanceId)
+                const effectiveType = v2Bar?.skillType || action.type
+                if (effectiveType === 'execution') {
                     const actualEndTime = getShiftedEndTime(action.startTime, action.duration, action.instanceId);
                     instantEvents.push({
                         time: snapMs(actualEndTime),
@@ -7411,7 +7122,7 @@ export const useTimelineStore = defineStore('timeline', () => {
      * computedEffectiveActions
      * Map<instanceId, {duration, gaugeGain, teamGaugeGain}>
      * 当 conditionResult 命中变体时，用变体数据覆盖原 action 的关键字段，
-     * 供 legacyNodeRects / calculateGaugeData 等计算使用。
+     * ��� calculateGaugeData 等计算使用。
      */
     const computedEffectiveActions = computed(() => {
         const map = new Map()
@@ -8372,7 +8083,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     return {
-        MAX_SCENARIOS, toTimelineSpace, toViewportSpace, toGameTime, toRealTime, toggleNewCompiler,
+        MAX_SCENARIOS, toTimelineSpace, toViewportSpace, toGameTime, toRealTime,
         systemConstants, isLoading, characterRoster, iconDatabase, tracks, connections, activeTrackId, timelineScrollTop, timelineShift, timelineRect, trackLaneRects, nodeRects, draggingSkillData,
         selectedActionId, selectedLibrarySkillId, selectedLibrarySource, selectedWeaponStatusId, multiSelectedIds, clipboard, isCapturing, setIsCapturing, showCursorGuide, isBoxSelectMode, cursorPosTimeline, cursorCurrentTime, cursorPosition, snapStep, strictMode, toggleStrictMode, validateSkillPlacement,
         selectedAnomalyId, setSelectedAnomalyId, updateTrackGaugeEfficiency,
@@ -8407,11 +8118,13 @@ export const useTimelineStore = defineStore('timeline', () => {
         computedConvertEvents,
         computedAnomalyDebuffsEffective,
         v2HitEffects: computed(() => _v2ProjectedData.value?.hitEffects || []),
+        v2ActionBars: computed(() => _v2ProjectedData.value?.actionBars || null),
+        v2AttackSegments: computed(() => _v2AttackSegmentMap.value || null),
         computedEffectiveActions,
         misc,
         prepDuration, prepExpanded, viewDuration, prepZoneWidthPx, totalTimelineWidthPx,
         timeToPx, pxToTime, formatAxisTimeLabel, togglePrepExpanded, setPrepDuration,
-        useNewCompiler, compiledTimeline, spSeries, staggerSeries,
+        compiledTimeline, spSeries, staggerSeries,
         gaugeSeriesByTrackId, legalityPolicy, legalityIssuesByAction, sortedLegalityIssues,
         timelineMode, cycleTimelineMode, TIMELINE_MODE_CYCLE,
         timelineEditorMode, setTimelineEditorMode, playheadTime, setPlayheadTime, confirmPlayheadRewind, advancePlayheadAfterPlacement,

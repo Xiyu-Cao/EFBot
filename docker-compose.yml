@@ -1,17 +1,4 @@
 services:
-  # ── Python 计算内核 (FastAPI) ──────────────────────────────────────────────
-  python-app:
-    build:
-      context: ./apps/python-app
-    container_name: efbot-engine
-    ports:
-      - "8000:8000"          # FastAPI REST API
-    volumes:
-      - ./apps/python-app:/app   # Live code sync — uvicorn --reload 自动热重载
-    environment:
-      - PYTHONUNBUFFERED=1
-    restart: on-failure
-
   # ── Vue 3 + Vite (Tauri 前端 dev server) ──────────────────────────────────
   # 注意：Tauri 桌面壳（src-tauri）需要在宿主机用 cargo tauri dev 启动
   # 此容器仅用于纯 Web 预览和开发调试

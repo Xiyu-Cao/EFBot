@@ -23,12 +23,6 @@ export default defineConfig({
       usePolling: true,
       interval: 500,
     },
-    proxy: {
-      '/api': {
-        target: 'http://python-app:8000',
-        changeOrigin: true,
-      },
-    },
   },
   clearScreen: false,
   optimizeDeps: {

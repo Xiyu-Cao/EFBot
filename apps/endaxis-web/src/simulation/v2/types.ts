@@ -67,6 +67,8 @@ export interface CharacterBuild {
   equipmentSetId: string | null;
   /** Gauge cap after potential modifier (e.g., 300 × 0.85 = 255) */
   gaugeMax: number;
+  /** If true, this actor only gains gauge from their own skill/link SP consumption (e.g., LASTRITE). */
+  gaugeFromSelfOnly?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -192,6 +194,12 @@ export interface Skill {
   gaugeCost?: number;
   /** Gauge gain for all team members, triggered on cast (SP consumption → charge). */
   teamGaugeGain?: number;
+  /** Detach time (seconds from skill start). Hits at or after this offset are not affected by interrupts. */
+  detach?: number;
+  /** Override default interrupt rules (character exceptions). Lists action types that can interrupt this skill. */
+  interruptibleBy?: ActionType[];
+  /** Visual duration override for frontend display (e.g., internal CD indicator when kernel duration=0). */
+  displayDuration?: number;
   // Note: SP restore within a skill is a HitEffect on a specific hit, not a Skill-level field.
   // gaugeGain for self is also derived from SP consumption (handled by kernel).
 }
@@ -446,6 +454,8 @@ export interface AnomalyEvent extends BaseEvent {
   anomalyType: AnomalyType;
   level: number;
   sourceId: string;
+  /** Duration in seconds (present on anomaly_apply). */
+  duration?: number;
 }
 
 /** Break status change. */
@@ -479,6 +489,12 @@ export interface ActionEvent extends BaseEvent {
   actionId: string;
   skillType: ActionType;
   variantId?: string;
+  /** True if this action was interrupted before its natural end. Only present on action_end events. */
+  interrupted?: boolean;
+  /** Visual duration override for frontend (e.g., internal CD indicator). Only present on action_end events. */
+  displayDuration?: number;
+  /** Hit offsets from the V2 Skill used by the kernel (seconds from action start). Only present on action_end events. */
+  hitOffsets?: number[];
 }
 
 /** Variant selection result. */

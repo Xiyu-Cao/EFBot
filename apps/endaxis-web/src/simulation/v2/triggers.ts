@@ -222,6 +222,55 @@ export class TriggerProcessor {
         const at = cond.params.actionType as ActionType;
         return (state.event.data.actionType as string) === at;
       }
+      // ── Weapon trigger conditions ──
+      case "source_is_skill": {
+        // SP restored from skill hit (spType is "refund")
+        return (state.event.data.spType as string) === "refund";
+      }
+      case "source_action_type_and_element": {
+        // Compound: action type AND element must both match
+        const at = cond.params.actionType as ActionType;
+        const el = cond.params.element as MagicElement;
+        return (state.event.data.actionType as string) === at
+          && (state.event.data.element as string) === el;
+      }
+      case "applied_anomaly_or_buff": {
+        // Check if the applied anomaly/buff type is in the allowed list
+        const types = cond.params.types as string[];
+        const anomalyType = state.event.data.anomalyType as string | undefined;
+        const buffType = state.event.data.buffType as string | undefined;
+        if (anomalyType && types.includes(anomalyType)) return true;
+        if (buffType && types.includes(buffType)) return true;
+        return false;
+      }
+      case "attachment_element": {
+        // Check attachment event element (no action type check)
+        const el = cond.params.element as string;
+        return (state.event.data.element as string) === el;
+      }
+      case "physical_anomaly_type": {
+        // Check physical anomaly sub-type (launch/knockdown/slam/armorBreak)
+        const allowed = cond.params.physicalTypes as string[];
+        return allowed.includes(state.event.data.physicalType as string);
+      }
+      case "consumed_anomaly_type": {
+        // Check which anomaly was consumed
+        const at = cond.params.anomalyType as string;
+        return (state.event.data.anomalyType as string) === at;
+      }
+      case "crit_hit": {
+        // Check if the hit was a crit (for real crit mode)
+        return (state.event.data.isCrit as boolean) === true;
+      }
+      case "first_break": {
+        // Check if this was the first break application (prevStacks === 0)
+        return (state.event.data.prevStacks as number) === 0;
+      }
+      case "enemy_has_attachment_min_stacks": {
+        // Check if enemy has attachment at or above minimum stacks
+        const minStacks = (cond.params.minStacks as number) || 1;
+        return state.enemy.attachmentStacks >= minStacks;
+      }
       default:
         return false;
     }

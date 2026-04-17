@@ -111,12 +111,7 @@ function selectEnemy(id) {
 }
 
 // === 数据计算 (失衡)===
-const staggerResult = computed(() => {
-  if (store.useNewCompiler) {
-    return store.staggerSeries
-  }
-  return store.calculateGlobalStaggerData()
-})
+const staggerResult = computed(() => store.staggerSeries)
 const staggerPoints = computed(() => staggerResult.value.points || [])
 const lockSegments = computed(() => staggerResult.value.lockSegments || [])
 const nodeSegments = computed(() => staggerResult.value.nodeSegments || [])
@@ -159,12 +154,7 @@ const lockZones = computed(() => lockSegments.value.map(seg => ({
 
 
 // === 数据计算 (技力) ===
-const spData = computed(() => {
-  if (store.useNewCompiler) {
-    return store.spSeries
-  }
-  return store.calculateGlobalSpData()
-})
+const spData = computed(() => store.spSeries)
 
 // 技力绘图坐标计算
 const BASE_Y_SP = STAGGER_HEIGHT + SP_HEIGHT - 20

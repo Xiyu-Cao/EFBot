@@ -12909,7 +12909,7 @@
     {
       "id": "wpn_funnel_0008",
       "name": "骑士精神",
-      "buffName": "侵蚀性狂热",
+      "buffName": "冠军威赫",
       "type": "funnel",
       "rarity": 6,
       "duration": 15,
@@ -12927,18 +12927,18 @@
       "buffBonuses": [],
       "baseAtk": 490,
       "passiveStats": {
-        "secondary_ability": 28
+        "healing_effect": 28
       },
       "triggeredBuffs": [
         {
-          "trigger": "on_arts_burst",
-          "name": "侵蚀性狂热",
-          "target": "enemy",
+          "trigger": "on_skill_heal",
+          "name": "冠军威赫",
+          "target": "team",
           "effects": [
             {
-              "stat": "arts_dmg",
+              "stat": "attack",
               "value": 25.2,
-              "zone": "增伤",
+              "zone": "攻击加成",
               "unit": "percent"
             }
           ],
@@ -12991,7 +12991,7 @@
     {
       "id": "wpn_funnel_0010",
       "name": "爆破单元",
-      "buffName": "冠军威赫",
+      "buffName": "侵蚀性狂热",
       "type": "funnel",
       "rarity": 6,
       "duration": 15,
@@ -13009,18 +13009,18 @@
       "buffBonuses": [],
       "baseAtk": 485,
       "passiveStats": {
-        "healing_effect": 28
+        "secondary_ability": 28
       },
       "triggeredBuffs": [
         {
-          "trigger": "on_skill_heal",
-          "name": "冠军威赫",
-          "target": "team",
+          "trigger": "on_arts_burst",
+          "name": "侵蚀性狂热",
+          "target": "enemy",
           "effects": [
             {
-              "stat": "attack",
+              "stat": "arts_dmg",
               "value": 25.2,
-              "zone": "攻击加成",
+              "zone": "增伤",
               "unit": "percent"
             }
           ],

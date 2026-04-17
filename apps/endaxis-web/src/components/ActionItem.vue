@@ -100,9 +100,15 @@ const resolvedVariantSkill = computed(() => {
 
 const secWidth = computed(() => store.timeBlockWidth)
 
+// Effective type: kernel may convert attack → execution during stagger
+const v2EffectiveType = computed(() => {
+  const v2Bar = store.v2ActionBars?.get(props.action.instanceId)
+  return v2Bar?.skillType || props.action.type
+})
+
 const displayLabel = computed(() => {
   const name = resolvedVariantSkill.value?.name || props.action.name || ''
-  const type = props.action.type
+  const type = v2EffectiveType.value
   const width = secWidth.value
 
   const suffix = (isVariant.value || conditionResult.value) ? '*' : ''
@@ -111,9 +117,15 @@ const displayLabel = computed(() => {
     return `${TYPE_SHORTHAND[type] || '?'}${suffix}`
   }
 
+  if (type === 'execution') {
+    return width >= 30 ? `${t('skillType.execution', '处决')}${suffix}` : `E${suffix}`
+  }
+
   if (props.action.kind === 'attack_segment' || props.action.kind === 'attack_auto_placed') {
     const total = Number(props.action.attackSequenceTotal) || 0
-    const idx = Number(props.action.attackSequenceIndex) || 0
+    // Use V2 recalculated segment index if available, otherwise store index
+    const v2Idx = store.v2AttackSegments?.get(props.action.instanceId)
+    const idx = v2Idx || Number(props.action.attackSequenceIndex) || 0
 
     if (total > 0 && idx > 0) {
       if (idx === total) {
@@ -136,10 +148,11 @@ const isGhostMode = computed(() => (props.action.triggerWindow || 0) < 0)
 // 计算主题色
 const themeColor = computed(() => {
   if (props.action.customColor) return props.action.customColor
-  if (props.action.type === 'link') return store.getColor('link')
-  if (props.action.type === 'execution') return store.getColor('execution')
-  if (props.action.type === 'attack') return store.getColor('attack')
-  if (props.action.type === 'dodge') return store.getColor('dodge')
+  const effectiveType = v2EffectiveType.value
+  if (effectiveType === 'link') return store.getColor('link')
+  if (effectiveType === 'execution') return store.getColor('execution')
+  if (effectiveType === 'attack') return store.getColor('attack')
+  if (effectiveType === 'dodge') return store.getColor('dodge')
   if (props.action.element) return store.getColor(props.action.element)
 
   let charId = null
@@ -429,29 +442,28 @@ const connectionSourceActionId = computed(() => {
 })
 
 // 计算判定点的位置样式
+// V2 kernel hit positions are authoritative (handles combo variants, interrupts).
+// Falls back to compiler-resolved ticks when V2 hasn't run.
 const renderableTicks = computed(() => {
-  if (store.useNewCompiler) {
-    const resolvedAction = store.compiledTimeline.actionMap.get(props.action.instanceId)
-    return resolvedAction?.resolvedDamageTicks.map(tick => {
-        const left = store.timeToPx(tick.realTime) - store.timeToPx(resolvedAction.realStartTime)
-        return {
-            style: { left: `${left}px` },
-            data: tick
-        }
-    })
+  const v2Bar = store.v2ActionBars?.get(props.action.instanceId)
+
+  if (v2Bar?.hitOffsets) {
+    const effectiveDuration = v2Bar.displayDuration ?? (v2Bar.endTime - v2Bar.startTime)
+    return v2Bar.hitOffsets
+      .filter(offset => !v2Bar.interrupted || offset < effectiveDuration)
+      .map(offset => {
+        const left = store.timeToPx(props.action.startTime + offset) - store.timeToPx(props.action.startTime)
+        return { style: { left: `${left}px` }, data: { offset } }
+      })
   }
 
-  const _variantForTicks = props.action.kind !== 'attack_segment' ? resolvedVariantSkill.value : null
-  const ticks = (_variantForTicks?.damageTicks !== undefined ? _variantForTicks.damageTicks : props.action.damageTicks) || []
-
-  return ticks.map(tick => {
-    const originalOffset = tick.offset || 0
-    const shiftedTimestamp = store.getShiftedEndTime(props.action.startTime, originalOffset, props.action.instanceId)
-    const left = store.timeToPx(shiftedTimestamp) - store.timeToPx(props.action.startTime)
-    return {
-      style: { left: `${left}px` },
-      data: tick
-    }
+  const resolvedAction = store.compiledTimeline.actionMap.get(props.action.instanceId)
+  return resolvedAction?.resolvedDamageTicks.map(tick => {
+      const left = store.timeToPx(tick.realTime) - store.timeToPx(resolvedAction.realStartTime)
+      return {
+          style: { left: `${left}px` },
+          data: tick
+      }
   })
 })
 

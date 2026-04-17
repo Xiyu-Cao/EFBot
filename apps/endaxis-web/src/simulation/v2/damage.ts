@@ -85,11 +85,25 @@ export interface BuffModifiers {
   // Ability modifiers
   abilityFlat: Record<string, number>;  // e.g., { strength: 20 } from buff
 
-  // Damage zone bonuses (all %)
-  damageBonus: number;      // 增伤区 additive bonus
+  // Damage zone bonuses — global (all %)
+  damageBonus: number;      // 增伤区 additive bonus (all damage)
   amplify: number;          // 增幅区 additive bonus
   combo: number;            // 连击区 additive bonus
   special: number;          // 特殊区 multiplicative factor (1.0 = no change)
+
+  // Damage zone bonuses — stat-specific (only apply to matching damage)
+  physicalDmg: number;      // physical school
+  artsDmg: number;          // magic school
+  blazeDmg: number;         // blaze element
+  coldDmg: number;          // cold element
+  emagDmg: number;          // emag element
+  natureDmg: number;        // nature element
+  attackDmgBonus: number;   // attack source type
+  skillDmgBonus: number;    // skill source type
+  linkDmgBonus: number;     // link source type
+  ultimateDmgBonus: number; // ultimate source type
+  allSkillDmgBonus: number; // skill/link/ultimate source types
+  brokenDmgBonus: number;   // stagger state bonus
 
   // Crit modifiers
   critRateBonus: number;    // added to base crit rate
@@ -166,33 +180,33 @@ export function computeEffectiveATK(buildStats: BuildStats, buffs: BuffModifiers
 // Damage bonus zone routing
 // ═══════════════════════════════════════════════════════════════════
 
-/** Get the base damage bonus for a given element and action type from build stats. */
-function getBaseDamageBonus(buildStats: BuildStats, element: DamageElement, school: DamageSchool, sourceType: ActionType): number {
+/** Get the base damage bonus for a given element and action type from build stats + buff modifiers. */
+function getBaseDamageBonus(buildStats: BuildStats, buffMods: BuffModifiers, element: DamageElement, school: DamageSchool, sourceType: ActionType): number {
   let bonus = 0;
 
   // School-based bonus
-  if (school === "physical") bonus += sumFlat(buildStats.physicalDmg);
-  else bonus += sumFlat(buildStats.artsDmg);
+  if (school === "physical") bonus += sumFlat(buildStats.physicalDmg) + buffMods.physicalDmg;
+  else bonus += sumFlat(buildStats.artsDmg) + buffMods.artsDmg;
 
   // Element-based bonus
   switch (element) {
-    case "blaze": bonus += sumFlat(buildStats.blazeDmg); break;
-    case "cold": bonus += sumFlat(buildStats.coldDmg); break;
-    case "emag": bonus += sumFlat(buildStats.emagDmg); break;
-    case "nature": bonus += sumFlat(buildStats.natureDmg); break;
+    case "blaze": bonus += sumFlat(buildStats.blazeDmg) + buffMods.blazeDmg; break;
+    case "cold": bonus += sumFlat(buildStats.coldDmg) + buffMods.coldDmg; break;
+    case "emag": bonus += sumFlat(buildStats.emagDmg) + buffMods.emagDmg; break;
+    case "nature": bonus += sumFlat(buildStats.natureDmg) + buffMods.natureDmg; break;
   }
 
   // Action type bonus
   switch (sourceType) {
-    case "attack": bonus += sumFlat(buildStats.attackDmgBonus); break;
-    case "skill": bonus += sumFlat(buildStats.skillDmgBonus); break;
-    case "link": bonus += sumFlat(buildStats.linkDmgBonus); break;
-    case "ultimate": bonus += sumFlat(buildStats.ultimateDmgBonus); break;
+    case "attack": bonus += sumFlat(buildStats.attackDmgBonus) + buffMods.attackDmgBonus; break;
+    case "skill": bonus += sumFlat(buildStats.skillDmgBonus) + buffMods.skillDmgBonus; break;
+    case "link": bonus += sumFlat(buildStats.linkDmgBonus) + buffMods.linkDmgBonus; break;
+    case "ultimate": bonus += sumFlat(buildStats.ultimateDmgBonus) + buffMods.ultimateDmgBonus; break;
   }
 
   // All-skill bonus (applies to skill/link/ultimate, not attack)
   if (sourceType === "skill" || sourceType === "link" || sourceType === "ultimate") {
-    bonus += sumFlat(buildStats.allSkillDmgBonus);
+    bonus += sumFlat(buildStats.allSkillDmgBonus) + buffMods.allSkillDmgBonus;
   }
 
   return bonus;
@@ -288,9 +302,9 @@ export function resolveDamage(ctx: DamageContext): DamageResult {
   const crit = resolveCrit(ctx);
 
   // Zone 3: Damage Bonus (增伤区)
-  const baseDmgBonus = getBaseDamageBonus(source.buildStats, element, school, sourceType);
+  const baseDmgBonus = getBaseDamageBonus(source.buildStats, source.buffModifiers, element, school, sourceType);
   // Add broken damage bonus if target is staggered
-  const brokenBonus = target.isStaggered ? sumFlat(source.buildStats.brokenDmgBonus) : 0;
+  const brokenBonus = target.isStaggered ? (sumFlat(source.buildStats.brokenDmgBonus) + source.buffModifiers.brokenDmgBonus) : 0;
   const damageBonusZone = 1 + (baseDmgBonus + brokenBonus + source.buffModifiers.damageBonus) / 100;
 
   // Zone 4: Amplify (增幅区)
@@ -359,6 +373,18 @@ export function emptyBuffModifiers(): BuffModifiers {
     amplify: 0,
     combo: 0,
     special: 1,
+    physicalDmg: 0,
+    artsDmg: 0,
+    blazeDmg: 0,
+    coldDmg: 0,
+    emagDmg: 0,
+    natureDmg: 0,
+    attackDmgBonus: 0,
+    skillDmgBonus: 0,
+    linkDmgBonus: 0,
+    ultimateDmgBonus: 0,
+    allSkillDmgBonus: 0,
+    brokenDmgBonus: 0,
     critRateBonus: 0,
     critDamageBonus: 0,
   };
