@@ -6,9 +6,10 @@ node_modules/
 dist/
 *.local
 
-# IDE
+# IDE / tools
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
