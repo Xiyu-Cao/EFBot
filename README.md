@@ -50,7 +50,7 @@ npm run type-check   # vue-tsc 类型检查
 
 ## 致谢
 
-- [end-axis](https://github.com/floating-sky/end-axis) — 原始项目
+- [end-axis](https://github.com/Lieyuan621/Endaxis) — 原始项目
 - [明日方舟：终末地](https://endfield.hypergryph.com/) — 部分游戏数据来源
 - [warfarin wiki](https://warfarin.wiki/) - 部分游戏数据来源
 - sxy.123 - 帮我测了很多数据和机制
