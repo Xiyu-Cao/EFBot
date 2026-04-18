@@ -679,6 +679,11 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
       }
       case "buff_apply": {
         const be = e as BuffEvent;
+        // Only show markers for the skill's own declared hit.effects. Trigger
+        // actions (weapon / equipment / talent / char-intrinsic triggers like
+        // crystal consumption) have their details accessible via the buff row
+        // + right panel; inlining them above the hit clutters the view.
+        if (be.fromTrigger) break;
         markers.push({
           id: id(), time: be.time, sourceId: be.actorId, actionId: "",
           effectType: be.buffId,

@@ -1275,6 +1275,77 @@ describe("V2 Buff source icons (actor / skill modes)", () => {
     expect(icons.skillIcon).toBe("/equipment/phy01/mock_点剑.webp");
   });
 
+  it("trigger-produced buffs set fromTrigger=true; hit.effect buffs don't", () => {
+    // Two buffs are applied at the same hit:
+    //   1. Direct hit.effect buff_apply (no trigger involvement) — fromTrigger=false
+    //   2. Weapon trigger buff_apply (reacting to slam consumption) — fromTrigger=true
+    const weapon = V2_WEAPON_REGISTRY.wpn_sword_0013!;
+    const triggers = convertWeaponTriggers(weapon, 8);
+    const build = makePhysBuild();
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.0, checkpointIndex: 0, damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const }, effects: [{ type: "break_apply", params: { stacks: 4 } }], standardLogic: true },
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+          effects: [
+            // direct hit.effect
+            { type: "buff_apply", params: { buffId: "direct_buff", target: "enemy", stat: "physical_dmg", zone: "vulnerability", value: 10, duration: 5 } },
+            // slam consumes break → fires weapon xianhe_* triggers
+            { type: "physical_anomaly", params: { physicalType: "slam" } },
+          ],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", triggers);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const direct = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "direct_buff") as any;
+    const xianhe = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "xianhe_self") as any;
+    expect(direct).toBeTruthy();
+    expect(xianhe).toBeTruthy();
+    expect(direct.fromTrigger).toBeFalsy();
+    expect(xianhe.fromTrigger).toBe(true);
+  });
+
+  it("projectHitEffects skips trigger-sourced buff markers above hit", async () => {
+    const { projectHitEffects } = await import("./projections");
+    const weapon = V2_WEAPON_REGISTRY.wpn_sword_0013!;
+    const triggers = convertWeaponTriggers(weapon, 8);
+    const build = makePhysBuild();
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.0, checkpointIndex: 0, damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const }, effects: [{ type: "break_apply", params: { stacks: 4 } }], standardLogic: true },
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+          effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", triggers);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const markers = projectHitEffects(result.events);
+    // No marker for xianhe buffs (trigger-produced)
+    expect(markers.find(m => m.effectType === "xianhe_self")).toBeFalsy();
+    expect(markers.find(m => m.effectType === "xianhe_others")).toBeFalsy();
+    // slam marker (the skill's own hit.effect) IS present
+    expect(markers.find(m => m.effectType === "slam")).toBeTruthy();
+  });
+
   it("hit.effect buff_apply (non-trigger) inherits sourceRef from the hit's skill type", () => {
     // Simulates 管理员 连携技 apply 源石结晶 pattern: buff_apply in hit.effects.
     const build = makePhysBuild();

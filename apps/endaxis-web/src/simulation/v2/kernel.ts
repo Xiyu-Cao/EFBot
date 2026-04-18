@@ -1724,6 +1724,12 @@ export function simulate(
         //   1. If this is a trigger action, use the trigger's explicit sourceRef.
         //   2. Otherwise (direct hit.effect), infer from the hit's skillType so
         //      e.g. 连携技 施加的源石结晶 → kind:"link" / actorId:owning character.
+        //
+        // `fromTrigger` records whether we entered via fireTriggers (trigger
+        // action) vs processEffect on hit.effects — distinct from what the
+        // sourceRef looks like, because some character-intrinsic triggers
+        // advertise sourceRef.kind = "link"/"ultimate" for icon purposes.
+        const fromTrigger = !!triggerSourceRef;
         const inferredSourceRef: TriggerSourceRef | undefined = triggerSourceRef
           || (skillType === "skill" || skillType === "link" || skillType === "ultimate"
               ? { kind: skillType, actorId }
@@ -1739,6 +1745,7 @@ export function simulate(
               duration, reason: "effect",
               stat: p.stat, zone: p.zone,
               sourceRef: inferredSourceRef,
+              fromTrigger,
             });
             // Push trigger event for enemy buff application (used by weapons like 宏愿)
             hitTriggerEvents?.push({
@@ -1758,6 +1765,7 @@ export function simulate(
             stacks: 1, duration, reason: "effect",
             stat: p.stat, zone: p.zone,
             sourceRef: inferredSourceRef,
+            fromTrigger,
           });
         } else {
           // "self" / "mainControl" / "trigger_source" → apply to source actor
@@ -1771,6 +1779,7 @@ export function simulate(
               duration, reason: "effect",
               stat: p.stat, zone: p.zone,
               sourceRef: inferredSourceRef,
+              fromTrigger,
             });
           }
         }

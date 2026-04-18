@@ -455,6 +455,11 @@ export interface BuffEvent extends BaseEvent {
   /** If produced by a PassiveTrigger, the trigger's sourceRef — for "source
    *  icon" modes in the UI (who/what generated this buff). */
   sourceRef?: TriggerSourceRef;
+  /** True when this buff was applied from a PassiveTrigger action (as opposed
+   *  to a direct hit.effect). The hit-marker projection uses this to skip
+   *  triggered buffs so the above-hit icon row shows only the skill's own
+   *  declared effects. */
+  fromTrigger?: boolean;
 }
 
 /** Stack buff (special layer) change. */
