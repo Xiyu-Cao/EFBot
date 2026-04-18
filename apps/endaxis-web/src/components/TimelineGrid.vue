@@ -760,12 +760,16 @@ const mergedBuffsByTrack = computed(() => {
     if (!status.trackId) return
     const endTime = status.startTime + (status.duration || 0)
     const arr = map.get(status.trackId) || []
+    // Pick per-track self-buff icon honouring the current buff icon mode so
+    // weapon/equipment-sourced buffs (e.g. 显赫声名 ATK+) render with weapon
+    // icon in "按技能" mode instead of always falling back to `status.icon`.
+    const displayIcon = getBuffDisplayIcon(status)
     arr.push({
       id: status.id,
       type: status.type || 'buff',
       name: status.name || '',
-      icon: status.icon || '',
-      stackIcon: status.icon || '',
+      icon: displayIcon,
+      stackIcon: displayIcon,
       startTime: status.startTime,
       endTime,
       stacks: status.stacks || 1,
