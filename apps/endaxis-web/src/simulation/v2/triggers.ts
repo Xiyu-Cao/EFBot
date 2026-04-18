@@ -93,11 +93,12 @@ export class TriggerProcessor {
 
   /**
    * Process an event — evaluate all matching triggers.
-   * Immediate triggers fire now and return their effects.
-   * Deferred triggers are queued for later.
+   * Immediate triggers fire now and return their effects paired with the
+   * originating trigger (so callers can propagate sourceRef into downstream
+   * events). Deferred triggers are queued for later.
    */
-  processEvent(event: TriggerEvent, state: TriggerState): HitEffect[] {
-    const immediateEffects: HitEffect[] = [];
+  processEvent(event: TriggerEvent, state: TriggerState): { effect: HitEffect; trigger: PassiveTrigger }[] {
+    const immediateEffects: { effect: HitEffect; trigger: PassiveTrigger }[] = [];
 
     for (const reg of this.triggers) {
       if (!this.matches(reg, event, state)) continue;
@@ -105,7 +106,7 @@ export class TriggerProcessor {
       if (reg.trigger.deferred) {
         this.deferredQueue.push({ trigger: reg, event, state });
       } else {
-        immediateEffects.push(...reg.trigger.actions);
+        for (const eff of reg.trigger.actions) immediateEffects.push({ effect: eff, trigger: reg.trigger });
         this.applyCooldown(reg, event.time);
       }
     }
@@ -115,13 +116,13 @@ export class TriggerProcessor {
 
   /**
    * Flush deferred triggers — call after a hit's full processing completes.
-   * Returns effects paired with the event that produced them so callers can
-   * resolve `event.*` scaleBy params against the right event context.
+   * Returns {effect, event, trigger} tuples so callers can resolve event.*
+   * scaleBy params and propagate sourceRef correctly.
    */
-  flushDeferred(): { effect: HitEffect; event: TriggerEvent }[] {
-    const out: { effect: HitEffect; event: TriggerEvent }[] = [];
+  flushDeferred(): { effect: HitEffect; event: TriggerEvent; trigger: PassiveTrigger }[] {
+    const out: { effect: HitEffect; event: TriggerEvent; trigger: PassiveTrigger }[] = [];
     for (const { trigger: reg, event } of this.deferredQueue) {
-      for (const eff of reg.trigger.actions) out.push({ effect: eff, event });
+      for (const eff of reg.trigger.actions) out.push({ effect: eff, event, trigger: reg.trigger });
       this.applyCooldown(reg, event.time);
     }
     this.deferredQueue = [];

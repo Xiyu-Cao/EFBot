@@ -1199,6 +1199,83 @@ describe("V2 Weapon Triggers — 古渠 (wpn_claym_0014) — per-layer scaling",
   });
 });
 
+describe("V2 Buff source icons (actor / skill modes)", () => {
+  it("weapon trigger produces buff with sourceRef kind=weapon", () => {
+    const weapon = V2_WEAPON_REGISTRY.wpn_claym_0014!;
+    const weaponTriggers = convertWeaponTriggers(weapon, 8);
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+    ]);
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", weaponTriggers);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const apply = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "guqu_buff") as any;
+    expect(apply).toBeTruthy();
+    expect(apply.sourceRef).toEqual({ kind: "weapon", id: "wpn_claym_0014" });
+  });
+
+  it("equipment set trigger produces buff with sourceRef kind=equipment_set", () => {
+    const set = V2_EQUIPMENT_SET_REGISTRY["阿伯莉遗声"]!;
+    const setTriggers = convertSetTriggers(set);
+    const build = makePhysBuild();
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.5, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+        effects: [],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", setTriggers);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const apply = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "aboli_skill") as any;
+    expect(apply).toBeTruthy();
+    expect(apply.sourceRef).toEqual({ kind: "equipment_set", id: "阿伯莉遗声" });
+  });
+
+  it("resolveSourceIcons resolves talent_1 → character talent icon and actor portrait", async () => {
+    const { resolveSourceIcons } = await import("./sourceIconResolver");
+    const icons = resolveSourceIcons(
+      { kind: "talent_1", actorId: "LIFENG" },
+      "LIFENG",
+    );
+    expect(icons.skillIcon).toBe("/avatars/LIFENG/icon_talent_lifeng_02.webp");
+    expect(icons.actorIcon).toBe("/avatars/LIFENG/LIFENG.webp");
+    expect(icons.label).toContain("LIFENG");
+  });
+
+  it("resolveSourceIcons resolves weapon → /weapons/<type>/<id>.webp", async () => {
+    const { resolveSourceIcons } = await import("./sourceIconResolver");
+    const icons = resolveSourceIcons(
+      { kind: "weapon", id: "wpn_claym_0014" },
+      "LASTRITE",
+    );
+    expect(icons.skillIcon).toBe("/weapons/claym/wpn_claym_0014.webp");
+    expect(icons.actorIcon).toBe("/avatars/LASTRITE/LASTRITE.webp");
+  });
+
+  it("resolveSourceIcons resolves equipment_set via provided resolver callback", async () => {
+    const { resolveSourceIcons } = await import("./sourceIconResolver");
+    const resolver = (setId: string) => `/equipment/phy01/mock_${setId}.webp`;
+    const icons = resolveSourceIcons(
+      { kind: "equipment_set", id: "点剑" },
+      "PHYS",
+      resolver,
+    );
+    expect(icons.skillIcon).toBe("/equipment/phy01/mock_点剑.webp");
+  });
+});
+
 describe("V2 Buff icon fallback (stat+zone)", () => {
   it("resolveBuffIcon falls back to icon_normal_atk_efficiency for attack+attackPercent", () => {
     const icon = resolveBuffIcon("xianhe_self_unregistered", "attack", "attackPercent");

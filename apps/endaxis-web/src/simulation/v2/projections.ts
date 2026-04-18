@@ -23,6 +23,7 @@ import type {
   MagicElement,
   AnomalyType,
   ActionType,
+  TriggerSourceRef,
 } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -121,6 +122,9 @@ export interface BuffBar {
    *  (stat+zone)-based icon when buffMetadata has no explicit entry. */
   stat?: string;
   zone?: string;
+  /** If produced by a PassiveTrigger, the trigger's sourceRef — for per-source
+   *  icon modes ("按技能/天赋" / "按角色") in the timeline UI. */
+  sourceRef?: TriggerSourceRef;
 }
 
 /**
@@ -150,6 +154,7 @@ export function projectBuffBars(
         color: be.target === "enemy" ? "#ff4d4f" : be.target === "team" ? "#faad14" : "#b37feb",
         stat: be.stat,
         zone: be.zone,
+        sourceRef: be.sourceRef,
       });
     } else if (e.type === "buff_remove") {
       const be = e as BuffEvent;

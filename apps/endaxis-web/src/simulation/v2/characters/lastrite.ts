@@ -254,6 +254,7 @@ const hypothermia: PassiveTrigger = {
       },
     },
   ],
+  sourceRef: { kind: "talent_0", actorId: "LASTRITE" },
 };
 
 /**
@@ -270,6 +271,7 @@ const coldFragility: PassiveTrigger = {
   actions: [
     { type: "fragility_amplify", params: { stat: "cold_dmg", amplifyRef: "talent_1" } },
   ],
+  sourceRef: { kind: "talent_1", actorId: "LASTRITE" },
 };
 
 /**
@@ -288,6 +290,9 @@ const coldInfusionPhantom: PassiveTrigger = {
     { type: "magic_attachment", params: { element: "cold", stacks: 1, delay: f(19) } },
     { type: "buff_consume", params: { buffId: "lastrite_low_temp_infusion", stacks: 1 } },
   ],
+  // 低温灌注 stack buff is applied by the skill; the phantom follow-up is a
+  // skill-driven mechanism for icon resolution.
+  sourceRef: { kind: "skill", actorId: "LASTRITE" },
 };
 
 // ═══════════════════════════════════════════════════════════════════

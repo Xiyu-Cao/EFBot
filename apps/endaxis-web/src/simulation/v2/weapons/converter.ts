@@ -127,6 +127,7 @@ function convertSimpleTrigger(
     cooldownDuration: wt.icd > 0 ? wt.icd : undefined,
     condition: wt.condition,
     actions,
+    sourceRef: { kind: "weapon", id: weapon.id },
   };
 }
 
@@ -169,6 +170,7 @@ function convertStoredBuff(
         activateValue: value,
       },
     }],
+    sourceRef: { kind: "weapon", id: weapon.id },
   };
 
   return [chargeTrigger];

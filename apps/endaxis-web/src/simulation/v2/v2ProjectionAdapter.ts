@@ -16,6 +16,7 @@ import type {
 import type { BuffStatus } from "../projection/projectWeaponBuffTimeline";
 import type { SelfBuffBar } from "../projection/projectSelfBuffTimeline";
 import { getBuffMeta, getBuffIcon, resolveBuffIcon } from "../data/buffMetadata";
+import { resolveSourceIcons } from "./sourceIconResolver";
 
 // ── Buff color resolution ──
 // Derive color from buffId keywords. Default = gray (physical/generic).
@@ -48,7 +49,10 @@ export interface AdaptedBuffStatuses {
  * Convert V2 BuffBar[] into categorized BuffStatus arrays
  * matching the existing UI rendering pipeline.
  */
-export function adaptBuffBars(bars: BuffBar[]): AdaptedBuffStatuses {
+export function adaptBuffBars(
+  bars: BuffBar[],
+  equipmentIconResolver?: (setId: string) => string,
+): AdaptedBuffStatuses {
   const weaponStatuses: BuffStatus[] = [];
   const teamBuffStatuses: BuffStatus[] = [];
   const debuffStatuses: BuffStatus[] = [];
@@ -56,6 +60,8 @@ export function adaptBuffBars(bars: BuffBar[]): AdaptedBuffStatuses {
   for (const bar of bars) {
     const meta = getBuffMeta(bar.buffId);
     const duration = bar.endTime - bar.startTime;
+    // Source icons for "按技能/天赋" / "按角色" timeline modes.
+    const sourceIcons = resolveSourceIcons(bar.sourceRef, bar.actorId, equipmentIconResolver);
 
     const base: BuffStatus = {
       id: bar.id,
@@ -72,6 +78,9 @@ export function adaptBuffBars(bars: BuffBar[]): AdaptedBuffStatuses {
       color: "",
       type: "",
       preshifted: true,
+      skillIcon: sourceIcons.skillIcon,
+      actorIcon: sourceIcons.actorIcon,
+      sourceLabel: sourceIcons.label,
     };
 
     const buffColor = resolveBuffColor(bar.buffId);
@@ -274,8 +283,9 @@ export function adaptAllProjections(
   anomalyBars: AnomalyBar[],
   attachmentBars: AttachmentBar[],
   breakBars: BreakBar[],
+  equipmentIconResolver?: (setId: string) => string,
 ): V2ProjectedData {
-  const buffs = adaptBuffBars(buffBars);
+  const buffs = adaptBuffBars(buffBars, equipmentIconResolver);
   const selfBuffs = adaptStackBuffBars(stackBuffBars);
   const anomalies = adaptAnomalyBars(anomalyBars);
   const attachments = adaptAttachmentBars(attachmentBars);

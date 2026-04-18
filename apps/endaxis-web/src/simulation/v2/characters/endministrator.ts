@@ -218,6 +218,7 @@ const essenceDissolve: PassiveTrigger = {
   actions: [
     { type: "buff_apply", params: { buffId: "endmin_essence_dissolve_atk", target: "self", stat: "all_dmg", zone: "attackPercent", valueRef: "talent_0", duration: 15 } },
   ],
+  sourceRef: { kind: "talent_0", actorId: "ENDMINISTRATOR" },
 };
 
 const realityStasis: PassiveTrigger = {
@@ -230,6 +231,7 @@ const realityStasis: PassiveTrigger = {
   actions: [
     { type: "buff_apply", params: { buffId: "endmin_reality_stasis", target: "enemy", stat: "physical_dmg", zone: "vulnerability", valueRef: "talent_1", duration: 999999 } },
   ],
+  sourceRef: { kind: "talent_1", actorId: "ENDMINISTRATOR" },
 };
 
 /**
@@ -250,6 +252,9 @@ const crystalConsumptionByAnomaly: PassiveTrigger = {
     { type: "buff_consume", params: { buffId: "endmin_debuff", stacks: "all", deferTo: "afterEffectDamage" } },
     // 碎晶伤害 sourceType 继承触发源，但倍率引用连携技的"击碎结晶伤害倍率"
   ],
+  // Crystal is placed by the link skill; its consumption semantics are treated
+  // as link-sourced effects for icon purposes.
+  sourceRef: { kind: "link", actorId: "ENDMINISTRATOR" },
 };
 
 /**
@@ -267,6 +272,7 @@ const crystalConsumptionByUltimate: PassiveTrigger = {
     { type: "buff_consume", params: { buffId: "endmin_debuff", stacks: "all" } },
     // 碎晶伤害 sourceType = "ultimate"，吃终结技增伤
   ],
+  sourceRef: { kind: "link", actorId: "ENDMINISTRATOR" },
 };
 
 // ═══════════════════════════════════════════════════════════════════

@@ -40,7 +40,14 @@ export function convertSetTriggers(setDef: EquipmentSetDefinition): PassiveTrigg
     id: setDef.id, name: setDef.name, type: "equipment", rarity: 0, baseAtk: 0,
     commonSlots: [], passiveStats: [], triggers: setDef.triggers,
   };
-  return convertWeaponTriggers(fakeWeapon, 8); // tier index 8 = max tier
+  const triggers = convertWeaponTriggers(fakeWeapon, 8); // tier index 8 = max tier
+  // Override sourceRef from weapon → equipment_set. Use `setDef.name` (Chinese
+  // display name) as the id — it matches `equipmentDatabase.piece.category`
+  // so the UI's equipmentIconResolver can look up a representative piece icon.
+  for (const t of triggers) {
+    t.sourceRef = { kind: "equipment_set", id: setDef.name };
+  }
+  return triggers;
 }
 
 // ═══════════════════════════════════════════════════════════════════

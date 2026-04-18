@@ -271,6 +271,9 @@ const ironOathRaid: PassiveTrigger = {
     { type: "delayed_damage", params: { delay: f(38), multiplierRef: "袭扰伤害倍率", stagger: 0, element: "physical", school: "physical" } },
     { type: "sp_restore", params: { amountRef: "袭扰恢复技力", isTrueSP: true, delay: f(38) } },
   ],
+  // 铁誓 stack buff is granted by the ultimate; consumption-driven follow-up
+  // effects inherit ultimate as the source category for icon purposes.
+  sourceRef: { kind: "ultimate", actorId: "POGRANICHNK" },
 };
 
 /**
@@ -289,6 +292,7 @@ const ironOathFinale: PassiveTrigger = {
     { type: "delayed_damage", params: { delay: f(72), multiplierRef: "决胜伤害倍率", stagger: 15, element: "physical", school: "physical" } },
     { type: "sp_restore", params: { amountRef: "决胜恢复技力", isTrueSP: true, delay: f(72) } },
   ],
+  sourceRef: { kind: "ultimate", actorId: "POGRANICHNK" },
 };
 
 /**
@@ -303,6 +307,7 @@ const livingBanner: PassiveTrigger = {
   actions: [
     { type: "conditional_stack_buff", params: { buffType: "pograni_talent", spThresholdRef: "talent_0", maxStacksRef: "talent_0" } },
   ],
+  sourceRef: { kind: "talent_0", actorId: "POGRANICHNK" },
 };
 
 /**
@@ -318,6 +323,7 @@ const tacticalGuidance: PassiveTrigger = {
   actions: [
     { type: "buff_apply", params: { buffId: "pograni_tactical_morale", target: "trigger_source", stat: "attack_percent", zone: "attackPercent", valueRef: "talent_0", durationRef: "talent_1" } },
   ],
+  sourceRef: { kind: "talent_1", actorId: "POGRANICHNK" },
 };
 
 // ── Interrupt exception ──

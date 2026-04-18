@@ -191,12 +191,19 @@ export function useDamageCalcState() {
   // Adapted buff data for UI display
   const adaptedProjections = computed(() => {
     if (!events.value.length) return null;
+    const equipmentIconResolver = (setId: string) => {
+      const piece = store.equipmentDatabase?.find(
+        (e: { category?: string; icon?: string }) => e.category === setId && !!e.icon,
+      );
+      return piece?.icon || "";
+    };
     return adaptAllProjections(
       buffBars.value,
       stackBuffBars.value,
       anomalyBars.value,
       attachmentBars.value,
       breakBars.value,
+      equipmentIconResolver,
     );
   });
 

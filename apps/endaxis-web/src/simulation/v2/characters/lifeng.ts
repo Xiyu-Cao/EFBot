@@ -283,6 +283,7 @@ const demonSubduer: PassiveTrigger = {
   actions: [
     { type: "delayed_damage", params: { multiplierFromTalent: "talent_1", element: "physical", school: "physical", canCrit: true } },
   ],
+  sourceRef: { kind: "talent_1", actorId: "LIFENG" },
 };
 
 // ═══════════════════════════════════════════════════════════════════

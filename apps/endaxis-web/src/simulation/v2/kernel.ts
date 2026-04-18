@@ -46,6 +46,7 @@ import type {
   ActionType,
   BuffTarget,
   PassiveTrigger,
+  TriggerSourceRef,
 } from "./types";
 import type { BuildStats } from "./characterBuild";
 import { resolveDamage, computeEffectiveATK, emptyBuffModifiers, type BuffModifiers, type DamageContext } from "./damage";
@@ -349,8 +350,8 @@ export function simulate(
   const rng = config.rng || Math.random;
   const resolveRef = config.resolveRef || (() => 0);
 
-  /** Queued slot item — an effect plus the event that produced it (for trigger actions). */
-  interface SlotItem { effect: HitEffect; eventContext?: EventContext }
+  /** Queued slot item — an effect plus the event / trigger that produced it (for trigger actions). */
+  interface SlotItem { effect: HitEffect; eventContext?: EventContext; sourceRef?: TriggerSourceRef }
 
   /**
    * Resolve a hit's multiplier from either fixed value or multiplierRef.
@@ -902,13 +903,13 @@ export function simulate(
 
       // ── Helper: route an effect to its slot or call processEffect now.
       //           allowDefer=false prevents re-queuing when draining a slot.
-      const dispatchEffect = (effect: HitEffect, allowDefer: boolean, eventContext?: EventContext) => {
+      const dispatchEffect = (effect: HitEffect, allowDefer: boolean, eventContext?: EventContext, sourceRef?: TriggerSourceRef) => {
         if (allowDefer) {
           const deferTo = (effect.params as any)?.deferTo;
-          if (deferTo === "afterEffectDamage") { slotQueues.afterEffectDamage.push({ effect, eventContext }); return; }
-          if (deferTo === "afterSkillDamage")  { slotQueues.afterSkillDamage.push({ effect, eventContext });  return; }
+          if (deferTo === "afterEffectDamage") { slotQueues.afterEffectDamage.push({ effect, eventContext, sourceRef }); return; }
+          if (deferTo === "afterSkillDamage")  { slotQueues.afterSkillDamage.push({ effect, eventContext, sourceRef });  return; }
         }
-        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type, eventContext);
+        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type, eventContext, sourceRef);
       };
 
       // ── Helper: resolve everything currently queued in effectDamages. ──
@@ -969,7 +970,7 @@ export function simulate(
       const drainSlot = (slot: SlotItem[]) => {
         if (slot.length === 0) return;
         const toRun = slot.splice(0);
-        for (const item of toRun) dispatchEffect(item.effect, false, item.eventContext);
+        for (const item of toRun) dispatchEffect(item.effect, false, item.eventContext, item.sourceRef);
       };
 
       // ════════════ ① Effects ════════════
@@ -1104,10 +1105,11 @@ export function simulate(
 
       // Legacy: flush trigger-level `deferred: true` triggers (LASTRITE hypothermia 等).
       // Each item carries the event that produced it so `event.*` scaleBy params
-      // still resolve correctly at deferred fire time.
+      // still resolve correctly at deferred fire time; sourceRef flows from the
+      // originating PassiveTrigger for per-source icon resolution.
       const deferredEffects = triggerProc.flushDeferred();
-      for (const { effect: eff, event: evt } of deferredEffects) {
-        dispatchEffect(eff, false, normalizeTriggerEvent(evt));
+      for (const { effect: eff, event: evt, trigger: trg } of deferredEffects) {
+        dispatchEffect(eff, false, normalizeTriggerEvent(evt), trg.sourceRef);
       }
       resolveQueuedDamages();
   }  // end globalHits for loop
@@ -1243,12 +1245,13 @@ export function simulate(
     const localDamages: EffectDamage[] = effectDamagesPool || [];
     const trigDeferredActions: (() => void)[] = [];
     const noTriggerEvents: TriggerEvent[] = []; // don't cascade triggers from triggers
-    for (const eff of immediateEffects) {
+    for (const { effect: eff, trigger: trg } of immediateEffects) {
+      const sref = trg.sourceRef;
       // Honour deferTo when slot queues are available.
       const deferTo = slotQueues ? (eff.params as any)?.deferTo : undefined;
-      if (deferTo === "afterEffectDamage" && slotQueues) { slotQueues.afterEffectDamage.push({ effect: eff, eventContext }); continue; }
-      if (deferTo === "afterSkillDamage"  && slotQueues) { slotQueues.afterSkillDamage.push({ effect: eff, eventContext });  continue; }
-      processEffect(eff, actorId, actionId, time, 0, build, emit, localDamages, trigDeferredActions, noTriggerEvents, undefined, eventContext);
+      if (deferTo === "afterEffectDamage" && slotQueues) { slotQueues.afterEffectDamage.push({ effect: eff, eventContext, sourceRef: sref }); continue; }
+      if (deferTo === "afterSkillDamage"  && slotQueues) { slotQueues.afterSkillDamage.push({ effect: eff, eventContext, sourceRef: sref });  continue; }
+      processEffect(eff, actorId, actionId, time, 0, build, emit, localDamages, trigDeferredActions, noTriggerEvents, undefined, eventContext, sref);
     }
     // If caller didn't supply an external pool, resolve damages inline (legacy).
     if (effectDamagesPool) {
@@ -1327,6 +1330,9 @@ export function simulate(
     skillType?: ActionType,
     /** Present when this effect is a trigger action — lets `valueRef.scaleBy: "event.*"` resolve. */
     eventContext?: EventContext,
+    /** When this effect is a trigger action, the owning trigger's source ref —
+     *  propagated onto BuffEvent so the UI can render per-source icons. */
+    triggerSourceRef?: TriggerSourceRef,
   ): void {
     const resolveCtx: ResolveContext = { resolveRef, enemy, event: eventContext };
     // Local shorthand for migrating old "p.foo ?? resolveRef(p.fooRef)" patterns.
@@ -1723,6 +1729,7 @@ export function simulate(
               stacks: enemy.buffManager.getStacks(p.buffId, time),
               duration, reason: "effect",
               stat: p.stat, zone: p.zone,
+              sourceRef: triggerSourceRef,
             });
             // Push trigger event for enemy buff application (used by weapons like 宏愿)
             hitTriggerEvents?.push({
@@ -1741,6 +1748,7 @@ export function simulate(
             buffId: p.buffId, buffName: p.buffId, target: targetStr as any,
             stacks: 1, duration, reason: "effect",
             stat: p.stat, zone: p.zone,
+            sourceRef: triggerSourceRef,
           });
         } else {
           // "self" / "mainControl" / "trigger_source" → apply to source actor
@@ -1753,6 +1761,7 @@ export function simulate(
               stacks: mgr.getStacks(p.buffId, time),
               duration, reason: "effect",
               stat: p.stat, zone: p.zone,
+              sourceRef: triggerSourceRef,
             });
           }
         }

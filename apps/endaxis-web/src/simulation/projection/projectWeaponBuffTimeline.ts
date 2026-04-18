@@ -29,6 +29,11 @@ export interface BuffStatus {
    *  and should NOT be re-shifted by TimelineGrid's getShiftedEndTime. Set by V2
    *  kernel projections whose event times come directly from `action.startTime`. */
   preshifted?: boolean;
+  /** Source icons for timeline "按技能" / "按角色" display modes. */
+  skillIcon?: string;
+  actorIcon?: string;
+  /** Human-readable source label (for detail panel) — e.g. "黎风天赋·伏魔". */
+  sourceLabel?: string;
 }
 
 export interface ProjectedBuffTimelines {

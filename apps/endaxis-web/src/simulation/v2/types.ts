@@ -298,7 +298,19 @@ export interface PassiveTrigger {
   condition?: TriggerCondition;
   /** Effect(s) to produce when triggered. */
   actions: HitEffect[];
+  /** Structured source reference, used by the UI to resolve the source icon
+   *  (天赋 / 战技 / 武器 / 装备等)。set automatically by converters for
+   *  weapon/equipment triggers; character-intrinsic triggers should set it
+   *  explicitly. */
+  sourceRef?: TriggerSourceRef;
 }
+
+/** Where a trigger-generated buff came from, for UI icon resolution. */
+export type TriggerSourceRef =
+  | { kind: "talent_0" | "talent_1" | "talent_2"; actorId?: string }
+  | { kind: "skill" | "link" | "ultimate"; actorId?: string }
+  | { kind: "weapon"; id: string }
+  | { kind: "equipment_set"; id: string };
 
 /**
  * Events that triggers can listen to.
@@ -440,6 +452,9 @@ export interface BuffEvent extends BaseEvent {
    *  (stat+zone)-based icon when buffMetadata has no explicit entry. */
   stat?: string;
   zone?: string;
+  /** If produced by a PassiveTrigger, the trigger's sourceRef — for "source
+   *  icon" modes in the UI (who/what generated this buff). */
+  sourceRef?: TriggerSourceRef;
 }
 
 /** Stack buff (special layer) change. */

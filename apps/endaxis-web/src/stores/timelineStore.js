@@ -5203,7 +5203,13 @@ export const useTimelineStore = defineStore('timeline', () => {
         const hitEffects = projectHitEffects(sim.events)
         const actionBars = projectActionBars(sim.events)
 
-        const adapted = adaptAllProjections(buffBars, stackBars, anomalyBars, attachBars, breakBars)
+        // Resolve equipment_set source icons via the first piece in each set
+        // (equipmentDatabase is keyed as array; pieces carry `category` = set id).
+        const equipmentIconResolver = (setId) => {
+            const piece = equipmentDatabase.value.find(e => e.category === setId && e.icon)
+            return piece?.icon || ""
+        }
+        const adapted = adaptAllProjections(buffBars, stackBars, anomalyBars, attachBars, breakBars, equipmentIconResolver)
         return { ...adapted, hitEffects, actionBars }
     })
 
