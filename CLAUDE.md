@@ -228,6 +228,19 @@ npx vitest@4.0.17 run src/simulation/v2/     # 运行指定目录
 - UI: playhead 旁显示圆形头像 + SVG 倒计时环
 - 21/25 角色已配置触发条件（EMBER/CATCHER/SNOWSHINE/ROSSI 未配置）
 
+### 时间轴行布局
+
+每条干员轨 (`.track-row`) 由三段构成:
+- **技能轴** (`.track-lane`, 固定 50px + 2px 封底): 技能方块 + 主控黄色上描边 + 主控 CD 紫色上描边 + 充能曲线 SVG + 主控切换 handle；所有原 state-sub-track 的元素已合并于此 (2026-04-18 重构)
+- **连携技 CD 间隙** (`--track-cd-gap`, 30px): 预留给未来的连携技 CD 条
+- **自身 Buff 行** (`.self-buff-track`, 动态高度): 每轨独立，高度 = `lane数 × 24 + 4`，lane 由 `_assignLanes` 按 startTime 无冲突分配；**不继承** track-lane 的 tick 背景
+
+Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
+- **展开** (`selfBuffExpanded=true`): 显示全部 buff
+- **折叠** (默认): 仅显示已 pin 的 buff；pin key = `buffId || name`，**按 buff 类型 pin**（同 buff 所有实例一起被 pin）
+- localStorage: `endaxis_self_buff_expanded` / `endaxis_pinned_buffs`
+- Pin 交互 (Alt+Click / 详情面板开关) 待做，参见 `project_ult_charge_full_effect.md` 之外的 P2-3 队列
+
 ### 伤害计算页面
 
 路由 `/damage`，竖向时间线 + 右侧详情面板。详见 `reports/damage-calc-page-2026-04-16.md`。
