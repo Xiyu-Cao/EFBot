@@ -743,6 +743,8 @@ function getConsumeIcon(status) {
 }
 
 // ── Merged buff bars: self-buff (StackBuffBar) + weapon-status (BuffStatus) ──
+// Each track's bars are sorted + lane-assigned so expanded mode can stack
+// non-overlapping buffs on lane 0 while overlapping ones fall to lane 1/2/...
 const mergedBuffsByTrack = computed(() => {
   const map = new Map()
   // 1. Self-buff bars from V2 projections (already in SelfBuffBar format)
@@ -766,22 +768,71 @@ const mergedBuffsByTrack = computed(() => {
     const displayIcon = getBuffDisplayIcon(status)
     arr.push({
       id: status.id,
+      buffId: status.buffId || status.id,
       type: status.type || 'buff',
       name: status.name || '',
       icon: displayIcon,
       stackIcon: displayIcon,
       startTime: status.startTime,
       endTime,
+      duration: status.duration || 0,
       stacks: status.stacks || 1,
       maxStacks: status.maxStacks || 0,
       color: status.color || '#52c41a',
     })
     map.set(status.trackId, arr)
   })
-  // Sort each track's bars by startTime
-  map.forEach(arr => arr.sort((a, b) => a.startTime - b.startTime))
-  return map
+  // Lane-assign and sort per track
+  const out = new Map()
+  for (const [trackId, bars] of map) {
+    // _assignLanes expects startTime + duration; synthesize duration when only
+    // endTime is present (V2 self-buffs).
+    const withDur = bars.map(b => ({
+      ...b,
+      duration: Number.isFinite(b.duration) && b.duration > 0
+        ? b.duration
+        : Math.max(0, (b.endTime || 0) - (b.startTime || 0)),
+    }))
+    out.set(trackId, _assignLanes(withDur))
+  }
+  return out
 })
+
+// Pin key: buffId (stable across simulations) with name fallback for legacy bars
+function getBuffPinKey(bar) {
+  return bar.buffId || bar.name || ''
+}
+function isBuffPinned(bar) {
+  const key = getBuffPinKey(bar)
+  return !!key && store.pinnedBuffKeys.has(key)
+}
+
+// Visible buffs per track, filtered by expand/collapse mode
+const visibleBuffsByTrack = computed(() => {
+  const src = mergedBuffsByTrack.value
+  if (store.selfBuffExpanded) return src
+  const out = new Map()
+  for (const [trackId, bars] of src) {
+    out.set(trackId, bars.filter(isBuffPinned))
+  }
+  return out
+})
+
+// Dynamic per-track self-buff row height
+const SELF_BUFF_LANE_HEIGHT = 24
+const SELF_BUFF_LANE_PAD = 4
+function getSelfBuffRowHeight(trackId) {
+  const bars = visibleBuffsByTrack.value.get(trackId) || []
+  if (bars.length === 0) return 0
+  const maxLane = bars.reduce((m, b) => Math.max(m, b._lane || 0), 0)
+  return (maxLane + 1) * SELF_BUFF_LANE_HEIGHT + SELF_BUFF_LANE_PAD
+}
+function getSelfBuffItemLaneStyle(bar) {
+  return {
+    left: `${store.timeToPx(bar.startTime)}px`,
+    top: `${(bar._lane || 0) * SELF_BUFF_LANE_HEIGHT + 2}px`,
+  }
+}
 
 function getWeaponStatusLeft(status) {
   const start = Number(status.startTime) || 0
@@ -916,7 +967,7 @@ function handleWeaponStatusDrop(statusId) {
 // State Sub-Track (gauge + active operator)
 // ===================================================================================
 
-const SUB_TRACK_HEIGHT = 24
+const GAUGE_HEIGHT = TRACK_HEIGHT
 
 function getActiveOpSegStyle(seg, trackId) {
   const left = store.timeToPx(seg.start)
@@ -1011,7 +1062,7 @@ function getSubTrackGaugePath(trackId) {
   return points.map(p => {
     const x = store.timeToPx(p.time)
     const ratio = Math.min(p.ratio, 1.0)
-    const y = SUB_TRACK_HEIGHT - (ratio * (SUB_TRACK_HEIGHT - 4)) - 2
+    const y = GAUGE_HEIGHT - (ratio * (GAUGE_HEIGHT - 4)) - 2
     return `${x},${y}`
   }).join(' ')
 }
@@ -1022,11 +1073,11 @@ function getSubTrackGaugeArea(trackId) {
   const pointsStr = points.map(p => {
     const x = store.timeToPx(p.time)
     const ratio = Math.min(p.ratio, 1.0)
-    const y = SUB_TRACK_HEIGHT - (ratio * (SUB_TRACK_HEIGHT - 4)) - 2
+    const y = GAUGE_HEIGHT - (ratio * (GAUGE_HEIGHT - 4)) - 2
     return `${x},${y}`
   }).join(' ')
   const lastX = store.timeToPx(points[points.length - 1].time)
-  return `0,${SUB_TRACK_HEIGHT} ${pointsStr} ${lastX},${SUB_TRACK_HEIGHT}`
+  return `0,${GAUGE_HEIGHT} ${pointsStr} ${lastX},${GAUGE_HEIGHT}`
 }
 
 // ===================================================================================
@@ -2410,6 +2461,16 @@ onUnmounted(() => {
             </svg>
           </button>
 
+          <!-- Self-buff expand/collapse. Collapsed = only pinned buffs shown. -->
+          <button class="mini-tool-btn" :class="{ 'is-active': store.selfBuffExpanded }" @click="store.toggleSelfBuffExpanded" :title="store.selfBuffExpanded ? '自身 Buff：展开（点击折叠，仅显示标记过的 buff）' : '自身 Buff：折叠（点击展开，显示全部 buff）'">
+            <svg v-if="store.selfBuffExpanded" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 15 12 9 18 15"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
         </div>
         
         <div class="corner-zoom-row">
@@ -2793,7 +2854,41 @@ onUnmounted(() => {
 
           <div v-for="(track, index) in store.tracks" :key="index" class="track-row" :id="`track-row-${index}`" :style="{ '--track-height': `${TRACK_HEIGHT}px` }"
                :class="{ 'is-active-drop': track.id === store.activeTrackId,'is-last-track': index === store.tracks.length - 1 }" @dragover="onTrackDragOver" @drop="onTrackDrop(track, $event)">
-            <div class="track-lane" :style="getTrackLaneStyle" ref="trackLaneRefs" :data-track-index="index" :data-track-id="track.id">
+            <div class="track-lane" :style="getTrackLaneStyle" ref="trackLaneRefs" :data-track-index="index" :data-track-id="track.id"
+                 @dragover="onGaugeDragOver" @drop="onGaugeDrop(track, $event)">
+              <!-- BG layer 0: active operator tint -->
+              <template v-if="track.id">
+                <div v-for="(seg, si) in store.activeOperatorSegmentsByTrack.get(track.id) || []"
+                     :key="'opseg_' + si"
+                     class="active-op-segment"
+                     :style="getActiveOpSegStyle(seg, track.id)">
+                </div>
+              </template>
+              <!-- BG layer 1: ultimate gauge (behind actions) -->
+              <svg v-if="track.id" class="sub-track-gauge-svg" :height="GAUGE_HEIGHT" :width="store.totalTimelineWidthPx">
+                <defs>
+                  <linearGradient :id="`sub-gauge-grad-${track.id}`" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" :stop-color="getSubTrackGaugeColor(track.id)" stop-opacity="0.35" />
+                    <stop offset="100%" :stop-color="getSubTrackGaugeColor(track.id)" stop-opacity="0.05" />
+                  </linearGradient>
+                </defs>
+                <polygon :points="getSubTrackGaugeArea(track.id)" :fill="`url(#sub-gauge-grad-${track.id})`" />
+                <polyline :points="getSubTrackGaugePath(track.id)" fill="none"
+                          :stroke="getSubTrackGaugeColor(track.id)" stroke-width="1.5"
+                          stroke-opacity="0.7" stroke-linejoin="round" />
+              </svg>
+              <!-- BG layer 2: main control segment borders (yellow=active main, purple=locked) -->
+              <template v-if="track.id">
+                <div v-for="(seg, si) in store.computedMainControlSegments.get(track.id) || []"
+                     :key="'mc_' + si"
+                     class="main-control-overlay"
+                     :style="getMainControlSegStyle(seg)"
+                     title="主控"></div>
+                <div v-for="cd in store.computedMainControlCooldowns.get(track.id) || []"
+                     :key="'mccd_' + cd.start"
+                     class="main-control-cd-bar"
+                     :style="getMcCdBarStyle(cd)"></div>
+              </template>
               <div class="actions-container">
                 <ActionItem v-memo="[action]" v-for="action in track.actions" :key="action.instanceId" :action="action"
                   @mousedown="onActionMouseDown($event, track, action)"
@@ -2803,6 +2898,15 @@ onUnmounted(() => {
                   :class="{ 'is-moving': isDragStarted && store.isActionSelected(action.instanceId) }"
                 />
               </div>
+              <!-- FG layer: main control handle (draggable switch point) -->
+              <template v-if="track.id">
+                <div v-for="ev in store.mainControlEvents.filter(e => e.trackId === track.id)"
+                     :key="'mch_' + ev.id"
+                     class="main-control-handle"
+                     :class="{ 'main-control-handle--selected': store.selectedMcEventId === ev.id }"
+                     :style="getMcHandlePreviewStyle(ev)"
+                     @mousedown.stop="onMcHandleMouseDown($event, ev, track.id)"></div>
+              </template>
               <div class="switch-marker-layer">
                 <div v-for="sw in store.switchEvents.filter(s => s.characterId === track.id)"
                      :key="sw.id"
@@ -2818,14 +2922,14 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div v-if="track.id" class="self-buff-track" :style="getTrackLaneStyle">
+            <div v-if="track.id && getSelfBuffRowHeight(track.id) > 0" class="self-buff-track" :style="{ width: store.totalTimelineWidthPx + 'px', height: getSelfBuffRowHeight(track.id) + 'px' }">
               <div class="self-buff-layer">
                 <div
-                  v-for="bar in mergedBuffsByTrack.get(track.id) || []"
+                  v-for="bar in visibleBuffsByTrack.get(track.id) || []"
                   :key="bar.id"
                   class="self-buff-item"
-                  :class="{ 'is-selected-buff': selectedBuffData?.id === bar.id }"
-                  :style="getSelfBuffItemStyle(bar)"
+                  :class="{ 'is-selected-buff': selectedBuffData?.id === bar.id, 'is-pinned': isBuffPinned(bar) }"
+                  :style="getSelfBuffItemLaneStyle(bar)"
                   :title="`${bar.name}${bar.stacks > 1 ? ' ×' + bar.stacks : ''}`"
                   @click.stop="selectBuff(bar, track.id)"
                 >
@@ -2837,41 +2941,6 @@ onUnmounted(() => {
                   <div class="self-buff-bar" :style="{ backgroundColor: bar.color || '#999', width: getSelfBuffBarWidth(bar) + 'px' }"></div>
                 </div>
               </div>
-            </div>
-            <div v-if="track.id" class="state-sub-track" :style="getTrackLaneStyle"
-                 @dragover="onGaugeDragOver" @drop="onGaugeDrop(track, $event)">
-              <div v-for="(seg, si) in store.computedMainControlSegments.get(track.id) || []"
-                   :key="'mc_' + si"
-                   class="main-control-overlay"
-                   :style="getMainControlSegStyle(seg)"
-                   title="主控"></div>
-              <div v-for="cd in store.computedMainControlCooldowns.get(track.id) || []"
-                   :key="'mccd_' + cd.start"
-                   class="main-control-cd-bar"
-                   :style="getMcCdBarStyle(cd)"></div>
-              <div v-for="ev in store.mainControlEvents.filter(e => e.trackId === track.id)"
-                   :key="'mch_' + ev.id"
-                   class="main-control-handle"
-                   :class="{ 'main-control-handle--selected': store.selectedMcEventId === ev.id }"
-                   :style="getMcHandlePreviewStyle(ev)"
-                   @mousedown.stop="onMcHandleMouseDown($event, ev, track.id)"></div>
-              <div v-for="(seg, si) in store.activeOperatorSegmentsByTrack.get(track.id) || []"
-                   :key="'opseg_' + si"
-                   class="active-op-segment"
-                   :style="getActiveOpSegStyle(seg, track.id)">
-              </div>
-              <svg class="sub-track-gauge-svg" :height="SUB_TRACK_HEIGHT" :width="store.totalTimelineWidthPx">
-                <defs>
-                  <linearGradient :id="`sub-gauge-grad-${track.id}`" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" :stop-color="getSubTrackGaugeColor(track.id)" stop-opacity="0.35" />
-                    <stop offset="100%" :stop-color="getSubTrackGaugeColor(track.id)" stop-opacity="0.05" />
-                  </linearGradient>
-                </defs>
-                <polygon :points="getSubTrackGaugeArea(track.id)" :fill="`url(#sub-gauge-grad-${track.id})`" />
-                <polyline :points="getSubTrackGaugePath(track.id)" fill="none"
-                          :stroke="getSubTrackGaugeColor(track.id)" stroke-width="1.5"
-                          stroke-opacity="0.7" stroke-linejoin="round" />
-              </svg>
             </div>
           </div>
 
@@ -4108,16 +4177,17 @@ body.capture-mode .davinci-range {
    ========================================================================== */
 .track-row {
   --track-height: 50px;
+  --track-cd-gap: 30px;
   position: relative;
   flex: 1;
   min-height: var(--track-height);
   padding-top: 30px;
-  padding-bottom: 60px;
+  padding-bottom: 14px;
   width: fit-content;
   min-width: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -4129,9 +4199,12 @@ body.capture-mode .davinci-range {
   position: relative;
   height: var(--track-height);
   display: flex;
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
   border-top: 2px solid transparent;
-  border-bottom: 2px solid transparent;
+  /* Bottom closure: keeps the skill track visually enclosed. Link-skill CD
+     row will live in the gap below (reserved via margin-bottom). */
+  border-bottom: 2px solid rgba(255, 255, 255, 0.18);
+  margin-bottom: var(--track-cd-gap);
 }
 
 .track-row.is-active-drop .track-lane {
@@ -4787,17 +4860,16 @@ body.capture-mode .davinci-range {
   pointer-events: none;
 }
 
-/* ---- State Sub-Track (gauge + active operator) ---- */
-
+/* Self-buff row: normal flow (below track-lane), dynamic height driven by
+   lane count. Transparent background — buff items render directly over the
+   timeline grid. */
 .self-buff-track {
-  position: absolute;
+  position: relative;
   left: 0;
-  bottom: 28px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+  width: 100%;
+  background: transparent;
+  border: none;
+  overflow: visible;
 }
 
 .self-buff-layer {
@@ -4808,7 +4880,6 @@ body.capture-mode .davinci-range {
 
 .self-buff-item {
   position: absolute;
-  top: 2px;
   height: 20px;
   display: flex;
   align-items: center;
@@ -4901,40 +4972,30 @@ body.capture-mode .davinci-range {
   pointer-events: none;
 }
 
-.state-sub-track {
-  position: absolute;
-  left: 0;
-  bottom: 2px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  pointer-events: auto;
-  overflow: hidden;
-}
-
+/* Main control segment: yellow top border on track-lane (active main control period).
+   Bottom edge is kept clean so hit markers and other per-action info remain readable. */
 .main-control-overlay {
   position: absolute;
   top: 0;
-  height: 100%;
-  background: rgba(160, 160, 160, 0.2);
-  border-left: 1px solid rgba(200, 200, 200, 0.35);
-  border-right: 1px solid rgba(200, 200, 200, 0.35);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.main-control-cd-bar {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  background: rgba(160, 80, 220, 0.25);
-  border-left: 1px solid rgba(180, 100, 240, 0.5);
-  border-right: 1px solid rgba(180, 100, 240, 0.5);
+  bottom: 0;
+  background: transparent;
+  border-top: 2px solid rgba(255, 204, 64, 0.9);
   pointer-events: none;
   z-index: 2;
 }
 
+/* Main control cooldown: purple top border (cannot switch to main control, but other skills usable) */
+.main-control-cd-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: transparent;
+  border-top: 2px solid rgba(180, 100, 240, 0.75);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Main control switch handle: full track-lane height, draggable */
 .main-control-handle {
   position: absolute;
   top: 0;
@@ -4943,7 +5004,7 @@ body.capture-mode .davinci-range {
   background: rgba(180, 180, 180, 0.9);
   transform: translateX(-4px);
   cursor: ew-resize;
-  z-index: 3;
+  z-index: 20;
   border-radius: 1px;
 }
 
@@ -4952,37 +5013,25 @@ body.capture-mode .davinci-range {
   box-shadow: 0 0 0 1px rgba(160, 160, 255, 0.9);
 }
 
+/* Active operator tint: faint character-colored bg in track-lane */
 .active-op-segment {
   position: absolute;
   top: 0;
   height: 100%;
-  opacity: 0.12;
+  opacity: 0.08;
   border-radius: 1px;
   pointer-events: none;
+  z-index: 0;
 }
 
+/* Ultimate gauge SVG: behind actions, above active-op tint */
 .sub-track-gauge-svg {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
   overflow: visible;
-}
-
-.state-sub-track-label {
-  position: absolute;
-  bottom: 2px;
-  left: 4px;
-  right: 0;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 9px;
-  color: #666;
-  letter-spacing: 0.3px;
-  user-select: none;
-  pointer-events: none;
+  z-index: 1;
 }
 
 /* ---- Summary Track Rows (Team Buff / Debuff) ---- */

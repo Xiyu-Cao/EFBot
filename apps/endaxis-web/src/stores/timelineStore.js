@@ -1171,6 +1171,59 @@ export const useTimelineStore = defineStore('timeline', () => {
         setBuffIconMode(buffIconMode.value === 'actor' ? 'skill' : 'actor')
     }
 
+    // Self-buff expand / collapse. Collapsed only shows buffs whose type is
+    // pinned (by buffId or name). Expanded shows all buffs, track heights
+    // grow dynamically per lane count. Persisted via localStorage.
+    const SELF_BUFF_EXPANDED_KEY = 'endaxis_self_buff_expanded'
+    const selfBuffExpanded = ref(
+        (typeof localStorage !== 'undefined' && localStorage.getItem(SELF_BUFF_EXPANDED_KEY)) === 'true'
+    )
+    function setSelfBuffExpanded(v) {
+        selfBuffExpanded.value = !!v
+        try { localStorage.setItem(SELF_BUFF_EXPANDED_KEY, String(selfBuffExpanded.value)) } catch (_) { /* storage unavailable */ }
+    }
+    function toggleSelfBuffExpanded() {
+        setSelfBuffExpanded(!selfBuffExpanded.value)
+    }
+
+    // Pinned buff types. Keyed by buffId (fallback to display name). Pinning
+    // a buff type pins ALL instances of that buff across all tracks and
+    // simulations — semantics decided with the user 2026-04-18.
+    const PINNED_BUFFS_KEY = 'endaxis_pinned_buffs'
+    const pinnedBuffKeys = ref(new Set(
+        (() => {
+            try {
+                const raw = localStorage.getItem(PINNED_BUFFS_KEY)
+                if (!raw) return []
+                const arr = JSON.parse(raw)
+                return Array.isArray(arr) ? arr : []
+            } catch (_) { return [] }
+        })()
+    ))
+    function _persistPinnedBuffs() {
+        try { localStorage.setItem(PINNED_BUFFS_KEY, JSON.stringify(Array.from(pinnedBuffKeys.value))) } catch (_) { /* storage unavailable */ }
+    }
+    function pinBuff(key) {
+        if (!key) return
+        if (!pinnedBuffKeys.value.has(key)) {
+            pinnedBuffKeys.value = new Set([...pinnedBuffKeys.value, key])
+            _persistPinnedBuffs()
+        }
+    }
+    function unpinBuff(key) {
+        if (!key) return
+        if (pinnedBuffKeys.value.has(key)) {
+            const next = new Set(pinnedBuffKeys.value)
+            next.delete(key)
+            pinnedBuffKeys.value = next
+            _persistPinnedBuffs()
+        }
+    }
+    function togglePinBuff(key) {
+        if (!key) return
+        pinnedBuffKeys.value.has(key) ? unpinBuff(key) : pinBuff(key)
+    }
+
     const draggingSkillData = ref(null)
 
     const selectedConnectionId = ref(null)
@@ -8117,6 +8170,8 @@ export const useTimelineStore = defineStore('timeline', () => {
         updateTrackWeaponTier, syncAllWeaponModifiers, getModifierLabel,
         removeConnection, updateConnection, updateConnectionPort, getColor, toggleCursorGuide, toggleBoxSelectMode, setCursorPosition, toggleSnapStep, nudgeSelection,
         buffIconMode, setBuffIconMode, toggleBuffIconMode,
+        selfBuffExpanded, setSelfBuffExpanded, toggleSelfBuffExpanded,
+        pinnedBuffKeys, pinBuff, unpinBuff, togglePinBuff,
         setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection, undo, redo, commitState,
         removeAnomaly, initAutoSave, loadFromBrowser, resetProject, selectedConnectionId, selectConnection, selectAnomaly,
         alignActionToTarget, moveTrack,
