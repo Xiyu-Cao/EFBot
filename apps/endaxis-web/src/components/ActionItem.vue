@@ -5,7 +5,8 @@ import { useDragConnection } from '../composables/useDragConnection.js'
 import ActionLinkPorts from './ActionLinkPorts.vue'
 import { getRectPos } from '@/utils/layoutUtils.js'
 import { useI18n } from 'vue-i18n'
-import { getBuffIcon } from '@/simulation/data/buffMetadata'
+import { getBuffIcon, resolveBuffIcon } from '@/simulation/data/buffMetadata'
+import { resolveSourceIcons } from '@/simulation/v2/sourceIconResolver'
 
 const props = defineProps({
   action: { type: Object, required: true },
@@ -64,11 +65,26 @@ const triggerHitTicks = computed(() => {
   return hitEffectsForAction.value.filter(h => h.isTriggerHit)
 })
 
-// Resolve effect icon from buffMetadata or iconDatabase
-function getEffectIcon(effectType) {
-  const fromMeta = getBuffIcon(effectType)
-  if (fromMeta) return fromMeta
-  return store.iconDatabase?.[effectType] || ''
+// Resolve the hit-effect marker icon with the same fallback chain used by the
+// V2 buff bars (explicit metadata → iconDatabase → stat+zone fallback →
+// per-source icon matching the current 按角色 / 按技能 mode).
+function getEffectIcon(fx) {
+  // Back-compat: accept a raw string for callers that don't have the marker.
+  if (typeof fx === 'string') {
+    return getBuffIcon(fx) || store.iconDatabase?.[fx] || ''
+  }
+  if (!fx) return ''
+  const direct = getBuffIcon(fx.effectType) || store.iconDatabase?.[fx.effectType]
+  if (direct) return direct
+  const statZone = resolveBuffIcon(fx.effectType, fx.stat, fx.zone)
+  if (statZone) return statZone
+  if (fx.sourceRef) {
+    const srcIcons = resolveSourceIcons(fx.sourceRef, fx.sourceId || '')
+    return store.buffIconMode === 'actor'
+      ? (srcIcons.actorIcon || srcIcons.skillIcon)
+      : (srcIcons.skillIcon || srcIcons.actorIcon)
+  }
+  return ''
 }
 
 // V1 legality removed — V2 kernel handles validation
@@ -659,7 +675,7 @@ function handleEffectDrop(effectId) {
            :style="{ left: `${store.timeToPx(fx.time) - store.timeToPx(action.startTime)}px`, bottom: `calc(100% + ${fx.stackIndex * 18 + 2}px)` }"
            :title="fx.name">
         <div class="hit-effect-icon" :style="{ borderColor: store.getColor(fx.element) || '#999' }">
-          <img v-if="getEffectIcon(fx.effectType)" :src="getEffectIcon(fx.effectType)" @error="e=>e.target.style.display='none'" />
+          <img v-if="getEffectIcon(fx)" :src="getEffectIcon(fx)" @error="e=>e.target.style.display='none'" />
           <span v-else class="hit-effect-letter">{{ fx.name?.charAt(0) || '?' }}</span>
         </div>
       </div>

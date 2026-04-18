@@ -643,6 +643,13 @@ export interface HitEffectMarker {
   element?: DamageElement | string;
   /** Whether this is a trigger-produced extra hit */
   isTriggerHit?: boolean;
+  /** Buff stat / zone — used by the UI's (stat+zone) icon fallback when the
+   *  marker originates from a `buff_apply` without explicit buffMetadata. */
+  stat?: string;
+  zone?: string;
+  /** Trigger source ref — lets the UI render the source icon (weapon / talent /
+   *  skill / equipment) matching the current 按技能 / 按角色 display mode. */
+  sourceRef?: TriggerSourceRef;
 }
 
 /**
@@ -677,6 +684,9 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
           effectType: be.buffId,
           name: be.buffName,
           element: be.target === "enemy" ? undefined : undefined,
+          stat: be.stat,
+          zone: be.zone,
+          sourceRef: be.sourceRef,
         });
         break;
       }
