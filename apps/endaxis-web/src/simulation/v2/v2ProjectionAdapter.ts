@@ -81,6 +81,8 @@ export function adaptBuffBars(
       skillIcon: sourceIcons.skillIcon,
       actorIcon: sourceIcons.actorIcon,
       sourceLabel: sourceIcons.label,
+      stat: bar.stat,
+      zone: bar.zone,
     };
 
     const buffColor = resolveBuffColor(bar.buffId);

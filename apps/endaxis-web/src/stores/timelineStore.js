@@ -1156,6 +1156,21 @@ export const useTimelineStore = defineStore('timeline', () => {
     const cursorPosition = ref({ x: 0, y: 0 })
     const snapStep = ref(0.1)
 
+    // Buff icon display mode — "actor" shows character avatars, "skill" shows
+    // skill/talent/weapon/equipment icons. Persisted via localStorage.
+    const BUFF_ICON_MODE_KEY = 'endaxis_buff_icon_mode'
+    const buffIconMode = ref(
+        (typeof localStorage !== 'undefined' && localStorage.getItem(BUFF_ICON_MODE_KEY)) === 'skill'
+            ? 'skill' : 'actor'
+    )
+    function setBuffIconMode(mode) {
+        buffIconMode.value = mode === 'skill' ? 'skill' : 'actor'
+        try { localStorage.setItem(BUFF_ICON_MODE_KEY, buffIconMode.value) } catch (_) { /* storage unavailable */ }
+    }
+    function toggleBuffIconMode() {
+        setBuffIconMode(buffIconMode.value === 'actor' ? 'skill' : 'actor')
+    }
+
     const draggingSkillData = ref(null)
 
     const selectedConnectionId = ref(null)
@@ -8101,6 +8116,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         addSkillToTrack, setDraggingSkill, setTimelineShift, setScrollTop, setTimelineRect, setTrackLaneRect, setNodeRect, calculateGlobalSpData, calculateGaugeData, getTrackGaugeMax, calculateGlobalStaggerData, updateTrackInitialGauge, updateTrackMaxGauge, updateTrackOriginiumArtsPower, updateTrackLinkCdReduction, updateTrackWeapon,
         updateTrackWeaponTier, syncAllWeaponModifiers, getModifierLabel,
         removeConnection, updateConnection, updateConnectionPort, getColor, toggleCursorGuide, toggleBoxSelectMode, setCursorPosition, toggleSnapStep, nudgeSelection,
+        buffIconMode, setBuffIconMode, toggleBuffIconMode,
         setMultiSelection, clearSelection, copySelection, pasteSelection, removeCurrentSelection, undo, redo, commitState,
         removeAnomaly, initAutoSave, loadFromBrowser, resetProject, selectedConnectionId, selectConnection, selectAnomaly,
         alignActionToTarget, moveTrack,

@@ -78,6 +78,50 @@ const selectedWeaponStatus = computed(() => {
   return store.weaponStatuses.find(s => s.id === store.selectedWeaponStatusId) || null
 })
 const isWeaponStatusMode = computed(() => !!selectedWeaponStatus.value)
+
+// V2 buff detail selection — searches all adapted buff pools.
+const selectedV2Buff = computed(() => {
+  const id = store.selectedWeaponStatusId
+  if (!id) return null
+  const pools = [
+    store.effectiveWeaponStatuses || [],
+    store.effectiveTeamBuffStatuses || [],
+    store.effectiveDebuffStatuses || [],
+  ]
+  for (const pool of pools) {
+    const found = pool.find(s => s.id === id)
+    if (found) return found
+  }
+  return null
+})
+const isV2BuffMode = computed(() => !!selectedV2Buff.value)
+
+// Format stat/zone into Chinese label for the detail panel.
+const STAT_LABELS = {
+  attack: '攻击力', attack_percent: '攻击力',
+  physical_dmg: '物理伤害', blaze_dmg: '灼热伤害', cold_dmg: '寒冷伤害', emag_dmg: '电磁伤害',
+  nature_dmg: '自然伤害', arts_dmg: '法术伤害', all_dmg: '所有伤害',
+  attack_dmg_bonus: '普攻增伤', skill_dmg_bonus: '战技增伤', link_dmg_bonus: '连携增伤',
+  ultimate_dmg_bonus: '终结增伤', all_skill_dmg_bonus: '技能增伤',
+  crit_rate: '暴击率', crit_damage: '暴击伤害',
+  originium_arts_power: '源石技艺强度',
+  primary_ability: '主属性', secondary_ability: '副属性',
+}
+const ZONE_LABELS = {
+  attackPercent: '攻击力区', dmgBonus: '增伤区',
+  fragility: '脆弱区', vulnerability: '易伤区',
+  additive: '加算', amplify: '放大',
+}
+function formatBuffEffect(status) {
+  if (!status) return ''
+  const sraw = status._stat || status.stat
+  const zraw = status._zone || status.zone
+  // stat / zone aren't exposed on BuffStatus currently — fall back to icon text.
+  if (!sraw) return status.name || ''
+  const sLabel = STAT_LABELS[sraw] || sraw
+  const zLabel = ZONE_LABELS[zraw] || zraw || ''
+  return `${sLabel}${zLabel ? `（${zLabel}）` : ''}`
+}
 const isSetLibraryMode = computed(() => store.selectedLibrarySource === 'set')
 const activeLibraryList = computed(() => {
   if (store.selectedLibrarySource === 'weapon') return store.activeWeaponSkillLibrary
@@ -746,16 +790,18 @@ function handleStartConnection(id, type = null) {
       </div>
     </template>
 
-    <!-- Buff detail view (shown when a buff is selected) -->
-    <template v-else-if="selectedBuffData && !targetData">
+    <!-- Buff detail view (shown when a V2 buff is selected in the timeline) -->
+    <template v-else-if="isV2BuffMode">
       <div class="panel-header">
         <div class="header-main-row">
           <div class="left-group">
             <div class="header-icon-bar" style="background: #ffa940;"></div>
-            <h3 class="char-name">{{ selectedBuffData.name || 'Buff' }}</h3>
+            <h3 class="char-name">{{ selectedV2Buff.name || 'Buff' }}</h3>
           </div>
           <div class="right-group">
-            <div class="skill-type-minimal" style="color: #ffa940;">自身增益</div>
+            <div class="skill-type-minimal" style="color: #ffa940;">
+              {{ selectedV2Buff.type === 'debuff' ? '敌方减益' : selectedV2Buff.type === 'team_buff' ? '团队增益' : '增益' }}
+            </div>
           </div>
         </div>
         <div class="header-divider"></div>
@@ -763,31 +809,33 @@ function handleStartConnection(id, type = null) {
       <div class="scrollable-content">
         <div class="section-container tech-style">
           <div class="buff-detail-section">
+            <!-- Top row: both icons side by side (skill / actor) and buff name. -->
             <div class="buff-detail-icon-row">
-              <img v-if="selectedBuffData.icon" :src="selectedBuffData.icon" class="buff-detail-icon" @error="e=>e.target.style.display='none'" />
-              <div class="buff-detail-name">{{ selectedBuffData.name }}</div>
-              <span v-if="selectedBuffData.stacks > 1" class="buff-detail-stacks">×{{ selectedBuffData.stacks }}</span>
+              <img v-if="selectedV2Buff.skillIcon" :src="selectedV2Buff.skillIcon" class="buff-detail-icon" @error="e=>e.target.style.display='none'" :title="'按技能：' + (selectedV2Buff.sourceLabel || '')" />
+              <img v-if="selectedV2Buff.actorIcon && selectedV2Buff.actorIcon !== selectedV2Buff.skillIcon" :src="selectedV2Buff.actorIcon" class="buff-detail-icon buff-detail-icon--small" @error="e=>e.target.style.display='none'" title="按角色" />
+              <div class="buff-detail-name">{{ selectedV2Buff.name }}</div>
+              <span v-if="selectedV2Buff.stacks > 1" class="buff-detail-stacks">×{{ selectedV2Buff.stacks }}</span>
             </div>
-            <div class="buff-detail-row">
+            <div class="buff-detail-row" v-if="selectedV2Buff.sourceLabel">
               <span class="buff-detail-label">来源</span>
-              <span class="buff-detail-value">{{ selectedBuffData.sourceTrackId }}</span>
+              <span class="buff-detail-value">{{ selectedV2Buff.sourceLabel }}</span>
+            </div>
+            <div class="buff-detail-row" v-if="selectedV2Buff.stat || selectedV2Buff.zone">
+              <span class="buff-detail-label">效果</span>
+              <span class="buff-detail-value">{{ formatBuffEffect(selectedV2Buff) }}</span>
             </div>
             <div class="buff-detail-row">
-              <span class="buff-detail-label">类型</span>
-              <span class="buff-detail-value">{{ selectedBuffData.type }}</span>
+              <span class="buff-detail-label">起止</span>
+              <span class="buff-detail-value">{{ store.formatTimeLabel?.(selectedV2Buff.startTime) || selectedV2Buff.startTime?.toFixed(2) }}s → {{ store.formatTimeLabel?.((selectedV2Buff.startTime || 0) + (selectedV2Buff.duration || 0)) || ((selectedV2Buff.startTime || 0) + (selectedV2Buff.duration || 0)).toFixed(2) }}s</span>
             </div>
-            <div class="buff-detail-row">
-              <span class="buff-detail-label">时间</span>
-              <span class="buff-detail-value">{{ store.formatTimeLabel?.(selectedBuffData.startTime) || selectedBuffData.startTime?.toFixed(2) }}s → {{ store.formatTimeLabel?.(selectedBuffData.endTime) || selectedBuffData.endTime?.toFixed(2) }}s</span>
+            <div class="buff-detail-row" v-if="selectedV2Buff.duration != null">
+              <span class="buff-detail-label">持续</span>
+              <span class="buff-detail-value">{{ selectedV2Buff.duration.toFixed(2) }}s</span>
             </div>
-            <div class="buff-detail-row" v-if="selectedBuffData.stacks > 1">
+            <div class="buff-detail-row" v-if="selectedV2Buff.stacks > 1">
               <span class="buff-detail-label">层数</span>
-              <span class="buff-detail-value">{{ selectedBuffData.stacks }}</span>
+              <span class="buff-detail-value">{{ selectedV2Buff.stacks }}</span>
             </div>
-            <div class="buff-detail-divider"></div>
-            <button class="buff-pin-btn" @click="togglePinBuff(selectedBuffData.id)">
-              {{ selectedBuffData.isPinned ? '📌 取消常显' : '📌 设为常显' }}
-            </button>
           </div>
         </div>
       </div>
@@ -1440,4 +1488,27 @@ function handleStartConnection(id, type = null) {
 }
 .pot-btn:hover:not(:disabled) { background: #444; border-color: #c9a80e; }
 .pot-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* V2 buff detail panel */
+.buff-detail-section { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+.buff-detail-icon-row {
+  display: flex; align-items: center; gap: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.buff-detail-icon {
+  width: 36px; height: 36px; border-radius: 4px; object-fit: contain;
+  background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12);
+}
+.buff-detail-icon--small { width: 28px; height: 28px; }
+.buff-detail-name { font-size: 14px; font-weight: 600; color: #fff; }
+.buff-detail-stacks {
+  font-size: 12px; color: #ffa940; font-weight: 600;
+  background: rgba(255,169,64,0.15); padding: 2px 6px; border-radius: 3px;
+}
+.buff-detail-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 3px 0; font-size: 12px;
+}
+.buff-detail-label { color: #888; }
+.buff-detail-value { color: #eee; font-family: ui-monospace, monospace; font-size: 11.5px; }
 </style>

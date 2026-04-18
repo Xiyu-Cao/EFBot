@@ -784,6 +784,22 @@ function getWeaponStatusLeft(status) {
   return store.timeToPx(start)
 }
 
+/**
+ * Pick the icon to render for a buff status based on the current buff icon mode.
+ *  - V2 buffs produced from a trigger carry `actorIcon` (character portrait) and
+ *    `skillIcon` (talent / skill / weapon / equipment icon). The mode decides
+ *    which one wins; fall back to `icon` when the preferred slot is empty.
+ *  - Attach / anomaly / break bars don't carry actor/skill icons; they always
+ *    fall through to `icon` (kept as the in-game icon per user intent).
+ */
+function getBuffDisplayIcon(status) {
+  if (!status) return ''
+  const mode = store.buffIconMode
+  if (mode === 'skill' && status.skillIcon) return status.skillIcon
+  if (mode === 'actor' && status.actorIcon) return status.actorIcon
+  return status.icon || ''
+}
+
 function getWeaponStatusTiming(status) {
   const start = Number(status.startTime) || 0
   const rawDuration = Number(status.duration) || 0
@@ -2379,6 +2395,17 @@ onUnmounted(() => {
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M5 4h14c3 0 3 8 0 8h-14c-3 0-3 8 0 8h14" /><circle cx="5" cy="4" r="2" fill="currentColor"/><circle cx="19" cy="20" r="2" fill="currentColor"/></svg>
           </button>
 
+          <!-- Buff icon mode: actor portrait (default) vs skill/talent icon. -->
+          <button class="mini-tool-btn" :class="{ 'is-active': store.buffIconMode === 'skill' }" @click="store.toggleBuffIconMode" :title="store.buffIconMode === 'actor' ? 'Buff 图标：按角色（点击切换到按技能）' : 'Buff 图标：按技能（点击切换到按角色）'">
+            <svg v-if="store.buffIconMode === 'actor'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="8" r="4"/>
+              <path d="M4 21c0-4.5 3.5-8 8-8s8 3.5 8 8"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12,2 15,9 22,10 17,15 18.5,22 12,18.5 5.5,22 7,15 2,10 9,9"/>
+            </svg>
+          </button>
+
         </div>
         
         <div class="corner-zoom-row">
@@ -2851,7 +2878,7 @@ onUnmounted(() => {
                 :class="{ 'is-selected': status.id === store.selectedWeaponStatusId }"
                 :style="{ left: `${getWeaponStatusLeft(status)}px`, top: `${status._lane * LANE_HEIGHT + 4}px` }">
                 <div class="weapon-status-icon-box" @mousedown.stop="handleWeaponStatusIconMouseDown($event, status)">
-                  <img v-if="status.icon" :src="status.icon" @error="e=>e.target.style.display='none'" />
+                  <img v-if="getBuffDisplayIcon(status)" :src="getBuffDisplayIcon(status)" @error="e=>e.target.style.display='none'" />
                   <div v-if="getDebuffStackLabel(status)" class="debuff-stack-badge">{{ getDebuffStackLabel(status) }}</div>
                 </div>
                 <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)">
@@ -2872,7 +2899,7 @@ onUnmounted(() => {
               <div v-for="status in sortedPhysicalStatuses" :key="status.id" class="weapon-status-item"
                 :style="{ left: `${getWeaponStatusLeft(status)}px`, top: `${status._lane * LANE_HEIGHT + 4}px` }">
                 <div class="weapon-status-icon-box">
-                  <img v-if="status.icon" :src="status.icon" @error="e=>e.target.style.display='none'" />
+                  <img v-if="getBuffDisplayIcon(status)" :src="getBuffDisplayIcon(status)" @error="e=>e.target.style.display='none'" />
                   <div v-if="getDebuffStackLabel(status)" class="debuff-stack-badge">{{ getDebuffStackLabel(status) }}</div>
                 </div>
                 <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)">
@@ -2890,7 +2917,7 @@ onUnmounted(() => {
                 :class="{ 'is-selected': status.id === store.selectedWeaponStatusId }"
                 :style="{ left: `${getWeaponStatusLeft(status)}px`, top: `${status._lane * LANE_HEIGHT + 4}px` }">
                 <div class="weapon-status-icon-box" @mousedown.stop="handleWeaponStatusIconMouseDown($event, status)">
-                  <img v-if="status.icon" :src="status.icon" @error="e=>e.target.style.display='none'" />
+                  <img v-if="getBuffDisplayIcon(status)" :src="getBuffDisplayIcon(status)" @error="e=>e.target.style.display='none'" />
                 </div>
                 <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)">
                   <div class="striped-bg"></div>
@@ -2908,7 +2935,7 @@ onUnmounted(() => {
                 :class="{ 'is-selected': status.id === store.selectedWeaponStatusId }"
                 :style="{ left: `${getWeaponStatusLeft(status)}px`, top: `${status._lane * LANE_HEIGHT + 4}px` }">
                 <div class="weapon-status-icon-box" @mousedown.stop="handleWeaponStatusIconMouseDown($event, status)">
-                  <img v-if="status.icon" :src="status.icon" @error="e=>e.target.style.display='none'" />
+                  <img v-if="getBuffDisplayIcon(status)" :src="getBuffDisplayIcon(status)" @error="e=>e.target.style.display='none'" />
                   <div v-if="getDebuffStackLabel(status)" class="debuff-stack-badge">{{ getDebuffStackLabel(status) }}</div>
                 </div>
                 <div class="weapon-status-bar" :style="getWeaponStatusBarStyle(status)">

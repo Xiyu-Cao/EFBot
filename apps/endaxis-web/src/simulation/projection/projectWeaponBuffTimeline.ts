@@ -34,6 +34,9 @@ export interface BuffStatus {
   actorIcon?: string;
   /** Human-readable source label (for detail panel) — e.g. "黎风天赋·伏魔". */
   sourceLabel?: string;
+  /** Stat / zone of the buff (for detail panel). */
+  stat?: string;
+  zone?: string;
 }
 
 export interface ProjectedBuffTimelines {
