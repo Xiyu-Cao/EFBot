@@ -1274,6 +1274,30 @@ describe("V2 Buff source icons (actor / skill modes)", () => {
     );
     expect(icons.skillIcon).toBe("/equipment/phy01/mock_点剑.webp");
   });
+
+  it("hit.effect buff_apply (non-trigger) inherits sourceRef from the hit's skill type", () => {
+    // Simulates 管理员 连携技 apply 源石结晶 pattern: buff_apply in hit.effects.
+    const build = makePhysBuild();
+    const skill: Skill = {
+      id: "mock_link", type: "link", name: "mock link",
+      element: "physical", duration: 1.5, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "link" as const },
+          effects: [{ type: "buff_apply", params: { buffId: "mock_link_debuff", target: "enemy", duration: 20 } }],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const apply = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "mock_link_debuff") as any;
+    expect(apply).toBeTruthy();
+    // sourceRef should be inferred from the hit's skill type (link).
+    expect(apply.sourceRef).toEqual({ kind: "link", actorId: "PHYS" });
+  });
 });
 
 describe("V2 Buff icon fallback (stat+zone)", () => {

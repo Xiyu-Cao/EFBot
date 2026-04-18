@@ -1719,6 +1719,15 @@ export function simulate(
         // Determine target BuffManager(s).
         // stat/zone are carried on the event so the UI can fall back to a
         // generic (stat+zone)-based icon when buffMetadata has no explicit entry.
+        //
+        // sourceRef resolution:
+        //   1. If this is a trigger action, use the trigger's explicit sourceRef.
+        //   2. Otherwise (direct hit.effect), infer from the hit's skillType so
+        //      e.g. 连携技 施加的源石结晶 → kind:"link" / actorId:owning character.
+        const inferredSourceRef: TriggerSourceRef | undefined = triggerSourceRef
+          || (skillType === "skill" || skillType === "link" || skillType === "ultimate"
+              ? { kind: skillType, actorId }
+              : undefined);
         const targetStr = p.target || "self";
         if (targetStr === "enemy") {
           const result = enemy.buffManager.apply(buffDef, actorId, time);
@@ -1729,7 +1738,7 @@ export function simulate(
               stacks: enemy.buffManager.getStacks(p.buffId, time),
               duration, reason: "effect",
               stat: p.stat, zone: p.zone,
-              sourceRef: triggerSourceRef,
+              sourceRef: inferredSourceRef,
             });
             // Push trigger event for enemy buff application (used by weapons like 宏愿)
             hitTriggerEvents?.push({
@@ -1748,7 +1757,7 @@ export function simulate(
             buffId: p.buffId, buffName: p.buffId, target: targetStr as any,
             stacks: 1, duration, reason: "effect",
             stat: p.stat, zone: p.zone,
-            sourceRef: triggerSourceRef,
+            sourceRef: inferredSourceRef,
           });
         } else {
           // "self" / "mainControl" / "trigger_source" → apply to source actor
@@ -1761,7 +1770,7 @@ export function simulate(
               stacks: mgr.getStacks(p.buffId, time),
               duration, reason: "effect",
               stat: p.stat, zone: p.zone,
-              sourceRef: triggerSourceRef,
+              sourceRef: inferredSourceRef,
             });
           }
         }
