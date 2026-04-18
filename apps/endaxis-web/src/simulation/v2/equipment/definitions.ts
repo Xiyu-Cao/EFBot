@@ -117,11 +117,15 @@ const tuohuang: EquipmentSetDefinition = {
 
 // ── 碾骨 (Niangu) ──
 // 3pc: 连携技施放→获得层数，下次战技+30%（最多2层，消耗型）
+// 触发时机：连携技**施放**（action_start），不是命中。
 const niangu: EquipmentSetDefinition = {
   id: "niangu", name: "碾骨",
   passiveStats: { attack_percent: 15 },
   triggers: [
-    { id: "niangu_buff", name: "碾骨重压", listenTo: "link_hit", target: "self",
+    { id: "niangu_buff", name: "碾骨重压",
+      listenTo: "action_start",
+      condition: { type: "source_action_type", params: { actionType: "link" } },
+      target: "self",
       stat: "all_dmg", zone: "dmgBonus", values: t(30), duration: 999, maxStacks: 2, stackMode: "independent", icd: 0,
       consumeOnSkillType: ["skill"] },
   ],
@@ -133,24 +137,35 @@ const yinglong: EquipmentSetDefinition = {
   id: "yinglong", name: "50式应龙",
   passiveStats: { attack_percent: 15 },
   triggers: [
-    { id: "yinglong_buff", name: "应龙之锐", listenTo: "skill_hit",
-      sourceMustBeOwner: false, // any ally's skill
+    { id: "yinglong_buff", name: "应龙之锐",
+      listenTo: "action_start",
+      condition: { type: "source_action_type", params: { actionType: "skill" } },
+      sourceMustBeOwner: false, // any ally's skill cast
       target: "self", stat: "all_dmg", zone: "dmgBonus", values: t(20), duration: 999, maxStacks: 3, stackMode: "independent", icd: 0,
       consumeOnSkillType: ["link"] },
   ],
 };
 
 // ── 阿伯莉遗声 (Aboli) ──
-// 3pc: 战技/连携技/终结技施放 → 各自独立ATK+5% 15s
+// 3pc: 战技/连携技/终结技**施放** → 各自独立ATK+5% 15s
 const aboli: EquipmentSetDefinition = {
   id: "aboli", name: "阿伯莉遗声",
   passiveStats: { all_skill_dmg_bonus: 24 },
   triggers: [
-    { id: "aboli_skill", name: "遗声(技)", listenTo: "skill_hit", target: "self",
+    { id: "aboli_skill", name: "遗声(技)",
+      listenTo: "action_start",
+      condition: { type: "source_action_type", params: { actionType: "skill" } },
+      target: "self",
       stat: "all_dmg", zone: "attackPercent", values: t(5), duration: 15, maxStacks: 1, stackMode: "refresh", icd: 0 },
-    { id: "aboli_link", name: "遗声(连)", listenTo: "link_hit", target: "self",
+    { id: "aboli_link", name: "遗声(连)",
+      listenTo: "action_start",
+      condition: { type: "source_action_type", params: { actionType: "link" } },
+      target: "self",
       stat: "all_dmg", zone: "attackPercent", values: t(5), duration: 15, maxStacks: 1, stackMode: "refresh", icd: 0 },
-    { id: "aboli_ult", name: "遗声(终)", listenTo: "ultimate_hit", target: "self",
+    { id: "aboli_ult", name: "遗声(终)",
+      listenTo: "action_start",
+      condition: { type: "source_action_type", params: { actionType: "ultimate" } },
+      target: "self",
       stat: "all_dmg", zone: "attackPercent", values: t(5), duration: 15, maxStacks: 1, stackMode: "refresh", icd: 0 },
   ],
 };

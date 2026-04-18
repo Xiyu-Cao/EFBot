@@ -248,9 +248,28 @@ export const V2_WEAPON_REGISTRY: Record<string, WeaponDefinition> = {
     [{ id: "rerong_buff", name: "高热解放", listenTo: "sp_restored", condition: { type: "source_is_skill", params: {} },
        target: "team", stat: "all_dmg", zone: "attackPercent", values: t(14), duration: 20, maxStacks: 2, stackMode: "independent", icd: 0 }]),
 
-  // 显赫声名 — 6★, on_break_consume → dynamic formula, TODO
+  // 显赫声名 — 6★, on_break_consume(slam/armorBreak) →
+  //   self:   ATK +[14% + 7% × consumed stacks]
+  //   others: ATK +[7%  + 3.5% × consumed stacks]
+  //   20s, maxStacks 1 refresh
   wpn_sword_0013: w("wpn_sword_0013", "显赫声名", "sword", 6, 490, "agility", "large", "physical_dmg", "large",
-    [{ stat: "attack", values: t(28) }], []), // TODO: ATK+[14%+7%×consumed stacks], others half
+    [{ stat: "attack", values: t(28) }],
+    [
+      { id: "xianhe_self", name: "显赫声名", listenTo: "physical_anomaly",
+        condition: { type: "physical_anomaly_type", params: { physicalTypes: ["slam", "armorBreak"] } },
+        target: "self", stat: "attack", zone: "attackPercent",
+        values: t(7),                  // 7% per consumed stack at max tier
+        valueAdditions: t(14),          // fixed 14% at max tier
+        valueScaleBy: "event.stacks",
+        duration: 20, maxStacks: 1, stackMode: "refresh", icd: 0 },
+      { id: "xianhe_others", name: "显赫声名(共享)", listenTo: "physical_anomaly",
+        condition: { type: "physical_anomaly_type", params: { physicalTypes: ["slam", "armorBreak"] } },
+        target: "others", stat: "attack", zone: "attackPercent",
+        values: t(3.5),
+        valueAdditions: t(7),
+        valueScaleBy: "event.stacks",
+        duration: 20, maxStacks: 1, stackMode: "refresh", icd: 0 },
+    ]),
 
   // 白夜新星 — 6★, on_burning_or_conductive → arts_dmg+33.6%
   wpn_sword_0014: w("wpn_sword_0014", "白夜新星", "sword", 6, 505, "intellect", "large", "originium_arts_power", "large",
@@ -354,9 +373,18 @@ export const V2_WEAPON_REGISTRY: Record<string, WeaponDefinition> = {
   wpn_claym_0012: w("wpn_claym_0012", "终点之声", "claym", 5, 411, "strength", "medium", "hp", "medium",
     [{ stat: "secondary_ability", values: t(14) }], []), // TODO: link heal bonus
 
-  // 古渠 — 5★, on_break_consume → dynamic formula, TODO
+  // 古渠 — 5★, on_break_consume(slam/armorBreak) →
+  //   physical_dmg +[14% × consumed stacks], 20s, maxStacks 1 refresh
   wpn_claym_0014: w("wpn_claym_0014", "古渠", "claym", 5, 411, "strength", "medium", "originium_arts_power", "medium",
-    [{ stat: "originium_arts_power", values: t(28) }], []), // TODO: physical_dmg+[14%×consumed stacks]
+    [{ stat: "originium_arts_power", values: t(28) }],
+    [
+      { id: "guqu_buff", name: "古渠", listenTo: "physical_anomaly",
+        condition: { type: "physical_anomaly_type", params: { physicalTypes: ["slam", "armorBreak"] } },
+        target: "self", stat: "physical_dmg", zone: "dmgBonus",
+        values: t(14),
+        valueScaleBy: "event.stacks",
+        duration: 20, maxStacks: 1, stackMode: "refresh", icd: 0 },
+    ]),
 
   // O.B.J.重荷 — 5★, on_knockdown_or_weaken → defense+50.4%, TODO (defense buff)
   wpn_claym_0015: w("wpn_claym_0015", "O.B.J.重荷", "claym", 5, 411, "strength", "medium", "hp", "medium",

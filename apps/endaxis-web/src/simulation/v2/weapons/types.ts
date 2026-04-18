@@ -42,6 +42,17 @@ export interface WeaponTrigger {
    * not limited to the skill's duration window.
    */
   consumeOnSkillType?: ActionType[];
+  /**
+   * When set, the converter emits an object-form ValueSource instead of a
+   * literal, scaling the `values[tier]` by the given scaleBy path.
+   * Example: `valueScaleBy: "event.stacks"` → `value × 消耗破防层数`.
+   */
+  valueScaleBy?: string;
+  /**
+   * Per-tier constant added after scaling. Enables compound formulas like
+   * "14% + 7% × consumed_stacks" (显赫声名): values = [..., 7], valueAdditions = [..., 14].
+   */
+  valueAdditions?: number[];
 }
 
 /** Complete weapon definition */

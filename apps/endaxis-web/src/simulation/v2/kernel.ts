@@ -1422,6 +1422,14 @@ export function simulate(
       case "physical_anomaly": {
         const p = effect.params as { physicalType: "launch" | "knockdown" | "slam" | "armorBreak"; stacks?: number };
         const outcome = resolvePhysicalAnomaly(p.physicalType, enemy.breakStacks);
+        // Capture the stack count associated with this anomaly so the trigger
+        // event can carry it (for `event.stacks`-scaled effects like 显赫声名).
+        // consumedStacks is meaningful for slam/armorBreak (all break consumed);
+        // for launch/knockdown there is no consumption — we use 0.
+        let consumedStacks = 0;
+        if (outcome.type === "slam" || outcome.type === "armorBreak") {
+          consumedStacks = outcome.breakStacksConsumed;
+        }
         if (outcome.type === "break_applied") {
           const prev = enemy.breakStacks;
           enemy.breakStacks = Math.min(BREAK_MAX_STACKS, enemy.breakStacks + outcome.newStacks);
@@ -1483,7 +1491,7 @@ export function simulate(
         if (outcome.type !== "break_applied") {
           hitTriggerEvents?.push({
             type: "physical_anomaly", time, sourceActorId: actorId,
-            data: { physicalType: p.physicalType, outcome: outcome.type },
+            data: { physicalType: p.physicalType, outcome: outcome.type, consumedStacks },
           });
         }
         break;

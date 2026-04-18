@@ -100,10 +100,16 @@ export interface ResolveContext {
  * Accepted forms:
  *   - `number`           — literal
  *   - `string`           — shorthand for `{ label: string }`
- *   - `{ label, literal, share, scaleBy }` — full form
+ *   - `{ label, literal, share, scaleBy, addition }` — full form
  *
- * Resolution: `base = (label ? resolveRef(label) : literal ?? 0) × (share ?? 1)
- *                      × (scaleBy ? SCALE_BY_RESOLVERS[scaleBy](ctx) : 1)`
+ * Resolution:
+ *   base    = label ? resolveRef(label) : (literal ?? 0)
+ *   scaled  = base × (share ?? 1) × (scaleBy ? SCALE_BY_RESOLVERS[scaleBy](ctx) : 1)
+ *   final   = scaled + (addition ?? 0)
+ *
+ * The `addition` component is a fixed literal added after the scaled part,
+ * used for compound formulas like "14% + 7% × consumed_stacks" (显赫声名):
+ *   { literal: 7, scaleBy: "event.stacks", addition: 14 }
  */
 export type ValueSource =
   | number
@@ -116,6 +122,8 @@ export interface ValueSourceObject {
   share?: number;
   /** Key into SCALE_BY_RESOLVERS. Multiplies the base value by the resolved scalar. */
   scaleBy?: string;
+  /** Constant added after base × share × scaleBy. Enables compound formulas. */
+  addition?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -336,5 +344,6 @@ export function resolveValue(
   else base = fallback;
   if (source.share != null) base *= source.share;
   if (source.scaleBy) base *= resolveScaleBy(source.scaleBy, ctx);
+  if (source.addition != null) base += source.addition;
   return base;
 }

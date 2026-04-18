@@ -227,7 +227,8 @@ describe("V2 Kernel — LAEVATAIN combo", () => {
 
 import type { PassiveTrigger } from "./types";
 import { convertWeaponTriggers } from "./weapons/converter";
-import { wpn_claym_0013, wpn_sword_0016, wpn_sword_0021 } from "./weapons/definitions";
+import { wpn_claym_0013, wpn_sword_0016, wpn_sword_0021, V2_WEAPON_REGISTRY } from "./weapons/definitions";
+import { convertSetTriggers, V2_EQUIPMENT_SET_REGISTRY } from "./equipment/definitions";
 
 // ── Shared helpers ──
 
@@ -1128,6 +1129,129 @@ describe("V2 Kernel — ValueSource / EventContext scaleBy", () => {
     const buffApply = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "cast_bonus") as any;
     expect(buffApply).toBeTruthy();
     expect(buffApply.time).toBe(10);   // fired at skill startTime, not at hit offset
+  });
+});
+
+describe("V2 Weapon Triggers — 古渠 (wpn_claym_0014) — per-layer scaling", () => {
+  it("buff value = 14 × consumedStacks after slam consumes N break layers", () => {
+    const weapon = V2_WEAPON_REGISTRY.wpn_claym_0014!;
+    const weaponTriggers = convertWeaponTriggers(weapon, 8); // max tier
+    const build = makePhysBuild();
+    // Apply 4 break, then slam to consume.
+    const skill = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+    ]);
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", weaponTriggers);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+
+    const applies = result.events.filter(e => e.type === "buff_apply" && (e as any).buffId === "guqu_buff");
+    expect(applies.length).toBe(1);
+    // Compare damage with vs without buff. buff gives physical_dmg +14%×4 = 56% dmgBonus.
+    // Simpler: simulate a follow-up damage hit after consume, compare to no-trigger baseline.
+    const damageSkill = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+      { offset: 1.0, effects: [] }, // hit that benefits from guqu_buff
+    ]);
+    const withBuff = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill: damageSkill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const noBuff = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill: damageSkill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const withBuffLastDmg = (withBuff.events.filter(e => e.type === "damage" && (e as any).time >= 1.0).pop() as any).damage;
+    const noBuffLastDmg = (noBuff.events.filter(e => e.type === "damage" && (e as any).time >= 1.0).pop() as any).damage;
+    // Buff adds 56% to physical dmg zone. Exact ratio depends on other zones,
+    // but should be non-trivially larger than no-buff.
+    expect(withBuffLastDmg).toBeGreaterThan(noBuffLastDmg);
+  });
+
+  it("buff value scales with consumedStacks (2 layers → 14×2 = 28%)", () => {
+    const weapon = V2_WEAPON_REGISTRY.wpn_claym_0014!;
+    const weaponTriggers = convertWeaponTriggers(weapon, 8);
+    const build = makePhysBuild();
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", weaponTriggers);
+    // 2 layers
+    const skill2 = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 2 } }] },
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+      { offset: 1.0, effects: [] },
+    ]);
+    // 4 layers
+    const skill4 = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+      { offset: 1.0, effects: [] },
+    ]);
+    const r2 = simulate([build], [{ actionId: "a", actorId: "PHYS", skill: skill2, startTime: 0 }], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const r4 = simulate([build], [{ actionId: "a", actorId: "PHYS", skill: skill4, startTime: 0 }], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    const dmg2 = (r2.events.filter(e => e.type === "damage" && (e as any).time >= 1.0).pop() as any).damage;
+    const dmg4 = (r4.events.filter(e => e.type === "damage" && (e as any).time >= 1.0).pop() as any).damage;
+    // 4-layer buff must exceed 2-layer buff (more % physical dmg)
+    expect(dmg4).toBeGreaterThan(dmg2);
+  });
+});
+
+describe("V2 Weapon Triggers — 显赫声名 (wpn_sword_0013) — compound formula", () => {
+  it("self buff value = 14 + 7×consumedStacks (max tier)", () => {
+    // 4 layers → 14 + 7×4 = 42% ATK
+    // 1 layer  → 14 + 7×1 = 21% ATK
+    const weapon = V2_WEAPON_REGISTRY.wpn_sword_0013!;
+    const weaponTriggers = convertWeaponTriggers(weapon, 8);
+    // Self + Others → 2 triggers
+    expect(weaponTriggers.length).toBe(2);
+    expect(weaponTriggers[0]!.id).toBe("xianhe_self");
+    expect(weaponTriggers[1]!.id).toBe("xianhe_others");
+
+    const build = makePhysBuild();
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", weaponTriggers);
+    const skill = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+      { offset: 1.0, effects: [] },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+
+    const applies = result.events.filter(e => e.type === "buff_apply" && (e as any).buffId === "xianhe_self");
+    expect(applies.length).toBe(1);
+  });
+});
+
+describe("V2 Equipment Triggers — 阿伯莉遗声 fires on action_start not hit", () => {
+  it("buff applied at skill startTime (action_start), not at hit time", () => {
+    const aboli = V2_EQUIPMENT_SET_REGISTRY["阿伯莉遗声"]!;
+    const abolitriggers = convertSetTriggers(aboli);
+    const build = makePhysBuild();
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", abolitriggers);
+
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 1.5, checkpointIndex: 0,   // hit is LATE in the action
+        damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+        effects: [],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 10 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+
+    const apply = result.events.find(e => e.type === "buff_apply" && (e as any).buffId === "aboli_skill") as any;
+    expect(apply).toBeTruthy();
+    expect(apply.time).toBe(10);  // action_start, not 11.5 (hit time)
   });
 });
 

@@ -77,7 +77,7 @@ export function convertWeaponTriggers(
       // Stored buff: charge trigger + consume-on-action trigger
       results.push(...convertStoredBuff(weapon, wt, value));
     } else {
-      results.push(convertSimpleTrigger(weapon, wt, value));
+      results.push(convertSimpleTrigger(weapon, wt, value, tierIndex));
     }
   }
   return results;
@@ -89,7 +89,20 @@ function convertSimpleTrigger(
   weapon: WeaponDefinition,
   wt: WeaponTrigger,
   value: number,
+  tierIndex: number,
 ): PassiveTrigger {
+  // If the trigger declares dynamic scaling / a compound addition, emit an
+  // object-form ValueSource so the kernel's resolveValue picks up the
+  // scaleBy / addition at runtime. Otherwise keep the simple literal form.
+  let valueParam: any = value;
+  if (wt.valueScaleBy || wt.valueAdditions?.length) {
+    const addition = wt.valueAdditions?.[tierIndex] ?? wt.valueAdditions?.[wt.valueAdditions.length - 1];
+    valueParam = {
+      literal: value,
+      ...(wt.valueScaleBy ? { scaleBy: wt.valueScaleBy } : {}),
+      ...(addition != null ? { addition } : {}),
+    };
+  }
   const actions: HitEffect[] = [{
     type: "buff_apply",
     params: {
@@ -97,7 +110,7 @@ function convertSimpleTrigger(
       target: wt.target,
       stat: wt.stat,
       zone: wt.zone,
-      value,
+      value: valueParam,
       duration: wt.duration,
       maxStacks: wt.maxStacks,
       stackBehavior: wt.stackMode,
