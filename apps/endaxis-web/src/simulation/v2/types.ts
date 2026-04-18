@@ -436,6 +436,10 @@ export interface BuffEvent extends BaseEvent {
   stacks: number;
   duration: number;
   reason: string;
+  /** Buff's stat id and zone, carried through so UI can fall back to a generic
+   *  (stat+zone)-based icon when buffMetadata has no explicit entry. */
+  stat?: string;
+  zone?: string;
 }
 
 /** Stack buff (special layer) change. */

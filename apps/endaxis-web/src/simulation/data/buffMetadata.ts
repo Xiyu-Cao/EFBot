@@ -142,3 +142,71 @@ export function getBuffIcon(effectType: string, layerCount?: number): string {
   }
   return meta.icon;
 }
+
+// ---------------------------------------------------------------------------
+// Generic fallback: (stat × zone) → icon
+// ---------------------------------------------------------------------------
+// When a buff has no explicit BUFF_METADATA entry (e.g. converter-generated
+// weapon/equipment buffs), the UI can still render a sensible icon based on
+// its semantic stat + zone. Keys are "<stat>|<zone>"; unknown combos fall back
+// to the empty string.
+const STAT_ZONE_ICON: Record<string, string> = {
+  // ATK / general attribute
+  "attack|attackPercent":          "/icons/icon_normal_atk_efficiency.webp",
+  "attack_percent|attackPercent":  "/icons/icon_normal_atk_efficiency.webp",
+  "all_dmg|attackPercent":         "/icons/icon_normal_atk_efficiency.webp",
+  // Damage-bonus zone — element specific
+  "physical_dmg|dmgBonus":   "/icons/icon_physical_damage_increase.webp",
+  "blaze_dmg|dmgBonus":      "/icons/icon_battle_affix_fire_enhance.webp",
+  "cold_dmg|dmgBonus":       "/icons/icon_battle_affix_cryst_enhance.webp",
+  "emag_dmg|dmgBonus":       "/icons/icon_battle_affix_pulse_enhance.webp",
+  "nature_dmg|dmgBonus":     "/icons/icon_battle_affix_natural_enhance.webp",
+  "arts_dmg|dmgBonus":       "/icons/icon_battle_affix_spell_enhance.webp",
+  "all_dmg|dmgBonus":        "/icons/icon_normal_atk_efficiency.webp",
+  // Skill-type damage bonuses (attack_dmg_bonus / skill_dmg_bonus etc.) —
+  // fall back to attack icon since these boost the character's output.
+  "attack_dmg_bonus|dmgBonus":   "/icons/icon_normal_atk_efficiency.webp",
+  "skill_dmg_bonus|dmgBonus":    "/icons/icon_normal_skill_efficiency.webp",
+  "link_dmg_bonus|dmgBonus":     "/icons/icon_comboskill_cooldown_scalar.webp",
+  "ultimate_dmg_bonus|dmgBonus": "/icons/icon_ultimate_skill_efficiency.webp",
+  "all_skill_dmg_bonus|dmgBonus": "/icons/icon_normal_atk_efficiency.webp",
+  // Fragility (enemy takes more of element)
+  "physical_dmg|fragility": "/icons/icon_battle_affix_physical_vulnerable.webp",
+  "blaze_dmg|fragility":    "/icons/icon_battle_affix_fire_enhance.webp",
+  "cold_dmg|fragility":     "/icons/icon_battle_affix_cryst_enhance.webp",
+  "emag_dmg|fragility":     "/icons/icon_battle_affix_pulse_enhance.webp",
+  "nature_dmg|fragility":   "/icons/icon_battle_affix_natural_enhance.webp",
+  "arts_dmg|fragility":     "/icons/icon_battle_affix_spell_vulnerable.webp",
+  // Vulnerability (enemy takes more damage general)
+  "physical_dmg|vulnerability": "/icons/icon_battle_affix_physical_vulnerable.webp",
+  "all_dmg|vulnerability":      "/icons/icon_attr_damage_to_broken_unit_increase.webp",
+  // Crit
+  "crit_rate|additive":     "/icons/icon_attribute_criticalRate.webp",
+  "crit_damage|additive":   "/icons/icon_attribute_criticalDamageIncrease.webp",
+  // Originium arts power
+  "originium_arts_power|additive": "/icons/icon_originium_arts.webp",
+  // Secondary / primary ability (attribute bonuses)
+  "primary_ability|additive":   "/icons/icon_attribute_str.webp",
+  "secondary_ability|additive": "/icons/icon_attribute_agi.webp",
+};
+
+/**
+ * Resolve an icon path for a buff, preferring an explicit metadata entry and
+ * falling back to the generic (stat + zone)-based mapping so converter-generated
+ * weapon / equipment buffs don't need per-id metadata.
+ */
+export function resolveBuffIcon(
+  buffId: string,
+  stat?: string,
+  zone?: string,
+  layerCount?: number,
+): string {
+  const direct = getBuffIcon(buffId, layerCount);
+  if (direct) return direct;
+  if (stat && zone) {
+    const key = `${stat}|${zone}`;
+    const fallback = STAT_ZONE_ICON[key];
+    if (fallback) return fallback;
+  }
+  return "";
+}

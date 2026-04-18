@@ -229,6 +229,7 @@ import type { PassiveTrigger } from "./types";
 import { convertWeaponTriggers } from "./weapons/converter";
 import { wpn_claym_0013, wpn_sword_0016, wpn_sword_0021, V2_WEAPON_REGISTRY } from "./weapons/definitions";
 import { convertSetTriggers, V2_EQUIPMENT_SET_REGISTRY } from "./equipment/definitions";
+import { resolveBuffIcon } from "../data/buffMetadata";
 
 // ── Shared helpers ──
 
@@ -1195,6 +1196,21 @@ describe("V2 Weapon Triggers — 古渠 (wpn_claym_0014) — per-layer scaling",
     const dmg4 = (r4.events.filter(e => e.type === "damage" && (e as any).time >= 1.0).pop() as any).damage;
     // 4-layer buff must exceed 2-layer buff (more % physical dmg)
     expect(dmg4).toBeGreaterThan(dmg2);
+  });
+});
+
+describe("V2 Buff icon fallback (stat+zone)", () => {
+  it("resolveBuffIcon falls back to icon_normal_atk_efficiency for attack+attackPercent", () => {
+    const icon = resolveBuffIcon("xianhe_self_unregistered", "attack", "attackPercent");
+    expect(icon).toBe("/icons/icon_normal_atk_efficiency.webp");
+  });
+  it("resolveBuffIcon returns empty for unknown buff + unknown stat/zone", () => {
+    expect(resolveBuffIcon("never_heard_of_it")).toBe("");
+    expect(resolveBuffIcon("no_meta", "unknown_stat", "unknown_zone")).toBe("");
+  });
+  it("resolveBuffIcon prefers explicit metadata over fallback", () => {
+    const icon = resolveBuffIcon("fire_enhance", "blaze_dmg", "dmgBonus");
+    expect(icon).toBe("/icons/icon_battle_affix_fire_enhance.webp");
   });
 });
 

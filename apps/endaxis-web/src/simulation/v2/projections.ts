@@ -117,6 +117,10 @@ export interface BuffBar {
   endTime: number;
   stacks: number;
   color: string;
+  /** Buff stat / zone carried through so the UI can fall back to a generic
+   *  (stat+zone)-based icon when buffMetadata has no explicit entry. */
+  stat?: string;
+  zone?: string;
 }
 
 /**
@@ -144,6 +148,8 @@ export function projectBuffBars(
         endTime: be.time + be.duration,
         stacks: be.stacks,
         color: be.target === "enemy" ? "#ff4d4f" : be.target === "team" ? "#faad14" : "#b37feb",
+        stat: be.stat,
+        zone: be.zone,
       });
     } else if (e.type === "buff_remove") {
       const be = e as BuffEvent;

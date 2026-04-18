@@ -1710,7 +1710,9 @@ export function simulate(
           modifiers,
         };
 
-        // Determine target BuffManager(s)
+        // Determine target BuffManager(s).
+        // stat/zone are carried on the event so the UI can fall back to a
+        // generic (stat+zone)-based icon when buffMetadata has no explicit entry.
         const targetStr = p.target || "self";
         if (targetStr === "enemy") {
           const result = enemy.buffManager.apply(buffDef, actorId, time);
@@ -1720,6 +1722,7 @@ export function simulate(
               buffId: p.buffId, buffName: p.buffId, target: "enemy",
               stacks: enemy.buffManager.getStacks(p.buffId, time),
               duration, reason: "effect",
+              stat: p.stat, zone: p.zone,
             });
             // Push trigger event for enemy buff application (used by weapons like 宏愿)
             hitTriggerEvents?.push({
@@ -1737,6 +1740,7 @@ export function simulate(
             type: "buff_apply", time, actorId, targetId: targetStr,
             buffId: p.buffId, buffName: p.buffId, target: targetStr as any,
             stacks: 1, duration, reason: "effect",
+            stat: p.stat, zone: p.zone,
           });
         } else {
           // "self" / "mainControl" / "trigger_source" → apply to source actor
@@ -1748,6 +1752,7 @@ export function simulate(
               buffId: p.buffId, buffName: p.buffId, target: "self",
               stacks: mgr.getStacks(p.buffId, time),
               duration, reason: "effect",
+              stat: p.stat, zone: p.zone,
             });
           }
         }

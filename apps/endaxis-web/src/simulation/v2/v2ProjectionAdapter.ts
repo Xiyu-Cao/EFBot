@@ -15,7 +15,7 @@ import type {
 } from "./projections";
 import type { BuffStatus } from "../projection/projectWeaponBuffTimeline";
 import type { SelfBuffBar } from "../projection/projectSelfBuffTimeline";
-import { getBuffMeta, getBuffIcon } from "../data/buffMetadata";
+import { getBuffMeta, getBuffIcon, resolveBuffIcon } from "../data/buffMetadata";
 
 // ── Buff color resolution ──
 // Derive color from buffId keywords. Default = gray (physical/generic).
@@ -60,7 +60,10 @@ export function adaptBuffBars(bars: BuffBar[]): AdaptedBuffStatuses {
     const base: BuffStatus = {
       id: bar.id,
       name: meta?.name || bar.name,
-      icon: meta?.icon || "",
+      // Prefer explicit metadata icon; otherwise fall back to a generic icon
+      // chosen from the buff's stat+zone (covers converter-generated weapon /
+      // equipment buffs that have no per-id metadata entry).
+      icon: meta?.icon || resolveBuffIcon(bar.buffId, bar.stat, bar.zone),
       startTime: bar.startTime,
       logicalStartTime: bar.startTime,
       duration,
