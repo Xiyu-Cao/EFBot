@@ -200,11 +200,14 @@ const link: Skill = {
     { offset: f(28), checkpointIndex: 0, damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 0, element: "cold", canCrit: true, school: "magic", sourceType: "link" }, effects: [], standardLogic: true },
     {
       offset: f(128), checkpointIndex: 0,
-      damage: { multiplierRef: { label: "消耗每层附着额外伤害倍率", share: 1 }, stagger: 15, element: "cold", canCrit: true, school: "magic", sourceType: "link" },
+      // Damage scales by consumed cold-attachment layers. scaleBy reads current
+      // `enemy.attachment.stacks` — pair with `deferTo: "afterSkillDamage"` on
+      // consume_attachment so the stacks are still present at multiplier resolution.
+      damage: { multiplierRef: { label: "消耗每层附着额外伤害倍率", share: 1, scaleBy: "attachmentStacks" }, stagger: 15, element: "cold", canCrit: true, school: "magic", sourceType: "link" },
       effects: [
-        { type: "consume_attachment", params: { element: "cold" } },
+        { type: "consume_attachment", params: { element: "cold", deferTo: "afterSkillDamage" } },
       ],
-      standardLogic: false, // custom: damage multiplied by consumed layers, consumption after damage
+      standardLogic: true,
     },
   ],
   checkpoints: [],

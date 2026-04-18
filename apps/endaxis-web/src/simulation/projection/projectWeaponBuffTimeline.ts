@@ -25,6 +25,10 @@ export interface BuffStatus {
   weaponId?: string;
   stacks?: number;
   maxStacks?: number;
+  /** True when startTime/endTime are already in real (freeze-shifted) coordinates
+   *  and should NOT be re-shifted by TimelineGrid's getShiftedEndTime. Set by V2
+   *  kernel projections whose event times come directly from `action.startTime`. */
+  preshifted?: boolean;
 }
 
 export interface ProjectedBuffTimelines {

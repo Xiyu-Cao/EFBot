@@ -4847,7 +4847,10 @@ export const useTimelineStore = defineStore('timeline', () => {
             map.set(status.id, { rect: iconRect })
 
             const rawDuration = Number(status.duration) || 0
-            const shiftedEnd = getShiftedEndTime(start, rawDuration, status.id)
+            // V2 projection bars are already in real (freeze-shifted) time; skip re-shift.
+            const shiftedEnd = status.preshifted
+                ? (start + rawDuration)
+                : getShiftedEndTime(start, rawDuration, status.id)
             const baseFinalDuration = Math.max(0, shiftedEnd - start)
 
             let finalDuration = baseFinalDuration

@@ -68,6 +68,7 @@ export function adaptBuffBars(bars: BuffBar[]): AdaptedBuffStatuses {
       maxStacks: bar.stacks,
       color: "",
       type: "",
+      preshifted: true,
     };
 
     const buffColor = resolveBuffColor(bar.buffId);
@@ -160,6 +161,8 @@ export interface AdaptedAnomalyDebuff {
   consumedBy?: string;
   /** Whether this was consumed (not natural expiry). */
   consumed?: boolean;
+  /** V2 times are already in real (freeze-shifted) coordinates; UI must not re-shift. */
+  preshifted?: boolean;
 }
 
 /** Map V2 anomaly type to UI anomaly type name. */
@@ -186,6 +189,7 @@ export function adaptAnomalyBars(bars: AnomalyBar[]): AdaptedAnomalyDebuff[] {
     sourceActionInstanceId: "",
     icon: "",  // resolved by UI from iconDatabase
     hideDuration: false,
+    preshifted: true,
   }));
 }
 
@@ -218,6 +222,7 @@ export function adaptAttachmentBars(bars: AttachmentBar[]): AdaptedAnomalyDebuff
     icon: "",
     hideDuration: false,
     consumed: bar.consumed,
+    preshifted: true,
   }));
 }
 
@@ -239,6 +244,7 @@ export function adaptBreakBars(bars: BreakBar[]): AdaptedAnomalyDebuff[] {
     hideDuration: false,
     consumedBy: bar.consumedBy,
     consumed: !!bar.consumedBy,
+    preshifted: true,
   }));
 }
 

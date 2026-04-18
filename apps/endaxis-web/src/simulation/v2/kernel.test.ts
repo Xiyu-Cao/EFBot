@@ -319,8 +319,10 @@ describe("V2 Weapon Triggers — 赫拉芬格 (wpn_claym_0013)", () => {
     expect(hitDamages.length).toBe(2);
     expect(hitDamagesNoBuff.length).toBe(2);
 
-    // First hit should be equal (no buff yet), second should be higher
-    expect((hitDamages[0] as any).damage).toBe((hitDamagesNoBuff[0] as any).damage);
+    // 赫拉芬格 passive: "施加寒冷附着**时**获得寒冷伤害+X%" — buff applies at the
+    // moment of attachment, so the skill hit that emits the attachment event already
+    // benefits. Both hits should exceed the no-buff baseline.
+    expect((hitDamages[0] as any).damage).toBeGreaterThan((hitDamagesNoBuff[0] as any).damage);
     expect((hitDamages[1] as any).damage).toBeGreaterThan((hitDamagesNoBuff[1] as any).damage);
   });
 
@@ -466,5 +468,511 @@ describe("V2 Weapon Triggers — 宏愿 (wpn_sword_0021)", () => {
     const dmg1 = (damages.find(e => (e as any).actionId === "act1") as any)?.damage || 0;
     const dmg2 = (damages.find(e => (e as any).actionId === "act2") as any)?.damage || 0;
     expect(dmg2).toBeGreaterThan(dmg1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Break / armor-break regression tests
+// ═══════════════════════════════════════════════════════════════════
+
+import { projectBreakBars, projectActionBars } from "./projections";
+import { armorBreakVulnerability } from "./anomaly";
+
+function makePhysBuild(id: string = "PHYS") {
+  const input: CharacterInput = {
+    id, name: id, element: "physical" as DamageElement, rarity: 6,
+    promotion: 4, potentialLevel: 0, talentLevels: {},
+    baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+    baseAttack: 300, baseHp: 1000,
+    mainAttribute: "strength", subAttribute: "agility",
+    weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+    equipmentSetId: null, baseGaugeMax: 300,
+    statModifiers: [],
+  };
+  return computeCharacterBuild(input);
+}
+
+function makeSkillWithEffects(hits: { offset: number; effects: any[] }[]): Skill {
+  return {
+    id: "test_phys_skill", type: "skill", name: "Phys Skill",
+    element: "physical", duration: 5, spCost: 0, cooldown: 0,
+    hits: hits.map(h => ({
+      offset: h.offset,
+      checkpointIndex: 0,
+      damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+      effects: h.effects,
+      standardLogic: true,
+    })),
+    checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, hits.length - 1] }],
+  };
+}
+
+describe("V2 Kernel — Break stack projection", () => {
+  it("merges consecutive stack additions into one BreakBar", () => {
+    // Skill fires break_apply then two knockdowns (each +1 stack, no consume).
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([
+      { offset: 0.1, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+      { offset: 0.3, effects: [{ type: "physical_anomaly", params: { physicalType: "knockdown" } }] },
+      { offset: 0.6, effects: [{ type: "physical_anomaly", params: { physicalType: "knockdown" } }] },
+    ]);
+    const result = simulate([build], [
+      { actionId: "act", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const bars = projectBreakBars(result.events, 10);
+    expect(bars.length).toBe(1);
+    expect(bars[0].stacks).toBe(3);           // max reached
+    expect(bars[0].segments.length).toBe(3);   // 1 → 2 → 3
+    expect(bars[0].segments[0].stacks).toBe(1);
+    expect(bars[0].segments[1].stacks).toBe(2);
+    expect(bars[0].segments[2].stacks).toBe(3);
+  });
+
+  it("closes a bar when break is consumed, opens a new one on re-apply", () => {
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([
+      { offset: 0.1, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+      { offset: 0.3, effects: [{ type: "physical_anomaly", params: { physicalType: "knockdown" } }] },
+      // Slam consumes all → stacks go 0
+      { offset: 0.5, effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }] },
+      // Re-apply
+      { offset: 0.8, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+    ]);
+    const result = simulate([build], [
+      { actionId: "act", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const bars = projectBreakBars(result.events, 10);
+    expect(bars.length).toBe(2);
+    expect(bars[0].stacks).toBe(2);
+    expect(bars[0].consumedBy).toBe("slam");
+    expect(bars[1].stacks).toBe(1);
+  });
+});
+
+describe("V2 Kernel — Armor break physical vulnerability", () => {
+  it("refreshes (does not accumulate) on repeated armor break", () => {
+    const build = makePhysBuild();
+    // Build up 4 stacks, armor break, then build up 4 again, armor break again.
+    // Second 碎甲 should refresh (replace), not stack additively.
+    const skill = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.1, effects: [{ type: "physical_anomaly", params: { physicalType: "armorBreak" } }] },
+      { offset: 0.2, effects: [{ type: "break_apply", params: { stacks: 4 } }] },
+      { offset: 0.3, effects: [{ type: "physical_anomaly", params: { physicalType: "armorBreak" } }] },
+      // Post-second-armorBreak damage at 0.4 to sample state
+      { offset: 0.4, effects: [] },
+    ]);
+    const result = simulate([build], [
+      { actionId: "act", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // Single-carrier expected vuln from 4-stack armor break
+    const artsPower = build.stats.originiumArtsPower;
+    const expectedSingleVuln = armorBreakVulnerability(4, artsPower);
+
+    // Compare damage of last hit (offset 0.4) vs a baseline run WITHOUT any armor break.
+    // Under accumulation bug, the damage would be ~2x vuln worth; under refresh, it's ~1x.
+    const baseResult = simulate([build], [{
+      actionId: "act_base", actorId: "PHYS",
+      skill: makeSkillWithEffects([{ offset: 0.4, effects: [] }]),
+      startTime: 0,
+    }], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const lastDmg = (result.events.filter(e => e.type === "damage").pop() as any).damage;
+    const baseDmg = (baseResult.events.filter(e => e.type === "damage").pop() as any).damage;
+
+    // Damage scaling from fragility: (1 + vuln/100). Tolerance for FP + integer floor.
+    const actualRatio = lastDmg / baseDmg;
+    const refreshRatio = 1 + expectedSingleVuln / 100;
+    const accumulateRatio = 1 + (expectedSingleVuln * 2) / 100;
+
+    expect(Math.abs(actualRatio - refreshRatio)).toBeLessThan(0.01);
+    expect(Math.abs(actualRatio - accumulateRatio)).toBeGreaterThan(0.05); // clearly NOT doubled
+  });
+
+  it("expires after armorBreakVulnDuration and stops boosting damage", () => {
+    const build = makePhysBuild();
+    // 1-stack armor break → duration = 1*6+6 = 12s. Damage after 15s should be unaffected.
+    const skill = makeSkillWithEffects([
+      { offset: 0.0, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+      { offset: 0.1, effects: [{ type: "physical_anomaly", params: { physicalType: "armorBreak" } }] },
+      { offset: 15.0, effects: [] }, // past 12s expiry
+    ]);
+    const result = simulate([build], [
+      { actionId: "act", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const baseResult = simulate([build], [{
+      actionId: "act_base", actorId: "PHYS",
+      skill: makeSkillWithEffects([{ offset: 15.0, effects: [] }]),
+      startTime: 0,
+    }], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // Damage at offset 15 should equal baseline (no lingering fragility).
+    const lateDmg = (result.events.filter(e => e.type === "damage" && (e as any).time >= 15).pop() as any).damage;
+    const baseDmg = (baseResult.events.filter(e => e.type === "damage").pop() as any).damage;
+    expect(lateDmg).toBe(baseDmg);
+  });
+
+  it("natural break expiry emits event at true expiresAt, not next action start", () => {
+    // break_apply at t=0 with default duration 30s. No actions until t=40 to force
+    // observation lag. The natural expiry should still be reported at t=30, not t=40.
+    const build = makePhysBuild();
+    const skill1: Skill = {
+      id: "s1", type: "skill", name: "s1", element: "physical",
+      duration: 0.5, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+        effects: [{ type: "break_apply", params: { stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    // Dummy action long after the 30s break expiry to trigger observation
+    const skill2: Skill = {
+      id: "s2", type: "skill", name: "s2", element: "physical",
+      duration: 0.5, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+        effects: [],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "PHYS", skill: skill1, startTime: 0 },
+      { actionId: "a2", actorId: "PHYS", skill: skill2, startTime: 40 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const bars = projectBreakBars(result.events, 50);
+    expect(bars.length).toBe(1);
+    // Break was applied at 0.1, expires 30s later → endTime 30.1, not 40.
+    expect(bars[0].endTime).toBeCloseTo(30.1, 2);
+  });
+});
+
+describe("V2 Kernel — buff_apply condition gating", () => {
+  it("applies buff when condition enemy_not_has_break is met (no break)", () => {
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([{
+      offset: 0.1,
+      effects: [{
+        type: "buff_apply",
+        params: {
+          buffId: "test_vuln", target: "enemy",
+          stat: "physical_dmg", zone: "vulnerability",
+          value: 10, duration: 5,
+          condition: "enemy_not_has_break",
+        },
+      }],
+    }]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const applies = result.events.filter(e => e.type === "buff_apply" && (e as any).buffId === "test_vuln");
+    expect(applies.length).toBe(1);
+  });
+
+  it("skips buff when condition enemy_not_has_break is NOT met (break present)", () => {
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([
+      { offset: 0.05, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+      {
+        offset: 0.1,
+        effects: [{
+          type: "buff_apply",
+          params: {
+            buffId: "test_vuln", target: "enemy",
+            stat: "physical_dmg", zone: "vulnerability",
+            value: 10, duration: 5,
+            condition: "enemy_not_has_break",
+          },
+        }],
+      },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const applies = result.events.filter(e => e.type === "buff_apply" && (e as any).buffId === "test_vuln");
+    expect(applies.length).toBe(0);
+  });
+});
+
+describe("V2 Kernel — delayed_damage multiplierFromTalent", () => {
+  it("resolves multiplier via resolveRef when using multiplierFromTalent", () => {
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([{
+      offset: 0.1,
+      effects: [{
+        type: "delayed_damage",
+        params: {
+          multiplierFromTalent: "talent_1",
+          element: "physical", school: "physical", canCrit: false,
+        },
+      }],
+    }]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, {
+      initialSP: 0, critMode: "expected",
+      resolveRef: (_id: string, label: string) => label === "talent_1" ? 100 : 0,
+    });
+
+    const trigDamages = result.events.filter(e => e.type === "damage" && (e as any).fromTrigger);
+    expect(trigDamages.length).toBe(1);
+    expect((trigDamages[0] as any).multiplier).toBe(100);
+  });
+});
+
+describe("V2 Kernel — conditional hit_mark", () => {
+  it("emits hit_mark for hits whose condition-gated effect fires", () => {
+    const build = makePhysBuild();
+    // Two hits: first has a condition that's met, second has a condition that fails.
+    const skill = makeSkillWithEffects([
+      {
+        offset: 0.1,
+        effects: [{
+          type: "buff_apply",
+          params: {
+            buffId: "vuln_a", target: "enemy",
+            stat: "physical_dmg", zone: "vulnerability",
+            value: 10, duration: 5,
+            condition: "enemy_not_has_break", // met — no break yet
+          },
+        }],
+      },
+      { offset: 0.15, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+      {
+        offset: 0.2,
+        effects: [{
+          type: "buff_apply",
+          params: {
+            buffId: "vuln_b", target: "enemy",
+            stat: "physical_dmg", zone: "vulnerability",
+            value: 10, duration: 5,
+            condition: "enemy_not_has_break", // NOT met — break is now present
+          },
+        }],
+      },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const marks = result.events.filter(e => e.type === "hit_mark") as any[];
+    // Only hit 0 had a condition-gated effect that passed.
+    expect(marks.length).toBe(1);
+    expect(marks[0].actionId).toBe("a");
+    expect(marks[0].hitIndex).toBe(0);
+    expect(marks[0].kind).toBe("conditional");
+
+    // buff_apply for vuln_b must NOT have been emitted (condition failed).
+    const applies = result.events.filter(e => e.type === "buff_apply" && (e as any).buffId === "vuln_b");
+    expect(applies.length).toBe(0);
+  });
+
+  it("projectActionBars attaches conditionalHits indices", () => {
+    const build = makePhysBuild();
+    const skill = makeSkillWithEffects([
+      {
+        offset: 0.1,
+        effects: [{
+          type: "buff_apply",
+          params: {
+            buffId: "vuln_a", target: "enemy",
+            stat: "physical_dmg", zone: "vulnerability",
+            value: 10, duration: 5,
+            condition: "enemy_not_has_break",
+          },
+        }],
+      },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const bars = projectActionBars(result.events);
+    const bar = bars.get("a");
+    expect(bar?.conditionalHits).toEqual([0]);
+  });
+});
+
+describe("V2 Kernel — deferTo + MultiplierRef.scaleBy (别礼 link hit 2 pattern)", () => {
+  it("consume_attachment with deferTo=afterSkillDamage runs after hit damage", () => {
+    const build = makePhysBuild();
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "cold", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        // Seed enemy with 4 cold attachment
+        { offset: 0.0, checkpointIndex: 0, damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const }, effects: [
+          { type: "magic_attachment", params: { element: "cold", stacks: 4 } },
+        ], standardLogic: true },
+        // Consume with deferTo — sample damage at the SAME hit
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "consume_attachment", params: { element: "cold", deferTo: "afterSkillDamage" } }],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // Order: damage events at 0.5 must precede attachment_change clearing.
+    const timeline = result.events.filter(e => {
+      if (e.type === "damage") return (e as any).time === 0.5;
+      if (e.type === "attachment_change") return (e as any).time === 0.5;
+      return false;
+    });
+    // Expect: damage (hit 2) → attachment_change (cleared) — confirms consume deferred past hit damage.
+    expect(timeline.length).toBe(2);
+    expect(timeline[0]!.type).toBe("damage");
+    expect(timeline[1]!.type).toBe("attachment_change");
+    expect((timeline[1] as any).stacks).toBe(0);
+  });
+
+  it("MultiplierRef.scaleBy=attachmentStacks multiplies damage by current stacks", () => {
+    const build = makePhysBuild();
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "cold", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        // Stack 4 cold
+        { offset: 0.0, checkpointIndex: 0, damage: { multiplier: 0, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const }, effects: [
+          { type: "magic_attachment", params: { element: "cold", stacks: 4 } },
+        ], standardLogic: true },
+        // Deal damage with scaleBy — should see stacks=4
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, multiplierRef: undefined, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+    // Baseline: multiplier 100 flat
+    const baseResult = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // Actually test scaleBy via a literal multiplierRef. Since baseline uses a hardcoded
+    // multiplier, compare against a skill that uses scaleBy with a stub resolveRef.
+    const scaleSkill: Skill = {
+      ...skill,
+      hits: [
+        skill.hits[0]!,
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: {
+            multiplierRef: { label: "per_layer_mult", share: 1, scaleBy: "attachmentStacks" },
+            stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const,
+          },
+          effects: [{ type: "consume_attachment", params: { element: "cold", deferTo: "afterSkillDamage" } }],
+          standardLogic: true,
+        },
+      ],
+    };
+    const scaleResult = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill: scaleSkill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, undefined, undefined, undefined);
+    // resolveRef default returns 0 for unknown labels. Override via config:
+    const scaleResult2 = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill: scaleSkill, startTime: 0 },
+    ], defaultEnemy, {
+      initialSP: 0, critMode: "expected",
+      resolveRef: (_id: string, label: string) => label === "per_layer_mult" ? 100 : 0,
+    });
+
+    // scaleResult2 hit 2 damage = baseResult hit 2 damage × 4 (since 4 attachment stacks at time of resolution).
+    const baseDmg = (baseResult.events.filter(e => e.type === "damage" && (e as any).time === 0.5)[0] as any).damage;
+    const scaleDmg = (scaleResult2.events.filter(e => e.type === "damage" && (e as any).time === 0.5)[0] as any).damage;
+    expect(scaleDmg).toBe(baseDmg * 4);
+
+    // Without config (resolveRef returns 0), scaleBy × 0 = 0 damage.
+    const noCfgDmg = (scaleResult.events.filter(e => e.type === "damage" && (e as any).time === 0.5)[0] as any).damage;
+    expect(noCfgDmg).toBe(0);
+  });
+
+  it("attachment_consumed trigger (deferred) still fires after afterSkillDamage consume", () => {
+    // Simulate LASTRITE hypothermia-like trigger: listens for attachment_consumed,
+    // deferred:true. Even with deferTo on the consume effect, hypothermia still fires.
+    const build = makePhysBuild();
+    const trigger: PassiveTrigger = {
+      id: "hypothermia_like",
+      source: "test",
+      listenTo: "attachment_consumed",
+      deferred: true,
+      sourceMustBeOwner: true,
+      actions: [
+        { type: "buff_apply", params: { buffId: "cold_fragility_like", target: "enemy", stat: "cold_dmg", zone: "fragility", value: 10, duration: 15 } },
+      ],
+    };
+    const skill: Skill = {
+      id: "s", type: "skill", name: "s",
+      element: "cold", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.0, checkpointIndex: 0, damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const }, effects: [
+          { type: "magic_attachment", params: { element: "cold", stacks: 2 } },
+        ], standardLogic: true },
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "consume_attachment", params: { element: "cold", deferTo: "afterSkillDamage" } }],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", [trigger]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+
+    const applies = result.events.filter(e => e.type === "buff_apply" && (e as any).buffId === "cold_fragility_like");
+    expect(applies.length).toBe(1);
+  });
+});
+
+describe("V2 Kernel — physical_anomaly_type trigger condition", () => {
+  it("accepts both `physicalTypes` (array) and legacy `physicalType` (string)", () => {
+    // Regression: 黎风 伏魔 trigger wrote `physicalType: "knockdown"` but triggers.ts
+    // read `cond.params.physicalTypes.includes(...)` → crashed only when enemy had
+    // break (otherwise knockdown degenerates to break_applied and no trigger fires).
+    const build = makePhysBuild();
+    const trigger: PassiveTrigger = {
+      id: "test_knockdown_trigger",
+      source: "test",
+      listenTo: "physical_anomaly",
+      deferred: false,
+      sourceMustBeOwner: true,
+      condition: { type: "physical_anomaly_type", params: { physicalType: "knockdown" } } as any,
+      actions: [
+        { type: "delayed_damage", params: { multiplier: 50, element: "physical", school: "physical", canCrit: false } },
+      ],
+    };
+    const skill = makeSkillWithEffects([
+      { offset: 0.05, effects: [{ type: "break_apply", params: { stacks: 1 } }] },
+      { offset: 0.1, effects: [{ type: "physical_anomaly", params: { physicalType: "knockdown" } }] },
+    ]);
+    const trigMap = new Map<string, PassiveTrigger[]>();
+    trigMap.set("PHYS", [trigger]);
+
+    expect(() => {
+      simulate([build], [
+        { actionId: "a", actorId: "PHYS", skill, startTime: 0 },
+      ], defaultEnemy, { initialSP: 0, critMode: "expected" }, trigMap);
+    }).not.toThrow();
   });
 });

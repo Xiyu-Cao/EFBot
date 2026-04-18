@@ -45,6 +45,8 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
   // ── Vulnerability/fragility (脆弱/易伤) ──
   physical_vulnerable: { name: "物理脆弱", icon: "/icons/icon_battle_affix_physical_vulnerable.webp" },
   spell_vulnerable:    { name: "法术脆弱", icon: "/icons/icon_battle_affix_spell_vulnerable.webp" },
+  // Per-character aliases — each character's 物理脆弱 stacks independently but shares the same icon.
+  lifeng_physical_vulnerability: { name: "物理脆弱", icon: "/icons/icon_battle_affix_physical_vulnerable.webp" },
 
   // ── Control ──
   affix_slow:    { name: "缓速", icon: "/icons/icon_battle_affix_slow.webp" },

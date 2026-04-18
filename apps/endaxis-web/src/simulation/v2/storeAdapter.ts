@@ -205,7 +205,31 @@ export function buildV2Inputs(
     }
   }
 
+  // Pre-resolve talent values per actor: talentId → numeric value for the actor's
+  // current talent level. Picks the highest-promotion stage with promotion <= level.
+  // Used by `valueRef: "talent_X"` / `multiplierFromTalent: "talent_X"` style refs.
+  const talentValueByActor = new Map<string, Map<string, number>>();
+  for (const track of activeTracks) {
+    const mod = getV2Module(track.id);
+    const talentLevels = track.growth?.talentLevels || {};
+    if (!mod?.talents) continue;
+    const map = new Map<string, number>();
+    for (const talent of mod.talents) {
+      const level = Number(talentLevels[talent.id]) || 0;
+      if (level <= 0 || !Array.isArray(talent.stages)) continue;
+      const stage = [...talent.stages].reverse().find((s: any) => Number(s.promotion) <= level);
+      if (!stage) continue;
+      const value = stage.value ?? stage.damageMultiplier ?? stage.valuePerPoint ?? 0;
+      map.set(talent.id, Number(value) || 0);
+    }
+    talentValueByActor.set(track.id, map);
+  }
+
   const resolveRef = (actorId: string, label: string): number => {
+    // Talent refs (e.g. "talent_0", "talent_1") — resolved from character module.
+    const talentMap = talentValueByActor.get(actorId);
+    if (talentMap?.has(label)) return talentMap.get(label) || 0;
+
     const sd = skillDataByActor.get(actorId);
     if (!sd) return 0;
     // Search all skill sections for the label

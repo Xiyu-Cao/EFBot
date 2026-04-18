@@ -249,8 +249,10 @@ export class TriggerProcessor {
         return (state.event.data.element as string) === el;
       }
       case "physical_anomaly_type": {
-        // Check physical anomaly sub-type (launch/knockdown/slam/armorBreak)
-        const allowed = cond.params.physicalTypes as string[];
+        // Check physical anomaly sub-type (launch/knockdown/slam/armorBreak).
+        // Accept both `physicalTypes: string[]` and legacy `physicalType: string`.
+        const raw = cond.params.physicalTypes ?? cond.params.physicalType;
+        const allowed = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
         return allowed.includes(state.event.data.physicalType as string);
       }
       case "consumed_anomaly_type": {

@@ -139,6 +139,14 @@ export interface MultiplierRef {
   share: number | "equal";
   /** When share="equal", how many hits share this multiplier row. */
   equalCount?: number;
+  /**
+   * Runtime scaling: multiply the resolved value by a dynamic enemy-state quantity.
+   * Used for skills whose per-layer multiplier depends on the current stack count
+   * (e.g. 别礼 link hit 2: "消耗每层附着额外伤害倍率 × 层数"). The referenced stacks
+   * should still be present when the multiplier is read — pair with `deferTo` on
+   * the corresponding consume effect to defer consumption to afterSkillDamage.
+   */
+  scaleBy?: "attachmentStacks" | "breakStacks";
 }
 
 /** An effect applied by a hit. */
@@ -515,6 +523,15 @@ export interface ConvertEvent extends BaseEvent {
   amount: number;
 }
 
+/** Per-hit annotation marker. Used by UI to style ticks (e.g. conditional effects). */
+export interface HitMarkEvent extends BaseEvent {
+  type: "hit_mark";
+  actionId: string;
+  hitIndex: number;
+  /** Marker kind. "conditional" = this hit fired at least one condition-gated effect. */
+  kind: "conditional";
+}
+
 /** Union of all event types. */
 export type SimEvent =
   | DamageEvent
@@ -528,7 +545,8 @@ export type SimEvent =
   | StaggerEvent
   | ActionEvent
   | ConditionResultEvent
-  | ConvertEvent;
+  | ConvertEvent
+  | HitMarkEvent;
 
 /** Validation error — returned when a skill's conditions are not met. */
 export interface ValidationError {

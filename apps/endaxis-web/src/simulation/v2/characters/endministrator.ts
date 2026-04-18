@@ -245,7 +245,9 @@ const crystalConsumptionByAnomaly: PassiveTrigger = {
   sourceMustBeOwner: false,
   condition: { type: "enemy_has_buff", params: { buffId: "endmin_debuff" } },
   actions: [
-    { type: "buff_consume", params: { buffId: "endmin_debuff", stacks: "all" } },
+    // 结晶消失时序：碎晶伤害（若实现）在效果伤害池结算；结晶本身的消失事件
+    // 通过 deferTo=afterEffectDamage 延后到效果伤害结算完之后、技能伤害之前。
+    { type: "buff_consume", params: { buffId: "endmin_debuff", stacks: "all", deferTo: "afterEffectDamage" } },
     // 碎晶伤害 sourceType 继承触发源，但倍率引用连携技的"击碎结晶伤害倍率"
   ],
 };

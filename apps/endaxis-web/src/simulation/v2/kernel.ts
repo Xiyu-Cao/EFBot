@@ -152,6 +152,21 @@ export interface EnemyConfig {
 type SkillCategory = "regular_attack" | "heavy_attack" | "execution" | "aerial"
   | "skill" | "link" | "dodge" | "ultimate";
 
+/**
+ * Evaluate a string-form condition against the current enemy state.
+ * Unknown conditions treat as met so misspelled conditions don't silently skip.
+ * Used by Phase 1 effect gating and the `hit_mark` projection.
+ */
+function evaluateEffectCondition(cond: string, enemy: EnemyState): boolean {
+  switch (cond) {
+    case "enemy_has_break":          return enemy.breakStacks > 0;
+    case "enemy_not_has_break":      return enemy.breakStacks <= 0;
+    case "enemy_has_attachment":     return enemy.attachment.element !== null;
+    case "enemy_not_has_attachment": return enemy.attachment.element === null;
+    default: return true;
+  }
+}
+
 function getSkillCategory(skill: { type: string; isHeavyAttack?: boolean; id: string }): SkillCategory {
   if (skill.type === "execution") return "execution";
   if (skill.type === "attack") {
@@ -227,26 +242,44 @@ class EnemyState {
 
   // Debuff values
   vulnerability: number = 0;        // 易伤 (%)
-  physicalFragility: number = 0;    // 物理脆弱 (%)
+  physicalFragility: number = 0;    // 物理脆弱 (%) — non-armor-break sources
   magicFragility: number = 0;       // 法术脆弱 (%)
   elementFragility: Record<DamageElement, number> = {
     physical: 0, blaze: 0, cold: 0, emag: 0, nature: 0,
   };
   resistReduction: number = 0;      // 抗性削减
 
+  /**
+   * Armor-break-applied physical vulnerability. Single-source debuff: reapplying
+   * 碎甲 refreshes value + expiresAt rather than stacking additively.
+   */
+  armorBreakVuln: { value: number; expiresAt: number } | null = null;
+
   buffManager = new BuffManager();
 
-  advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: boolean; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[] } {
-    const changes: { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: boolean; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[] } = {};
+  /** Physical fragility at `time`, summing baseline sources with armor-break vuln (if still active). */
+  getPhysicalFragility(time: number): number {
+    const abv = this.armorBreakVuln && time < this.armorBreakVuln.expiresAt ? this.armorBreakVuln.value : 0;
+    return this.physicalFragility + abv;
+  }
+
+  advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: boolean } {
+    const changes: { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: boolean } = {};
     // Expire attachment
     if (this.attachment.element && time >= this.attachment.expiresAt) {
       changes.attachmentExpired = { element: this.attachment.element, stacks: this.attachment.stacks, expiresAt: this.attachment.expiresAt };
       this.attachment = { element: null, stacks: 0, expiresAt: 0 };
     }
-    // Expire break
+    // Expire break — record the real expiry moment so projection bars close at it,
+    // not at the next action start that happens to observe the expiry.
     if (this.breakStacks > 0 && time >= this.breakExpiresAt) {
-      changes.breakExpired = true;
+      changes.breakExpired = { prevStacks: this.breakStacks, expiredAt: this.breakExpiresAt };
       this.breakStacks = 0;
+    }
+    // Expire armor-break physical vulnerability
+    if (this.armorBreakVuln && time >= this.armorBreakVuln.expiresAt) {
+      changes.armorBreakVulnExpired = true;
+      this.armorBreakVuln = null;
     }
     // Expire stagger state
     if (this.isStaggered && time >= this.staggerEndTime) {
@@ -314,8 +347,13 @@ export function simulate(
     if (!damage.multiplierRef) return 0;
     const ref = damage.multiplierRef;
     const rawValue = resolveRef(actorId, ref.label);
-    if (ref.share === "equal") return rawValue / (ref.equalCount || 1);
-    return rawValue * ref.share;
+    let base: number;
+    if (ref.share === "equal") base = rawValue / (ref.equalCount || 1);
+    else base = rawValue * ref.share;
+    // Runtime scaling by enemy-state stack count (e.g. consume-per-layer skills).
+    if (ref.scaleBy === "attachmentStacks") base *= enemy.attachment.stacks;
+    else if (ref.scaleBy === "breakStacks") base *= enemy.breakStacks;
+    return base;
   }
 
   // ── Initialize state ──
@@ -451,7 +489,7 @@ export function simulate(
       emit({ type: "attachment_change", time: expiryChanges.attachmentExpired.expiresAt, element: null, stacks: 0, prevElement: expiryChanges.attachmentExpired.element, prevStacks: expiryChanges.attachmentExpired.stacks });
     }
     if (expiryChanges.breakExpired) {
-      emit({ type: "break_change", time, stacks: 0, prevStacks: 0 });
+      emit({ type: "break_change", time: expiryChanges.breakExpired.expiredAt, stacks: 0, prevStacks: expiryChanges.breakExpired.prevStacks });
     }
     if (expiryChanges.staggerExpired) {
       emit({ type: "stagger_change", time, amount: 0, total: 0, maxStagger: enemyConfig.maxStagger, nodeReached: false, isFullStagger: false });
@@ -815,68 +853,136 @@ export function simulate(
       }
     }
 
-      // Queues populated during effect processing
+      // ════════════════════════════════════════════════════════════════
+      // Hit pipeline — 3 phases + 2 deferTo slot drains:
+      //   ① effects (+ effect-originated triggers fired inline)
+      //   ② effect damages resolved
+      //   ◇ afterEffectDamage slot drain (e.g. 结晶消失)
+      //   ③ skill damage resolved
+      //   ◇ afterSkillDamage slot drain + post-damage triggers fired
+      //                              (e.g. 别礼 consume_attachment, hit_damage/skill_hit listeners)
+      // Trigger cascades are suppressed (noTriggerEvents inside fireTriggers).
+      // ════════════════════════════════════════════════════════════════
+
       const effectDamages: EffectDamage[] = [];
-      const deferredActions: (() => void)[] = [];
-      const hitTriggerEvents: TriggerEvent[] = []; // trigger events from Phase 1 effects
+      const deferredActions: (() => void)[] = []; // legacy, unused by current effect handlers
+      const hitTriggerEvents: TriggerEvent[] = [];
+      const slotQueues = {
+        afterEffectDamage: [] as HitEffect[],
+        afterSkillDamage:  [] as HitEffect[],
+      };
 
-      // ── Phase 1: Effects ──
-      // Process hit effects. Effects may push sub-damages into effectDamages
-      // and cleanup actions into deferredActions.
-      for (const effect of hit.effects) {
+      // ── Helper: route an effect to its slot or call processEffect now.
+      //           allowDefer=false prevents re-queuing when draining a slot.
+      const dispatchEffect = (effect: HitEffect, allowDefer: boolean) => {
+        if (allowDefer) {
+          const deferTo = (effect.params as any)?.deferTo;
+          if (deferTo === "afterEffectDamage") { slotQueues.afterEffectDamage.push(effect); return; }
+          if (deferTo === "afterSkillDamage")  { slotQueues.afterSkillDamage.push(effect);  return; }
+        }
         processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type);
-      }
+      };
 
-      // ── Phase 2: Effect-generated damages ──
-      // Resolve damages produced by effects (slam, crystal shatter, etc.).
-      // Enemy state from before deferred cleanup still applies (e.g., fragility buffs).
-      for (const eDmg of effectDamages) {
-        const buffMods = getBuffModifiers(eDmg.sourceId, hitTime);
-        const eBuild = buildMap.get(eDmg.sourceId) || build;
-        const ctx: DamageContext = {
-          source: { buildStats: eBuild.buildStats, buffModifiers: buffMods },
-          target: {
-            defenseMultiplier: enemyConfig.defenseMultiplier,
-            resistPhysical: enemyConfig.basePhysicalResist,
-            resistBlaze: enemyConfig.baseMagicResist,
-            resistEmag: enemyConfig.baseMagicResist,
-            resistCold: enemyConfig.baseMagicResist,
-            resistNature: enemyConfig.baseMagicResist,
-            resistReduction: enemy.resistReduction,
-            isStaggered: enemy.isStaggered,
-            vulnerability: enemy.vulnerability,
-            physicalFragility: enemy.physicalFragility,
-            magicFragility: enemy.magicFragility,
-            elementFragility: { ...enemy.elementFragility },
-          },
-          multiplier: eDmg.multiplier,
-          element: eDmg.element,
-          school: eDmg.school,
-          sourceType: eDmg.sourceType,
-          canCrit: eDmg.canCrit,
-          critMode: config.critMode,
-          rng,
-        };
-        const result = resolveDamage(ctx);
-        emit({
-          type: "damage", time: hitTime,
-          sourceId: eDmg.sourceId, targetId: "boss",
-          damage: result.finalDamage, multiplier: eDmg.multiplier,
-          stagger: eDmg.stagger, isCrit: result.isCrit,
-          element: eDmg.element, school: eDmg.school,
-          actionId: eDmg.actionId, hitIndex: hitIdx,
-        });
-      }
+      // ── Helper: resolve everything currently queued in effectDamages. ──
+      const resolveQueuedDamages = () => {
+        if (effectDamages.length === 0) return;
+        const toResolve = effectDamages.splice(0);
+        for (const eDmg of toResolve) {
+          const buffMods = getBuffModifiers(eDmg.sourceId, hitTime);
+          const eBuild = buildMap.get(eDmg.sourceId) || build;
+          const ctx: DamageContext = {
+            source: { buildStats: eBuild.buildStats, buffModifiers: buffMods },
+            target: {
+              defenseMultiplier: enemyConfig.defenseMultiplier,
+              resistPhysical: enemyConfig.basePhysicalResist,
+              resistBlaze: enemyConfig.baseMagicResist,
+              resistEmag: enemyConfig.baseMagicResist,
+              resistCold: enemyConfig.baseMagicResist,
+              resistNature: enemyConfig.baseMagicResist,
+              resistReduction: enemy.resistReduction,
+              isStaggered: enemy.isStaggered,
+              vulnerability: enemy.vulnerability,
+              physicalFragility: enemy.getPhysicalFragility(hitTime),
+              magicFragility: enemy.magicFragility,
+              elementFragility: { ...enemy.elementFragility },
+            },
+            multiplier: eDmg.multiplier,
+            element: eDmg.element,
+            school: eDmg.school,
+            sourceType: eDmg.sourceType,
+            canCrit: eDmg.canCrit,
+            critMode: config.critMode,
+            rng,
+          };
+          const result = resolveDamage(ctx);
+          emit({
+            type: "damage", time: hitTime,
+            sourceId: eDmg.sourceId, targetId: "boss",
+            damage: result.finalDamage, multiplier: eDmg.multiplier,
+            stagger: eDmg.stagger, isCrit: result.isCrit,
+            element: eDmg.element, school: eDmg.school,
+            actionId: eDmg.actionId, hitIndex: hitIdx,
+          });
+        }
+      };
 
-      // ── Phase 3: Deferred actions ──
-      // Consumption cleanup, talent buff application, etc.
-      // After this phase, consumed buffs are gone and new buffs are active.
-      for (const action of deferredActions) {
-        action();
-      }
+      // ── Helper: fire all pending trigger events through the unified pipeline. ──
+      let _trigState: TriggerState | null = null;
+      const getTrigState = () => (_trigState ??= buildTriggerState(actorId, hitTime));
+      const fireQueuedTriggers = () => {
+        if (hitTriggerEvents.length === 0) return;
+        const toFire = hitTriggerEvents.splice(0);
+        for (const te of toFire) {
+          fireTriggers(te, getTrigState(), actorId, actionId, hitTime, build, effectDamages, slotQueues);
+        }
+      };
 
-      // ── Phase 4: Hit's own damage ──
-      // Resolved last — sees post-deferred state.
+      // ── Helper: drain a slot once; drained effects may push to hitTriggerEvents. ──
+      const drainSlot = (slot: HitEffect[]) => {
+        if (slot.length === 0) return;
+        const toRun = slot.splice(0);
+        for (const eff of toRun) dispatchEffect(eff, false);
+      };
+
+      // ════════════ ① Effects ════════════
+      // Effect-originated triggers fire at the end of this phase (before effect
+      // damages resolve). This means the hit that emits an event (attachment_applied,
+      // physical_anomaly, buff_applied, etc.) sees the triggered effects reflected
+      // in its own subsequent damage — e.g. 赫拉芬格 "施加寒冷附着时 cold_dmg+X%"
+      // buff applies to the skill hit that caused the attachment.
+      let hitMarkedConditional = false;
+      for (const effect of hit.effects) {
+        const cond = (effect.params as any)?.condition;
+        if (typeof cond === "string") {
+          if (!evaluateEffectCondition(cond, enemy)) continue;
+          if (!hitMarkedConditional) {
+            emit({ type: "hit_mark", time: hitTime, actionId, hitIndex: hitIdx, kind: "conditional" });
+            hitMarkedConditional = true;
+          }
+        }
+        dispatchEffect(effect, true);
+      }
+      // Fire effect-originated triggers for events emitted during Phase ①.
+      // Trigger actions route through the shared effectDamages pool and honour deferTo.
+      fireQueuedTriggers();
+
+      // Legacy deferredActions (currently no effect handler uses this).
+      for (const action of deferredActions) action();
+      deferredActions.length = 0;
+
+      // ════════════ ② Effect damages ════════════
+      resolveQueuedDamages();
+
+      // ════════════ ◇ afterEffectDamage slot drain ════════════
+      // Hit-effects (and trigger actions) with `deferTo: "afterEffectDamage"` run
+      // here. 例如 管理员 源石结晶消耗：crystalConsumption trigger 在 Phase ① 末
+      // fire，其 buff_consume 标 deferTo=afterEffectDamage 后落到这里，保证
+      // 结晶消失发生在效果伤害（碎晶伤害）结算之后、技能伤害之前。
+      drainSlot(slotQueues.afterEffectDamage);
+      fireQueuedTriggers();     // drained effects may emit new trigger events
+      resolveQueuedDamages();
+
+      // ════════════ ③ Skill damage ════════════
       if (hit.damage) {
         const mult = resolveMultiplier(actorId, hit.damage);
         const buffMods = getBuffModifiers(actorId, hitTime);
@@ -892,7 +998,7 @@ export function simulate(
             resistReduction: enemy.resistReduction,
             isStaggered: enemy.isStaggered,
             vulnerability: enemy.vulnerability,
-            physicalFragility: enemy.physicalFragility,
+            physicalFragility: enemy.getPhysicalFragility(hitTime),
             magicFragility: enemy.magicFragility,
             elementFragility: { ...enemy.elementFragility },
           },
@@ -904,7 +1010,6 @@ export function simulate(
           critMode: config.critMode,
           rng,
         };
-
         const result = resolveDamage(ctx);
         emit({
           type: "damage", time: hitTime,
@@ -914,7 +1019,6 @@ export function simulate(
           element: hit.damage.element, school: hit.damage.school,
           actionId, hitIndex: hitIdx,
         });
-
         // Stagger from hit damage
         if (hit.damage.stagger > 0 && !enemy.isStaggered) {
           const staggerResult = resolveStagger(
@@ -937,49 +1041,46 @@ export function simulate(
         }
       }
 
-      // ── Phase 5: Trigger evaluation ──
-      // Fire trigger events based on what happened during this hit.
-      const trigState = buildTriggerState(actorId, hitTime);
+      // ════════════ ◇ afterSkillDamage slot drain + post-damage triggers ════════════
+      // Step 1: drain deferred hit.effects (e.g. 别礼 consume_attachment);
+      //         these may push new trigger events (e.g. attachment_consumed).
+      drainSlot(slotQueues.afterSkillDamage);
 
-      // Effect-originated triggers (from Phase 1)
-      for (const te of hitTriggerEvents) {
-        fireTriggers(te, trigState, actorId, actionId, hitTime, build);
-      }
-
-      // Damage trigger (from Phase 4)
+      // Step 2: synthesise post-damage trigger events and queue alongside step 1's.
       if (hit.damage) {
         const sourceType = hit.damage.sourceType;
-        const hitDmgEvent: TriggerEvent = { type: "hit_damage", time: hitTime, sourceActorId: actorId, data: { actionType: sourceType } };
-        fireTriggers(hitDmgEvent, trigState, actorId, actionId, hitTime, build);
-
-        // Action-type-specific trigger
+        hitTriggerEvents.push({ type: "hit_damage", time: hitTime, sourceActorId: actorId, data: { actionType: sourceType } });
         const typeMap: Record<string, string> = { attack: "attack_hit", skill: "skill_hit", link: "link_hit", ultimate: "ultimate_hit", execution: "execution_hit" };
         const specificType = typeMap[sourceType];
         if (specificType) {
-          fireTriggers({ type: specificType as any, time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
+          hitTriggerEvents.push({ type: specificType as any, time: hitTime, sourceActorId: actorId, data: {} });
         }
-
-        // Heavy attack trigger: last hit of a heavy attack skill (普攻最后一段)
         if (skill.isHeavyAttack && hitIdx === skill.hits.length - 1) {
-          fireTriggers({ type: "heavy_attack_hit", time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
+          hitTriggerEvents.push({ type: "heavy_attack_hit", time: hitTime, sourceActorId: actorId, data: {} });
         }
-
-        // Aerial attack trigger
         if (sourceType === "attack" && skill.id.includes("aerial")) {
-          fireTriggers({ type: "aerial_hit" as any, time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
+          hitTriggerEvents.push({ type: "aerial_hit" as any, time: hitTime, sourceActorId: actorId, data: {} });
         }
-
-        // Stagger trigger
         if (hit.damage.stagger > 0) {
-          fireTriggers({ type: "stagger_increased", time: hitTime, sourceActorId: actorId, data: {} }, trigState, actorId, actionId, hitTime, build);
+          hitTriggerEvents.push({ type: "stagger_increased", time: hitTime, sourceActorId: actorId, data: {} });
         }
       }
 
-      // Flush deferred triggers (幻影追击 etc.)
+      // Step 3: fire everything — drained-effect events + post-damage events together.
+      fireQueuedTriggers();
+
+      // Step 4: drain again if trigger actions routed more into the slot;
+      //         no further trigger cascade since 禁级联 is enforced.
+      drainSlot(slotQueues.afterSkillDamage);
+      resolveQueuedDamages();
+
+      // Legacy: flush trigger-level `deferred: true` triggers (LASTRITE hypothermia 等).
+      // These are fire-and-forget; 他们产生的 damage 通过 pool 统一结算。
       const deferredEffects = triggerProc.flushDeferred();
       for (const eff of deferredEffects) {
-        processEffect(eff, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions);
+        dispatchEffect(eff, false);
       }
+      resolveQueuedDamages();
   }  // end globalHits for loop
 
   // ── Final expiry sweep: expire any remaining timed states ──
@@ -1079,7 +1180,17 @@ export function simulate(
     };
   }
 
-  /** Fire triggers for an event; immediate effects are processed inline. */
+  /**
+   * Fire triggers for an event.
+   *
+   * When `effectDamagesPool` is provided, trigger-produced damages are appended
+   * to it (for the caller to resolve in a unified phase) rather than resolved
+   * inline. When `slotQueues` is provided, trigger actions with `deferTo` route
+   * into the corresponding slot queue.
+   *
+   * Without these options, the legacy behaviour is used: damages resolve inline.
+   * Trigger cascades are always suppressed (禁级联).
+   */
   function fireTriggers(
     event: TriggerEvent,
     state: TriggerState,
@@ -1087,18 +1198,30 @@ export function simulate(
     actionId: string,
     time: number,
     build: CharacterBuild,
+    effectDamagesPool?: EffectDamage[],
+    slotQueues?: { afterEffectDamage: HitEffect[]; afterSkillDamage: HitEffect[] },
   ): void {
     state.event = event;
     const immediateEffects = triggerProc.processEvent(event, state);
     // Process immediate trigger effects (these may produce damage, buffs, etc.)
-    const trigEffectDamages: EffectDamage[] = [];
+    const localDamages: EffectDamage[] = effectDamagesPool || [];
     const trigDeferredActions: (() => void)[] = [];
     const noTriggerEvents: TriggerEvent[] = []; // don't cascade triggers from triggers
     for (const eff of immediateEffects) {
-      processEffect(eff, actorId, actionId, time, 0, build, emit, trigEffectDamages, trigDeferredActions, noTriggerEvents);
+      // Honour deferTo when slot queues are available.
+      const deferTo = slotQueues ? (eff.params as any)?.deferTo : undefined;
+      if (deferTo === "afterEffectDamage" && slotQueues) { slotQueues.afterEffectDamage.push(eff); continue; }
+      if (deferTo === "afterSkillDamage"  && slotQueues) { slotQueues.afterSkillDamage.push(eff);  continue; }
+      processEffect(eff, actorId, actionId, time, 0, build, emit, localDamages, trigDeferredActions, noTriggerEvents);
+    }
+    // If caller didn't supply an external pool, resolve damages inline (legacy).
+    if (effectDamagesPool) {
+      // Caller will resolve; just execute deferred actions.
+      for (const action of trigDeferredActions) action();
+      return;
     }
     // Resolve trigger-originated damages immediately
-    for (const eDmg of trigEffectDamages) {
+    for (const eDmg of localDamages) {
       const buffMods = getBuffModifiers(eDmg.sourceId, time);
       const eBuild = buildMap.get(eDmg.sourceId) || build;
       const ctx: DamageContext = {
@@ -1113,7 +1236,7 @@ export function simulate(
           resistReduction: enemy.resistReduction,
           isStaggered: enemy.isStaggered,
           vulnerability: enemy.vulnerability,
-          physicalFragility: enemy.physicalFragility,
+          physicalFragility: enemy.getPhysicalFragility(time),
           magicFragility: enemy.magicFragility,
           elementFragility: { ...enemy.elementFragility },
         },
@@ -1286,7 +1409,8 @@ export function simulate(
           const artsPower = build.stats.originiumArtsPower;
           const vuln = armorBreakVulnerability(consumed, artsPower);
           const dur = armorBreakVulnDuration(consumed);
-          enemy.physicalFragility += vuln; // simplified: additive
+          // Refresh (not accumulate): a new 碎甲 replaces value + expiry.
+          enemy.armorBreakVuln = { value: vuln, expiresAt: time + dur };
           // Queue armorBreak damage for Phase 2
           const mult = armorBreakMult(consumed, 1, artsPower); // level=1 simplified
           effectDamages.push({
@@ -1483,12 +1607,20 @@ export function simulate(
           valuePerLayerRef?: string;
           maxStacks?: number;
           stackBehavior?: string;
+          // Conditional application — skip if not satisfied.
+          // Supports: "enemy_has_break", "enemy_not_has_break",
+          //           "enemy_has_attachment", "enemy_not_has_attachment".
+          condition?: string;
           // consumeOnAction stored buff metadata
           consumeOnAction?: string[];
           activateStat?: string;
           activateZone?: string;
           activateValue?: number;
         };
+
+        // Condition gating is handled in the Phase 1 caller via
+        // `evaluateEffectCondition` so effect dispatchers stay uniform.
+
         const duration = p.duration || (p.durationRef ? resolveRef(actorId, p.durationRef) : 0) || 15;
 
         // If this is a consumeOnAction charge buff, register it
@@ -1620,12 +1752,16 @@ export function simulate(
           delay?: number;
           multiplier?: number;
           multiplierRef?: string;
+          /** Resolve multiplier from a talent id (e.g. "talent_1"). Honoured when no literal/ref present. */
+          multiplierFromTalent?: string;
           stagger?: number;
           element?: DamageElement;
           school?: DamageSchool;
         };
         const delay = p.delay || 0;
-        const mult = p.multiplier || (p.multiplierRef ? resolveRef(actorId, p.multiplierRef) : 0);
+        const mult = p.multiplier
+          || (p.multiplierRef ? resolveRef(actorId, p.multiplierRef) : 0)
+          || (p.multiplierFromTalent ? resolveRef(actorId, p.multiplierFromTalent) : 0);
         const dmgTime = time + delay;
 
         if (mult > 0) {
@@ -1642,7 +1778,7 @@ export function simulate(
               resistReduction: enemy.resistReduction,
               isStaggered: enemy.isStaggered,
               vulnerability: enemy.vulnerability,
-              physicalFragility: enemy.physicalFragility,
+              physicalFragility: enemy.getPhysicalFragility(dmgTime),
               magicFragility: enemy.magicFragility,
               elementFragility: { ...enemy.elementFragility },
             },

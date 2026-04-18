@@ -279,7 +279,7 @@ const demonSubduer: PassiveTrigger = {
   listenTo: "physical_anomaly",
   deferred: false,
   sourceMustBeOwner: true,
-  condition: { type: "physical_anomaly_type", params: { physicalType: "knockdown" } },
+  condition: { type: "physical_anomaly_type", params: { physicalTypes: ["knockdown"] } },
   actions: [
     { type: "delayed_damage", params: { multiplierFromTalent: "talent_1", element: "physical", school: "physical", canCrit: true } },
   ],

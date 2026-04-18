@@ -449,11 +449,18 @@ const renderableTicks = computed(() => {
 
   if (v2Bar?.hitOffsets) {
     const effectiveDuration = v2Bar.displayDuration ?? (v2Bar.endTime - v2Bar.startTime)
+    const conditionalSet = new Set(v2Bar.conditionalHits || [])
     return v2Bar.hitOffsets
-      .filter(offset => !v2Bar.interrupted || offset < effectiveDuration)
-      .map(offset => {
+      .map((offset, idx) => ({ offset, idx }))
+      .filter(({ offset }) => !v2Bar.interrupted || offset < effectiveDuration)
+      .map(({ offset, idx }) => {
         const left = store.timeToPx(props.action.startTime + offset) - store.timeToPx(props.action.startTime)
-        return { style: { left: `${left}px` }, data: { offset } }
+        const isConditional = conditionalSet.has(idx)
+        return {
+          style: { left: `${left}px` },
+          data: { offset },
+          isConditional,
+        }
       })
   }
 
@@ -637,14 +644,14 @@ function handleEffectDrop(effectId) {
            class="damage-tick-wrapper"
            :style="tick.style"
            :title="getDamageTickTitle(tick)">
-        <div class="tick-marker"></div>
+        <div class="tick-marker" :class="{ 'tick-marker--conditional': tick.isConditional }"></div>
       </div>
-      <!-- Trigger hits as tick markers (same position as regular hits, different color) -->
+      <!-- Trigger hits as tick markers (fixed blue, regardless of element). -->
       <div v-for="hit in triggerHitTicks" :key="hit.id"
            class="damage-tick-wrapper"
            :style="{ left: `${store.timeToPx(hit.time) - store.timeToPx(action.startTime)}px` }"
            :title="`${hit.name}${hit.damage ? ' (' + hit.damage + ')' : ''}`">
-        <div class="tick-marker" :style="{ background: store.getColor(hit.element) || '#4fc3f7' }"></div>
+        <div class="tick-marker tick-marker--trigger"></div>
       </div>
       <!-- Effect icons above hits (stacked vertically) -->
       <div v-for="fx in groupedEffectIcons" :key="fx.id"
@@ -925,6 +932,17 @@ function handleEffectDrop(effectId) {
   transform: translateY(50%) rotate(45deg);
   box-shadow: 0 1px 2px rgba(0,0,0,0.5);
   transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Hit fired at least one condition-gated effect (e.g. 黎风战技对无破防敌人额外施加物理脆弱). */
+.tick-marker--conditional {
+  background-color: #ffd666;
+  box-shadow: 0 0 4px rgba(255, 214, 102, 0.7);
+}
+
+/* Trigger-produced追加伤害 — fixed blue regardless of element. */
+.tick-marker--trigger {
+  background-color: #4fc3f7;
 }
 
 .damage-tick-wrapper:hover .tick-marker {

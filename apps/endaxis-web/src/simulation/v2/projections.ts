@@ -316,62 +316,106 @@ export function projectAnomalyBars(
 
 export interface BreakBar {
   id: string;
+  /** Max stack count reached during this break lifecycle. */
   stacks: number;
   startTime: number;
   endTime: number;
+  /** Physical anomaly type that initially triggered the break state. */
   physicalType?: string;
   /** What consumed this break (slam/armorBreak), or undefined if expired naturally. */
   consumedBy?: string;
+  /** Per-stack-change timeline within the lifecycle, for detailed UI. */
+  segments: { stacks: number; startTime: number; endTime: number }[];
 }
 
 const BREAK_DURATION = 30;
 
 /**
  * Project break stack bars from break_change events.
+ *
+ * A break lifecycle = continuous interval where stacks > 0. Stack additions
+ * (击飞/倒地/直接施加) within one lifecycle do NOT open a new bar — they
+ * append a segment. The lifecycle ends when stacks drop back to 0 (consumed
+ * by 猛击/碎甲, or naturally expired via BREAK_DURATION).
  */
 export function projectBreakBars(
   events: SimEvent[],
   endTime: number,
 ): BreakBar[] {
   const bars: BreakBar[] = [];
-  let current: { stacks: number; startTime: number; physicalType?: string } | null = null;
+  let current: {
+    startTime: number;
+    physicalType?: string;
+    segments: { stacks: number; startTime: number; endTime: number }[];
+    currentSegStart: number;
+    currentStacks: number;
+    maxStacks: number;
+  } | null = null;
   let counter = 0;
+
+  const closeSegment = (endT: number) => {
+    if (!current) return;
+    if (endT > current.currentSegStart) {
+      current.segments.push({
+        stacks: current.currentStacks,
+        startTime: current.currentSegStart,
+        endTime: endT,
+      });
+    }
+  };
 
   for (const e of events) {
     if (e.type !== "break_change") continue;
     const bk = e as BreakEvent;
 
-    // Close previous bar
-    if (current && current.stacks > 0) {
-      counter++;
-      // If stacks dropped to 0, this was consumed by the current event's physicalType
-      const consumed = bk.stacks === 0 && bk.physicalType ? bk.physicalType : undefined;
-      bars.push({
-        id: `break_${counter}`,
-        stacks: current.stacks,
-        startTime: current.startTime,
-        endTime: bk.time,
-        physicalType: current.physicalType,
-        consumedBy: consumed,
-      });
-    }
-
-    // Open new bar if stacks > 0
     if (bk.stacks > 0) {
-      current = { stacks: bk.stacks, startTime: bk.time, physicalType: bk.physicalType };
+      if (current == null) {
+        // Open new lifecycle
+        counter++;
+        current = {
+          startTime: bk.time,
+          physicalType: bk.physicalType,
+          segments: [],
+          currentSegStart: bk.time,
+          currentStacks: bk.stacks,
+          maxStacks: bk.stacks,
+        };
+      } else {
+        // Stack change within same lifecycle — close previous segment, open new
+        closeSegment(bk.time);
+        current.currentSegStart = bk.time;
+        current.currentStacks = bk.stacks;
+        if (bk.stacks > current.maxStacks) current.maxStacks = bk.stacks;
+      }
     } else {
-      current = null;
+      // stacks went to 0 → close lifecycle
+      if (current) {
+        closeSegment(bk.time);
+        bars.push({
+          id: `break_${counter}`,
+          stacks: current.maxStacks,
+          startTime: current.startTime,
+          endTime: bk.time,
+          physicalType: current.physicalType,
+          consumedBy: bk.physicalType,
+          segments: current.segments,
+        });
+        current = null;
+      }
     }
   }
 
   // Close unclosed (cap at startTime + BREAK_DURATION)
-  if (current && current.stacks > 0) {
-    counter++;
+  if (current) {
+    const cap = Math.min(endTime, current.startTime + BREAK_DURATION);
+    closeSegment(cap);
     bars.push({
       id: `break_${counter}`,
-      stacks: current.stacks,
+      stacks: current.maxStacks,
       startTime: current.startTime,
-      endTime: Math.min(endTime, current.startTime + BREAK_DURATION),
+      endTime: cap,
+      physicalType: current.physicalType,
+      segments: current.segments,
     });
   }
 
@@ -693,6 +737,8 @@ export interface ActionBarInfo {
   displayDuration?: number;
   /** Hit offsets from the V2 Skill (seconds from action start). */
   hitOffsets?: number[];
+  /** Hit indices that fired a condition-gated ("额外") effect. UI can colour these distinctly. */
+  conditionalHits?: number[];
 }
 
 /**
@@ -703,6 +749,8 @@ export interface ActionBarInfo {
 export function projectActionBars(events: SimEvent[]): Map<string, ActionBarInfo> {
   const starts = new Map<string, { actorId: string; time: number }>();
   const result = new Map<string, ActionBarInfo>();
+  // Collected hit_mark events keyed by actionId.
+  const conditionalByAction = new Map<string, Set<number>>();
 
   for (const e of events) {
     if (e.type === "action_start") {
@@ -723,7 +771,17 @@ export function projectActionBars(events: SimEvent[]): Map<string, ActionBarInfo
           hitOffsets: ae.hitOffsets,
         });
       }
+    } else if (e.type === "hit_mark" && (e as any).kind === "conditional") {
+      const he = e as any;
+      if (!conditionalByAction.has(he.actionId)) conditionalByAction.set(he.actionId, new Set());
+      conditionalByAction.get(he.actionId)!.add(he.hitIndex);
     }
+  }
+
+  // Attach conditional hit indices to the corresponding ActionBarInfo.
+  for (const [actionId, hits] of conditionalByAction) {
+    const info = result.get(actionId);
+    if (info) info.conditionalHits = [...hits].sort((a, b) => a - b);
   }
 
   return result;

@@ -787,7 +787,12 @@ function getWeaponStatusLeft(status) {
 function getWeaponStatusTiming(status) {
   const start = Number(status.startTime) || 0
   const rawDuration = Number(status.duration) || 0
-  const shiftedEnd = store.getShiftedEndTime(start, rawDuration, status.id)
+  // V2 kernel bars already carry real (freeze-shifted) times that align with
+  // `action.startTime`. Re-shifting would double-count any freeze that falls
+  // within the bar's span (observed as break bar extending past slam).
+  const shiftedEnd = status.preshifted
+    ? (start + rawDuration)
+    : store.getShiftedEndTime(start, rawDuration, status.id)
   const baseFinalDuration = Math.max(0, shiftedEnd - start)
 
   let finalDuration = baseFinalDuration
