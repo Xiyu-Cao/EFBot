@@ -243,7 +243,16 @@ const hypothermia: PassiveTrigger = {
   deferred: true,
   sourceMustBeOwner: true,
   actions: [
-    { type: "buff_apply", params: { buffId: "lastrite_cold_fragility", target: "enemy", stat: "cold_dmg", zone: "fragility", valuePerLayerRef: "talent_0", duration: 15 } },
+    // 冰脆弱值 = 每层 (talent_0) × 消耗层数 (event.stacks from attachment_consumed).
+    {
+      type: "buff_apply",
+      params: {
+        buffId: "lastrite_cold_fragility", target: "enemy",
+        stat: "cold_dmg", zone: "fragility",
+        valueRef: { label: "talent_0", scaleBy: "event.stacks" },
+        duration: 15,
+      },
+    },
   ],
 };
 

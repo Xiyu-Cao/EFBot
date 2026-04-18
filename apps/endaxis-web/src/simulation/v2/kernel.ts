@@ -62,6 +62,14 @@ import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain, 
 import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef, type BuffModifierDef } from "./effects";
 import { getBuffMeta } from "../data/buffMetadata";
 import { TriggerProcessor, type TriggerEvent, type TriggerState } from "./triggers";
+import {
+  type EventContext,
+  type ResolveContext,
+  type ValueSource,
+  normalizeTriggerEvent,
+  resolveValue,
+  resolveScaleBy,
+} from "./valueSource";
 
 // ═══════════════════════════════════════════════════════════════════
 // Stat+Zone → BuffModifiers field mapping (for weapon/equipment buffs)
@@ -341,8 +349,15 @@ export function simulate(
   const rng = config.rng || Math.random;
   const resolveRef = config.resolveRef || (() => 0);
 
-  /** Resolve a hit's multiplier from either fixed value or multiplierRef. */
-  function resolveMultiplier(actorId: string, damage: { multiplier?: number; multiplierRef?: MultiplierRef }): number {
+  /** Queued slot item — an effect plus the event that produced it (for trigger actions). */
+  interface SlotItem { effect: HitEffect; eventContext?: EventContext }
+
+  /**
+   * Resolve a hit's multiplier from either fixed value or multiplierRef.
+   * `scaleBy` goes through the shared SCALE_BY_RESOLVERS registry, same as
+   * ValueSource — `"attachmentStacks"`, `"breakStacks"`, `"event.stacks"` etc.
+   */
+  function resolveMultiplier(actorId: string, damage: { multiplier?: number; multiplierRef?: MultiplierRef }, eventContext?: EventContext): number {
     if (damage.multiplier !== undefined) return damage.multiplier;
     if (!damage.multiplierRef) return 0;
     const ref = damage.multiplierRef;
@@ -350,9 +365,10 @@ export function simulate(
     let base: number;
     if (ref.share === "equal") base = rawValue / (ref.equalCount || 1);
     else base = rawValue * ref.share;
-    // Runtime scaling by enemy-state stack count (e.g. consume-per-layer skills).
-    if (ref.scaleBy === "attachmentStacks") base *= enemy.attachment.stacks;
-    else if (ref.scaleBy === "breakStacks") base *= enemy.breakStacks;
+    if (ref.scaleBy) {
+      const ctx: ResolveContext = { resolveRef, enemy, event: eventContext };
+      base *= resolveScaleBy(ref.scaleBy, ctx);
+    }
     return base;
   }
 
@@ -660,6 +676,16 @@ export function simulate(
       skillType: skill.type,
       variantId: selectedVariant?.id,
     });
+    // Fire skill_cast triggers at action start, out-of-hit. Trigger actions
+    // resolve inline (legacy fireTriggers path) — they don't participate in
+    // the hit's effectDamages/slot pipeline.
+    {
+      const castState = buildTriggerState(actorId, time);
+      fireTriggers(
+        { type: "action_start", time, sourceActorId: actorId, data: { actionType: skill.type, actionId } },
+        castState, actorId, actionId, time, build,
+      );
+    }
 
     // SP cost
     if (skill.spCost > 0) {
@@ -867,20 +893,22 @@ export function simulate(
       const effectDamages: EffectDamage[] = [];
       const deferredActions: (() => void)[] = []; // legacy, unused by current effect handlers
       const hitTriggerEvents: TriggerEvent[] = [];
+      // Slot queues carry an optional EventContext so deferred trigger actions
+      // keep access to the triggering event's data when they eventually run.
       const slotQueues = {
-        afterEffectDamage: [] as HitEffect[],
-        afterSkillDamage:  [] as HitEffect[],
+        afterEffectDamage: [] as SlotItem[],
+        afterSkillDamage:  [] as SlotItem[],
       };
 
       // ── Helper: route an effect to its slot or call processEffect now.
       //           allowDefer=false prevents re-queuing when draining a slot.
-      const dispatchEffect = (effect: HitEffect, allowDefer: boolean) => {
+      const dispatchEffect = (effect: HitEffect, allowDefer: boolean, eventContext?: EventContext) => {
         if (allowDefer) {
           const deferTo = (effect.params as any)?.deferTo;
-          if (deferTo === "afterEffectDamage") { slotQueues.afterEffectDamage.push(effect); return; }
-          if (deferTo === "afterSkillDamage")  { slotQueues.afterSkillDamage.push(effect);  return; }
+          if (deferTo === "afterEffectDamage") { slotQueues.afterEffectDamage.push({ effect, eventContext }); return; }
+          if (deferTo === "afterSkillDamage")  { slotQueues.afterSkillDamage.push({ effect, eventContext });  return; }
         }
-        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type);
+        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type, eventContext);
       };
 
       // ── Helper: resolve everything currently queued in effectDamages. ──
@@ -938,10 +966,10 @@ export function simulate(
       };
 
       // ── Helper: drain a slot once; drained effects may push to hitTriggerEvents. ──
-      const drainSlot = (slot: HitEffect[]) => {
+      const drainSlot = (slot: SlotItem[]) => {
         if (slot.length === 0) return;
         const toRun = slot.splice(0);
-        for (const eff of toRun) dispatchEffect(eff, false);
+        for (const item of toRun) dispatchEffect(item.effect, false, item.eventContext);
       };
 
       // ════════════ ① Effects ════════════
@@ -1075,10 +1103,11 @@ export function simulate(
       resolveQueuedDamages();
 
       // Legacy: flush trigger-level `deferred: true` triggers (LASTRITE hypothermia 等).
-      // These are fire-and-forget; 他们产生的 damage 通过 pool 统一结算。
+      // Each item carries the event that produced it so `event.*` scaleBy params
+      // still resolve correctly at deferred fire time.
       const deferredEffects = triggerProc.flushDeferred();
-      for (const eff of deferredEffects) {
-        dispatchEffect(eff, false);
+      for (const { effect: eff, event: evt } of deferredEffects) {
+        dispatchEffect(eff, false, normalizeTriggerEvent(evt));
       }
       resolveQueuedDamages();
   }  // end globalHits for loop
@@ -1186,10 +1215,16 @@ export function simulate(
    * When `effectDamagesPool` is provided, trigger-produced damages are appended
    * to it (for the caller to resolve in a unified phase) rather than resolved
    * inline. When `slotQueues` is provided, trigger actions with `deferTo` route
-   * into the corresponding slot queue.
+   * into the corresponding slot queue (along with the normalised event context
+   * so deferred effects still see the triggering event's data).
    *
-   * Without these options, the legacy behaviour is used: damages resolve inline.
-   * Trigger cascades are always suppressed (禁级联).
+   * The raw event is normalised via `normalizeTriggerEvent` and passed to each
+   * processed effect, enabling trigger-action params like
+   * `valueRef: { label, scaleBy: "event.stacks" }` to scale by consumed/added
+   * stack counts (LASTRITE 低温症 pattern).
+   *
+   * Without `effectDamagesPool`, the legacy behaviour is used: damages resolve
+   * inline. Trigger cascades are always suppressed (禁级联).
    */
   function fireTriggers(
     event: TriggerEvent,
@@ -1199,10 +1234,11 @@ export function simulate(
     time: number,
     build: CharacterBuild,
     effectDamagesPool?: EffectDamage[],
-    slotQueues?: { afterEffectDamage: HitEffect[]; afterSkillDamage: HitEffect[] },
+    slotQueues?: { afterEffectDamage: SlotItem[]; afterSkillDamage: SlotItem[] },
   ): void {
     state.event = event;
     const immediateEffects = triggerProc.processEvent(event, state);
+    const eventContext = normalizeTriggerEvent(event);
     // Process immediate trigger effects (these may produce damage, buffs, etc.)
     const localDamages: EffectDamage[] = effectDamagesPool || [];
     const trigDeferredActions: (() => void)[] = [];
@@ -1210,9 +1246,9 @@ export function simulate(
     for (const eff of immediateEffects) {
       // Honour deferTo when slot queues are available.
       const deferTo = slotQueues ? (eff.params as any)?.deferTo : undefined;
-      if (deferTo === "afterEffectDamage" && slotQueues) { slotQueues.afterEffectDamage.push(eff); continue; }
-      if (deferTo === "afterSkillDamage"  && slotQueues) { slotQueues.afterSkillDamage.push(eff);  continue; }
-      processEffect(eff, actorId, actionId, time, 0, build, emit, localDamages, trigDeferredActions, noTriggerEvents);
+      if (deferTo === "afterEffectDamage" && slotQueues) { slotQueues.afterEffectDamage.push({ effect: eff, eventContext }); continue; }
+      if (deferTo === "afterSkillDamage"  && slotQueues) { slotQueues.afterSkillDamage.push({ effect: eff, eventContext });  continue; }
+      processEffect(eff, actorId, actionId, time, 0, build, emit, localDamages, trigDeferredActions, noTriggerEvents, undefined, eventContext);
     }
     // If caller didn't supply an external pool, resolve damages inline (legacy).
     if (effectDamagesPool) {
@@ -1289,7 +1325,15 @@ export function simulate(
     hitTriggerEvents?: TriggerEvent[],
     /** Action type context for trigger event data. */
     skillType?: ActionType,
+    /** Present when this effect is a trigger action — lets `valueRef.scaleBy: "event.*"` resolve. */
+    eventContext?: EventContext,
   ): void {
+    const resolveCtx: ResolveContext = { resolveRef, enemy, event: eventContext };
+    // Local shorthand for migrating old "p.foo ?? resolveRef(p.fooRef)" patterns.
+    const rv = (source: ValueSource | undefined, fallback: number = 0): number =>
+      resolveValue(source, actorId, resolveCtx, fallback);
+    // Keep rv referenced even when no case uses it (e.g. empty migrations).
+    void rv;
     switch (effect.type) {
       case "magic_attachment": {
         const p = effect.params as { element: DamageElement; stacks?: number; delay?: number };
@@ -1598,13 +1642,12 @@ export function simulate(
         const p = effect.params as {
           buffId: string;
           target?: BuffTarget | "mainControl" | "trigger_source" | "others";
-          duration?: number;
-          durationRef?: string;
+          duration?: ValueSource;
+          durationRef?: ValueSource;
           stat?: string;
           zone?: string;
-          value?: number;
-          valueRef?: string;
-          valuePerLayerRef?: string;
+          value?: ValueSource;
+          valueRef?: ValueSource;
           maxStacks?: number;
           stackBehavior?: string;
           // Conditional application — skip if not satisfied.
@@ -1621,7 +1664,7 @@ export function simulate(
         // Condition gating is handled in the Phase 1 caller via
         // `evaluateEffectCondition` so effect dispatchers stay uniform.
 
-        const duration = p.duration || (p.durationRef ? resolveRef(actorId, p.durationRef) : 0) || 15;
+        const duration = rv(p.duration ?? p.durationRef, 0) || 15;
 
         // If this is a consumeOnAction charge buff, register it
         if (p.consumeOnAction?.length && p.activateStat && p.activateZone) {
@@ -1636,11 +1679,14 @@ export function simulate(
           pendingCharges.set(actorId, charges);
         }
 
-        // Resolve stat modifiers from stat/zone/value params
+        // Resolve stat modifiers from stat/zone/value params.
+        // value/valueRef can be a ValueSource (literal, label, or object with scaleBy).
+        // E.g. LASTRITE 低温症: { label: "talent_0", scaleBy: "event.stacks" }
+        // scales the buff value by the consumed-attachment-stacks from the triggering event.
         const modifiers: BuffModifierDef[] = [];
         if (p.stat && p.zone) {
           const modZone = resolveBuffModifierZone(p.stat, p.zone);
-          const modValue = p.value ?? (p.valueRef ? resolveRef(actorId, p.valueRef) : 0);
+          const modValue = rv(p.value ?? p.valueRef, 0);
           if (modZone && modValue) {
             modifiers.push({ zone: modZone, valuePerStack: modValue });
           }
@@ -1747,21 +1793,23 @@ export function simulate(
       }
 
       case "delayed_damage": {
-        // Emit a damage event at time + delay, resolved with current state
+        // Emit a damage event at time + delay, resolved with current state.
+        // `multiplier` / `multiplierRef` / `multiplierFromTalent` all accept a
+        // ValueSource so trigger actions can scale damage by event.stacks etc.
         const p = effect.params as {
-          delay?: number;
-          multiplier?: number;
-          multiplierRef?: string;
+          delay?: ValueSource;
+          multiplier?: ValueSource;
+          multiplierRef?: ValueSource;
           /** Resolve multiplier from a talent id (e.g. "talent_1"). Honoured when no literal/ref present. */
-          multiplierFromTalent?: string;
-          stagger?: number;
+          multiplierFromTalent?: ValueSource;
+          stagger?: ValueSource;
           element?: DamageElement;
           school?: DamageSchool;
         };
-        const delay = p.delay || 0;
-        const mult = p.multiplier
-          || (p.multiplierRef ? resolveRef(actorId, p.multiplierRef) : 0)
-          || (p.multiplierFromTalent ? resolveRef(actorId, p.multiplierFromTalent) : 0);
+        const delay = rv(p.delay, 0);
+        const mult = rv(p.multiplier, 0)
+          || rv(p.multiplierRef, 0)
+          || rv(p.multiplierFromTalent, 0);
         const dmgTime = time + delay;
 
         if (mult > 0) {
@@ -1795,7 +1843,7 @@ export function simulate(
             type: "damage", time: dmgTime,
             sourceId: actorId, targetId: "boss",
             damage: result.finalDamage, multiplier: mult,
-            stagger: p.stagger || 0, isCrit: result.isCrit,
+            stagger: rv(p.stagger, 0), isCrit: result.isCrit,
             element: p.element || build.element,
             school: p.school || "physical",
             actionId, hitIndex,

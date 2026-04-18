@@ -115,16 +115,17 @@ export class TriggerProcessor {
 
   /**
    * Flush deferred triggers — call after a hit's full processing completes.
-   * Returns all deferred effects that should now execute.
+   * Returns effects paired with the event that produced them so callers can
+   * resolve `event.*` scaleBy params against the right event context.
    */
-  flushDeferred(): HitEffect[] {
-    const effects: HitEffect[] = [];
+  flushDeferred(): { effect: HitEffect; event: TriggerEvent }[] {
+    const out: { effect: HitEffect; event: TriggerEvent }[] = [];
     for (const { trigger: reg, event } of this.deferredQueue) {
-      effects.push(...reg.trigger.actions);
+      for (const eff of reg.trigger.actions) out.push({ effect: eff, event });
       this.applyCooldown(reg, event.time);
     }
     this.deferredQueue = [];
-    return effects;
+    return out;
   }
 
   /**

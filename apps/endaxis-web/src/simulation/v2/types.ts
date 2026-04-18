@@ -305,6 +305,9 @@ export interface PassiveTrigger {
  * These are produced by the kernel during hit processing.
  */
 export type TriggerEventType =
+  // Skill cast (action_start)
+  | "action_start"           // any skill cast started
+  | "skill_cast"             // 战技 cast (aliases dispatched per-actionType if needed)
   // Hit events
   | "hit_damage"             // any damage dealt
   | "hit_effect"             // any effect applied
