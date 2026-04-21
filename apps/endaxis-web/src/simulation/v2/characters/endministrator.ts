@@ -179,7 +179,10 @@ const link: Skill = {
     {
       offset: f(50), checkpointIndex: 0,
       damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 10, element: "physical", canCrit: true, school: "physical", sourceType: "link" },
-      effects: [{ type: "buff_apply", params: { buffId: "endmin_debuff", target: "enemy", durationRef: "封印时间（秒）" } }],
+      effects: [
+        { type: "buff_apply", params: { buffId: "endmin_debuff", target: "enemy", durationRef: "封印时间（秒）" } },
+        { type: "gauge_gain", params: { amount: 10 } },
+      ],
       standardLogic: true,
     },
   ],

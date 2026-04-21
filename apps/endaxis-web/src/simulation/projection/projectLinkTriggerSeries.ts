@@ -40,6 +40,15 @@ export interface TrackLinkConfig {
 export interface LinkTriggerEvent {
   time: number;
   trackId: string;
+  /**
+   * One-shot data captured at trigger time, passed through to the placed link action and
+   * finally to the V2 kernel's variant selection (placed.triggerData).
+   *
+   * Keys so far:
+   *  - consumedBreakStacks: number — for POGRANICHNK on_slam_or_armor_break; the break
+   *    stacks consumed by the triggering slam/armor_break. Selects linkBreak1..4.
+   */
+  triggerData?: Record<string, unknown>;
 }
 
 export interface LinkQueueEntry {
@@ -53,6 +62,9 @@ export interface LinkQueueEntry {
   isLocked: boolean;
   /** Link is on cooldown */
   onCooldown: boolean;
+  /** Trigger-time data from the underlying LinkTriggerEvent. Forwarded to action.triggerData
+   *  when this queue entry is placed. */
+  triggerData?: Record<string, unknown>;
 }
 
 // ── Constants ──
@@ -199,20 +211,23 @@ export function projectLinkTriggerSeries(
     return windows.some(w => time >= w.castTime && time < w.cdEnd);
   }
 
-  /** Check if a trigger condition is met for a given event context. */
+  /** Check if a trigger condition is met for a given event context.
+   *  Returns `{ ok, data? }` — `data` carries trigger-time state for variant selection
+   *  (e.g. POGRANICHNK: { consumedBreakStacks: N } from the slam/armor_break that fired). */
   function checkTrigger(
     cfg: TrackLinkConfig,
     eventType: string,
     eventPayload: Record<string, unknown>,
     time: number,
-  ): boolean {
+  ): { ok: boolean; data?: Record<string, unknown> } {
     const cond = cfg.condition;
-    if (!cond?.trigger) return false;
+    if (!cond?.trigger) return { ok: false };
 
     // Don't trigger during cooldown
-    if (isOnCooldown(cfg.trackId, time)) return false;
+    if (isOnCooldown(cfg.trackId, time)) return { ok: false };
 
     let triggered = false;
+    let triggerData: Record<string, unknown> | undefined;
 
     switch (cond.trigger) {
       case "on_heavy_attack": {
@@ -359,12 +374,23 @@ export function projectLinkTriggerSeries(
       }
 
       case "on_slam_or_armor_break": {
-        // POGRANICHNK: slam (PHYSICAL_CRUSH) or armor_break (PHYSICAL_BREACH) applied
+        // POGRANICHNK: slam (PHYSICAL_CRUSH) or armor_break (PHYSICAL_BREACH) applied.
+        // consumedBreakStacks (the break stacks this slam/armor_break consumed) selects
+        // one of linkBreak1..4. V1 simLog does not carry stacks on EFFECT_START — the
+        // V2 kernel break_change event does (prevStacks), but this projection layer
+        // runs on the V1 simLog. When the link queue system migrates to V2 event sources,
+        // populate `triggerData.consumedBreakStacks` from the break_change prevStacks.
         if (eventType === "EFFECT_START") {
           const snap = eventPayload.effectSnapshot as any;
           if (snap?.tags && eventPayload.targetId === "boss") {
             const tags = snap.tags as string[];
-            if (tags.includes("PHYSICAL_CRUSH") || tags.includes("PHYSICAL_BREACH")) triggered = true;
+            if (tags.includes("PHYSICAL_CRUSH") || tags.includes("PHYSICAL_BREACH")) {
+              triggered = true;
+              const stacks = Number((snap as { stacks?: number }).stacks ?? (eventPayload as { stacks?: number }).stacks);
+              if (Number.isFinite(stacks) && stacks > 0) {
+                triggerData = { consumedBreakStacks: stacks };
+              }
+            }
           }
         }
         break;
@@ -381,13 +407,13 @@ export function projectLinkTriggerSeries(
       }
     }
 
-    if (!triggered) return false;
+    if (!triggered) return { ok: false };
 
     // Check require/require_not against enemy state
-    if (cond.require?.length && !state.checkRequire(cond.require)) return false;
-    if (cond.require_not?.length && !state.checkRequireNot(cond.require_not)) return false;
+    if (cond.require?.length && !state.checkRequire(cond.require)) return { ok: false };
+    if (cond.require_not?.length && !state.checkRequireNot(cond.require_not)) return { ok: false };
 
-    return true;
+    return { ok: true, data: triggerData };
   }
 
   // ── Main scan loop ──
@@ -448,8 +474,12 @@ export function projectLinkTriggerSeries(
     const eventPayload = entry.payload as Record<string, unknown>;
 
     for (const cfg of trackConfigs) {
-      if (checkTrigger(cfg, eventType, eventPayload, entry.time)) {
-        triggers.push({ time: entry.time, trackId: cfg.trackId });
+      const result = checkTrigger(cfg, eventType, eventPayload, entry.time);
+      if (result.ok) {
+        triggers.push({
+          time: entry.time, trackId: cfg.trackId,
+          ...(result.data ? { triggerData: result.data } : {}),
+        });
       }
     }
   }
@@ -472,7 +502,7 @@ export function computeLinkQueueAt(
 ): LinkQueueEntry[] {
   const windowMap = new Map<
     string,
-    { windowStart: number; windowEnd: number; insertionOrder: number }
+    { windowStart: number; windowEnd: number; insertionOrder: number; triggerData?: Record<string, unknown> }
   >();
   let insertionCounter = 0;
 
@@ -481,14 +511,17 @@ export function computeLinkQueueAt(
 
     const existing = windowMap.get(trigger.trackId);
     if (existing && trigger.time <= existing.windowEnd) {
-      // Re-trigger within active window: refresh duration, keep position
+      // Re-trigger within active window: refresh duration, keep position.
+      // Latest triggerData wins (re-trigger supplies fresh state).
       existing.windowStart = trigger.time;
       existing.windowEnd = trigger.time + LINK_WINDOW_DURATION;
+      if (trigger.triggerData) existing.triggerData = trigger.triggerData;
     } else {
       windowMap.set(trigger.trackId, {
         windowStart: trigger.time,
         windowEnd: trigger.time + LINK_WINDOW_DURATION,
         insertionOrder: insertionCounter++,
+        triggerData: trigger.triggerData,
       });
     }
   }
@@ -496,6 +529,7 @@ export function computeLinkQueueAt(
   const activeEntries: Array<{
     trackId: string; windowEnd: number;
     insertionOrder: number; trackIndex: number; avatar: string;
+    triggerData?: Record<string, unknown>;
   }> = [];
 
   for (const [trackId, window] of windowMap) {
@@ -515,6 +549,7 @@ export function computeLinkQueueAt(
       insertionOrder: window.insertionOrder,
       trackIndex: cfg.trackIndex,
       avatar: cfg.avatar,
+      triggerData: window.triggerData,
     });
   }
 
@@ -540,6 +575,7 @@ export function computeLinkQueueAt(
       fraction,
       isLocked: lockedTrackIds.has(entry.trackId),
       onCooldown,
+      ...(entry.triggerData ? { triggerData: entry.triggerData } : {}),
     };
   });
 }

@@ -147,6 +147,13 @@ export interface MultiplierRef {
    * the corresponding consume effect to defer consumption to afterSkillDamage.
    */
   scaleBy?: "attachmentStacks" | "breakStacks";
+  /**
+   * Subtract another multiplier row. Used when skills.json only records a cumulative
+   * multiplier but a specific hit uses the delta (e.g. 弧光 A3 hit2: 普攻第三段 − 普攻第二段).
+   * Final resolved value = label × share − subtractLabel × (subtractShare ?? 1).
+   */
+  subtractLabel?: string;
+  subtractShare?: number;
 }
 
 /** An effect applied by a hit. */
@@ -166,10 +173,12 @@ export interface HitEffect {
 // "buff_consume"        { buffId: string, stacks: number | "all" }
 // "sp_restore"          { amount: number, isTrueSP: boolean }
 // "sp_consume"          { amount: number }
-// "gauge_gain"          { amount: number }
+// "gauge_gain"          { amount: number } | { amountPerLayer: number, scaleBy: "attachmentStacks" | "breakStacks" }
 // "stack_buff_apply"    { buffType: string, stacks: number }  (type="stack" buffs like magma)
 // "stack_buff_consume"  { buffType: string, stacks: number | "all" }
 // "blaze_to_magma"      {}  (莱万汀天赋: consume enemy blaze → self magma)
+// "consume_anomaly"     { anomalyType: AnomalyType, deferTo?: "afterEffectDamage" | "afterSkillDamage" }
+//                        (弧光 强化战技 hit3 / 终结技 hit2: 消耗法术异常，boolean 状态置为 false)
 
 /** Interrupt checkpoint within a skill. */
 export interface Checkpoint {
@@ -218,10 +227,16 @@ export interface Skill {
 
 /** Condition for variant selection (evaluated at skill cast time). */
 export interface VariantCondition {
-  type: "stackBuff" | "ultimateActive";
+  type: "stackBuff" | "ultimateActive" | "enemyAnomaly" | "triggerData";
   /** For stackBuff: which buff type to check. */
   buffType?: string;
-  /** For stackBuff: comparison operator. */
+  /** For enemyAnomaly: which magic anomaly to check on the current enemy. */
+  anomalyType?: AnomalyType;
+  /** For enemyAnomaly: true = require active, false = require absent. Default true. */
+  present?: boolean;
+  /** For triggerData: key into placed.triggerData (e.g. "consumedBreakStacks"). */
+  field?: string;
+  /** For stackBuff / triggerData: comparison operator. */
   op?: ">=" | "<=" | ">" | "<" | "==" | "!=";
   /** For stackBuff: comparison value. */
   value?: number;

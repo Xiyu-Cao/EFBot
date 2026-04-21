@@ -6,7 +6,7 @@
  * Main attribute: will, Sub attribute: agility
  */
 
-import type { Skill, PassiveTrigger, DamageElement } from "../types";
+import type { Skill, SkillVariant, PassiveTrigger, DamageElement } from "../types";
 
 const f = (frames: number) => frames / 60;
 
@@ -189,11 +189,15 @@ const skill: Skill = {
 // ── Link variants (连携技: 盈月邀击) ──
 // Variant depends on consumed break stacks (1-4)
 
+// Default link.interruptibleBy = [dodge, ultimate]; 骏卫连携允许战技打断。
+const LINK_INTERRUPT_OVERRIDE: ("skill" | "dodge" | "ultimate")[] = ["skill", "dodge", "ultimate"];
+
 const linkBreak1: Skill = {
   id: "pograni_link_1", type: "link", name: "盈月邀击·一",
   element: "physical", duration: f(108), spCost: 0, cooldown: 0,
+  interruptibleBy: LINK_INTERRUPT_OVERRIDE,
   hits: [
-    { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }], standardLogic: true },
+    { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }, { type: "gauge_gain", params: { amount: 10 } }], standardLogic: true },
   ],
   checkpoints: [],
 };
@@ -201,8 +205,9 @@ const linkBreak1: Skill = {
 const linkBreak2: Skill = {
   id: "pograni_link_2", type: "link", name: "盈月邀击·二",
   element: "physical", duration: f(118), spCost: 0, cooldown: 0,
+  interruptibleBy: LINK_INTERRUPT_OVERRIDE,
   hits: [
-    { offset: f(49), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }], standardLogic: true },
+    { offset: f(49), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }, { type: "gauge_gain", params: { amount: 10 } }], standardLogic: true },
     { offset: f(85), checkpointIndex: 0, damage: { multiplierRef: { label: "第二段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第二段技力恢复", isTrueSP: true } }], standardLogic: true },
   ],
   checkpoints: [],
@@ -211,8 +216,9 @@ const linkBreak2: Skill = {
 const linkBreak3: Skill = {
   id: "pograni_link_3", type: "link", name: "盈月邀击·三",
   element: "physical", duration: f(207), spCost: 0, cooldown: 0,
+  interruptibleBy: LINK_INTERRUPT_OVERRIDE,
   hits: [
-    { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }], standardLogic: true },
+    { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }, { type: "gauge_gain", params: { amount: 10 } }], standardLogic: true },
     { offset: f(85), checkpointIndex: 0, damage: { multiplierRef: { label: "第二段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第二段技力恢复", isTrueSP: true } }], standardLogic: true },
     { offset: f(142), checkpointIndex: 0, damage: { multiplierRef: { label: "第三段伤害倍率", share: 1 }, stagger: 4, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第三段技力恢复", isTrueSP: true } }], standardLogic: true },
   ],
@@ -222,8 +228,9 @@ const linkBreak3: Skill = {
 const linkBreak4: Skill = {
   id: "pograni_link_4", type: "link", name: "盈月邀击·四",
   element: "physical", duration: f(207), spCost: 0, cooldown: 0,
+  interruptibleBy: LINK_INTERRUPT_OVERRIDE,
   hits: [
-    { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }], standardLogic: true },
+    { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第一段技力恢复", isTrueSP: true } }, { type: "gauge_gain", params: { amount: 10 } }], standardLogic: true },
     { offset: f(85), checkpointIndex: 0, damage: { multiplierRef: { label: "第二段伤害倍率", share: 1 }, stagger: 3, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "第二段技力恢复", isTrueSP: true } }], standardLogic: true },
     { offset: f(142), checkpointIndex: 0, damage: { multiplierRef: { label: "强化第三段伤害倍率", share: 1 }, stagger: 9, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [{ type: "sp_restore", params: { amountRef: "强化第三段技力恢复", isTrueSP: true } }], standardLogic: true },
   ],
@@ -327,9 +334,10 @@ const tacticalGuidance: PassiveTrigger = {
 };
 
 // ── Interrupt exception ──
-export const interruptOverrides = {
-  skillCanInterruptLink: true,  // 战技和连携可互相打断（非默认）
-};
+// 骏卫例外：战技与连携可互相打断（默认连携仅 dodge/ultimate 可打断）。
+// Implemented by extending each link variant's `interruptibleBy` with "skill".
+// Skill side already allows link in the default matrix, so mutual interrupt
+// is achieved by only widening the link's side.
 
 /**
  * 铁誓消耗 — 袭扰 (by link): triggered by POGRANICHNK's own link hit.
@@ -355,11 +363,59 @@ const ironOathFinaleByLink: PassiveTrigger = {
 // Exports
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Link variant selection ──
+// linkBreak1 is the base skill (consumed 1 layer, the default when triggerData is absent).
+// Variants 2/3/4 are selected via placed.triggerData.consumedBreakStacks — recorded by the
+// front-end when a slam/armor_break event triggers the link window.
+const linkVariants: SkillVariant[] = [
+  {
+    id: "pograni_link_2",
+    priority: 2,
+    conditions: [{ type: "triggerData", field: "consumedBreakStacks", op: "==", value: 2 }],
+    overrides: {
+      name: linkBreak2.name,
+      duration: linkBreak2.duration,
+      hits: linkBreak2.hits,
+      interruptibleBy: linkBreak2.interruptibleBy,
+    },
+  },
+  {
+    id: "pograni_link_3",
+    priority: 3,
+    conditions: [{ type: "triggerData", field: "consumedBreakStacks", op: "==", value: 3 }],
+    overrides: {
+      name: linkBreak3.name,
+      duration: linkBreak3.duration,
+      hits: linkBreak3.hits,
+      interruptibleBy: linkBreak3.interruptibleBy,
+    },
+  },
+  {
+    id: "pograni_link_4",
+    priority: 4,
+    conditions: [{ type: "triggerData", field: "consumedBreakStacks", op: ">=", value: 4 }],
+    overrides: {
+      name: linkBreak4.name,
+      duration: linkBreak4.duration,
+      hits: linkBreak4.hits,
+      interruptibleBy: linkBreak4.interruptibleBy,
+    },
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// Exports
+// ═══════════════════════════════════════════════════════════════════
+
 export const skills = {
   attack: [a1, a2, a3, a4, a5, execution, aerialAttack],
   skill,
-  link: [linkBreak1, linkBreak2, linkBreak3, linkBreak4],
+  link: linkBreak1,
   ultimate,
+};
+
+export const variants = {
+  link: linkVariants,
 };
 
 export const triggers: PassiveTrigger[] = [

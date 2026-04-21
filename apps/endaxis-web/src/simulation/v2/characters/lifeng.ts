@@ -185,18 +185,26 @@ const skill: Skill = {
 
 // ── Link (连携技: 忿怒相) ──
 // Triggered when main control heavy-attacks enemy in physical vulnerability or break state
-// Hit2: stagger + grants combo buff (20s, modeled as stack buff for variant system)
+// Hit1: grants combo buff (20s, stack buff for ultimate variant trigger)
+// Hit2: stagger + gauge gain
 
 const link: Skill = {
   id: "lifeng_link", type: "link", name: "忿怒相",
   element: "physical", duration: f(132), spCost: 0, cooldown: 0,
   hits: [
-    { offset: f(40), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "link" }, effects: [], standardLogic: true },
+    {
+      offset: f(40), checkpointIndex: 0,
+      damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "link" },
+      effects: [
+        { type: "stack_buff_apply", params: { buffType: "lifeng_combo", stacks: 1, duration: 20 } },
+      ],
+      standardLogic: true,
+    },
     {
       offset: f(98), checkpointIndex: 0,
       damage: { multiplierRef: { label: "第二段伤害倍率", share: 1 }, stagger: 10, element: "physical", canCrit: true, school: "physical", sourceType: "link" },
       effects: [
-        { type: "stack_buff_apply", params: { buffType: "lifeng_combo", stacks: 1, duration: 20 } },
+        { type: "gauge_gain", params: { amount: 10 } },
       ],
       standardLogic: true,
     },
@@ -235,7 +243,7 @@ export const ultimateAnimation = f(111);
 
 // ── Ultimate variant: consume combo for hit3 ──
 
-export const ultimateVariants: SkillVariant[] = [
+const ultimateVariants: SkillVariant[] = [
   {
     id: "lifeng_ult_combo",
     priority: 1,
@@ -295,6 +303,10 @@ export const skills = {
   skill,
   link,
   ultimate,
+};
+
+export const variants = {
+  ultimate: ultimateVariants,
 };
 
 export const triggers: PassiveTrigger[] = [

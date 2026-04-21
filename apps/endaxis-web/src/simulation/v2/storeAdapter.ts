@@ -20,6 +20,7 @@ import { computeCharacterBuild } from "./characterBuild";
 import { V2_READY_IDS, getV2Module } from "./characters/adapter";
 import { V2_WEAPON_REGISTRY, extractWeaponPassiveStats, convertWeaponTriggers } from "./weapons/definitions";
 import { V2_EQUIPMENT_SET_REGISTRY, convertSetTriggers } from "./equipment/definitions";
+import { canInterrupt, isPostLastHit } from "./interrupts";
 
 // ═══════════════════════════════════════════════════════════════════
 // Types for store data (loosely typed — store is JS)
@@ -113,6 +114,12 @@ export function buildV2Inputs(
   resolveGaugeMax: (trackId: string) => number,
   /** Returns active equipment set categories for a track (e.g., ["点剑"]). */
   resolveActiveSetCategories?: (trackId: string) => string[],
+  /**
+   * Second-pass override: heavy attacks interrupted before their hit1 in the
+   * prior simulation pass. Map<actionInstanceId, interruptTime>. Combo resolver
+   * keeps `comboIdx` on 重击 after these so the next attack re-casts heavy.
+   */
+  pendingHeavyInfo?: Map<string, number>,
 ): V2Inputs | null {
   const activeTracks = tracks.filter(t => t.id && t.actions?.length >= 0);
   if (activeTracks.length === 0) { console.log('[buildV2Inputs] no active tracks'); return null; }
@@ -141,7 +148,7 @@ export function buildV2Inputs(
     builds.push(build);
 
     // ── Map actions to PlacedSkills (with combo re-evaluation) ──
-    const { placed, segMap } = mapActionsToPlacedSkills(track, mod);
+    const { placed, segMap } = mapActionsToPlacedSkills(track, mod, pendingHeavyInfo);
     allSkills.push(...placed);
     for (const [id, idx] of segMap) attackSegmentMap.set(id, idx);
 
@@ -401,7 +408,11 @@ function collectStatModifiers(
 // Action → PlacedSkill mapping
 // ═══════════════════════════════════════════════════════════════════
 
-function mapActionsToPlacedSkills(track: StoreTrack, mod: any): { placed: PlacedSkill[]; segMap: Map<string, number> } {
+function mapActionsToPlacedSkills(
+  track: StoreTrack,
+  mod: any,
+  pendingHeavyInfo?: Map<string, number>,
+): { placed: PlacedSkill[]; segMap: Map<string, number> } {
   const { skills, variants } = mod;
   const result: PlacedSkill[] = [];
   const segMap = new Map<string, number>(); // actionInstanceId → recalculated 1-based segment index
@@ -421,18 +432,37 @@ function mapActionsToPlacedSkills(track: StoreTrack, mod: any): { placed: Placed
   let lastDodgeEnd = -Infinity;
   let cumulOtherTime = 0;
 
+  // ── Push rule: track the currently-active (last resolved) skill so we can
+  // shift the next action to its end when the incoming can't interrupt it.
+  // Matches kernel's canInterrupt semantics (default matrix + per-skill override
+  // + 后摇 relaxed rule once past the last-hit offset).
+  let runningSkill: Skill | null = null;
+  let runningStart = -Infinity;
+  let runningEnd = -Infinity;
+
   for (let i = 0; i < sorted.length; i++) {
     const action = sorted[i];
     if (action.isDisabled) continue;
 
-    const aStart = action.startTime || 0;
+    // ── 0. Apply push rule based on previously-resolved running skill ──
+    let aStart = action.startTime || 0;
+    if (runningSkill && aStart < runningEnd) {
+      // Incoming category probe: type is sufficient for the matrix lookup
+      // (isHeavyAttack only matters for active-side categorization).
+      const incoming = { type: action.type, kind: action.kind, id: action._v2SkillId } as any;
+      const postLastHit = isPostLastHit(runningSkill, runningStart, aStart);
+      if (!canInterrupt(runningSkill, incoming, postLastHit)) {
+        aStart = runningEnd;
+      }
+      // else: incoming interrupts running → aStart stays, kernel will truncate running
+    }
 
     // ── 1. Resolve skill (determines V2 Skill with correct duration) ──
     let skill: Skill | null;
     let segIdx = -1;
 
     if (action.type === "attack" && action.kind !== "aerial") {
-      // Re-evaluate combo segment index
+      // Re-evaluate combo segment index using effective start
       const refTime = Math.max(lastAtkEnd, lastDodgeEnd);
       const idleTime = (aStart - refTime) - cumulOtherTime;
 
@@ -454,25 +484,48 @@ function mapActionsToPlacedSkills(track: StoreTrack, mod: any): { placed: Placed
     const v2Dur = skill.duration;
 
     if (action.type === "attack" && action.kind !== "aerial") {
-      comboIdx = (segIdx >= totalSegs - 1) ? 0 : segIdx + 1;
-      lastAtkEnd = aStart + v2Dur;
+      // pendingHeavy: if the prior pass said this heavy was interrupted BEFORE
+      // hit1, the swing didn't land — keep comboIdx at heavy so the next attack
+      // is resolved as 重击 again. lastAtkEnd uses the interrupt time so the
+      // idle window for the next attack is measured from the aborted end.
+      const pendingInterruptT = pendingHeavyInfo?.get(action.instanceId);
+      if (pendingInterruptT !== undefined && segIdx === totalSegs - 1) {
+        comboIdx = totalSegs - 1;
+        lastAtkEnd = pendingInterruptT;
+      } else {
+        comboIdx = (segIdx >= totalSegs - 1) ? 0 : segIdx + 1;
+        lastAtkEnd = aStart + v2Dur;
+      }
       cumulOtherTime = 0;
       segMap.set(action.instanceId, segIdx + 1);
-    } else if (action.type === "execution") {
-      comboIdx = 0;
-      lastAtkEnd = aStart + v2Dur;
-      cumulOtherTime = 0;
     } else if (action.type === "dodge") {
       lastDodgeEnd = aStart + v2Dur;
       cumulOtherTime = 0;
     } else {
+      // Skills, ultimate, link, execution (处决), aerial (下落攻击) and all
+      // non-combo actions pause the combo timer but neither advance nor
+      // reset the combo counter. (Matches the placement-side logic in
+      // timelineStore.js.)
       const refTime = Math.max(lastAtkEnd, lastDodgeEnd);
       if (aStart >= refTime) cumulOtherTime += v2Dur;
     }
 
-    // ── 3. Emit PlacedSkill ──
+    // ── 3. Update running skill for push rule ──
+    runningSkill = skill;
+    runningStart = aStart;
+    runningEnd = aStart + v2Dur;
+
+    // ── 4. Emit PlacedSkill with push-adjusted start time ──
     const variantList = variants?.[action.type] || undefined;
-    result.push({ actionId: action.instanceId, actorId: track.id, skill, startTime: action.startTime, variants: variantList });
+    // Pass through triggerData captured by the front-end at trigger time
+    // (e.g. POGRANICHNK link: { consumedBreakStacks } set when the slam/armor_break
+    // window opened). Kernel reads this during variant selection.
+    const triggerData = (action as { triggerData?: Record<string, unknown> }).triggerData;
+    result.push({
+      actionId: action.instanceId, actorId: track.id, skill, startTime: aStart,
+      variants: variantList,
+      ...(triggerData ? { triggerData } : {}),
+    });
   }
 
   return { placed: result, segMap };

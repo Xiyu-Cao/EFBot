@@ -4177,9 +4177,11 @@ body.capture-mode .davinci-range {
    ========================================================================== */
 .track-row {
   --track-height: 50px;
-  --track-cd-gap: 30px;
+  --track-cd-gap: 10px;
   position: relative;
-  flex: 1;
+  /* grow to fill empty viewport space, but never shrink below content
+     (otherwise summary rows appearing after validation squeeze the lanes). */
+  flex: 1 0 auto;
   min-height: var(--track-height);
   padding-top: 30px;
   padding-bottom: 14px;

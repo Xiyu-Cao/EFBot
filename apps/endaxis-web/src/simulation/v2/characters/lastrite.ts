@@ -197,7 +197,12 @@ const link: Skill = {
   id: "lastrite_link", type: "link", name: "噬冬",
   element: "cold", duration: f(202), spCost: 0, cooldown: 0,
   hits: [
-    { offset: f(28), checkpointIndex: 0, damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 0, element: "cold", canCrit: true, school: "magic", sourceType: "link" }, effects: [], standardLogic: true },
+    {
+      offset: f(28), checkpointIndex: 0,
+      damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 0, element: "cold", canCrit: true, school: "magic", sourceType: "link" },
+      effects: [{ type: "gauge_gain", params: { amount: 40 } }],
+      standardLogic: true,
+    },
     {
       offset: f(128), checkpointIndex: 0,
       // Damage scales by consumed cold-attachment layers. scaleBy reads current
@@ -205,6 +210,10 @@ const link: Skill = {
       // consume_attachment so the stacks are still present at multiplier resolution.
       damage: { multiplierRef: { label: "消耗每层附着额外伤害倍率", share: 1, scaleBy: "attachmentStacks" }, stagger: 15, element: "cold", canCrit: true, school: "magic", sourceType: "link" },
       effects: [
+        // Gauge gain scales with cold attachment layers (15/layer, 0 if none).
+        // Runs in phase-1 before consume_attachment (which is deferred to afterSkillDamage),
+        // so the stack count at read time equals the layers about to be consumed.
+        { type: "gauge_gain", params: { amountPerLayer: 15, scaleBy: "attachmentStacks" } },
         { type: "consume_attachment", params: { element: "cold", deferTo: "afterSkillDamage" } },
       ],
       standardLogic: true,

@@ -316,6 +316,10 @@ export class StackBuffTracker {
 export interface ConditionState {
   stackBuffs: Record<string, number>;
   ultimateActive: boolean;
+  /** Enemy's currently active magic anomalies (by type → active bool). Optional for back-compat. */
+  enemyAnomalies?: Partial<Record<import("./types").AnomalyType, boolean>>;
+  /** One-shot trigger-time data passed from the placed action (e.g. pogranichnk link: consumedBreakStacks). */
+  triggerData?: Record<string, unknown>;
 }
 
 /**
@@ -338,6 +342,28 @@ function evalCondition(cond: VariantCondition, state: ConditionState): boolean {
   }
   if (cond.type === "ultimateActive") {
     return state.ultimateActive;
+  }
+  if (cond.type === "enemyAnomaly") {
+    if (!cond.anomalyType) return false;
+    const active = state.enemyAnomalies?.[cond.anomalyType] === true;
+    const want = cond.present ?? true;
+    return active === want;
+  }
+  if (cond.type === "triggerData") {
+    if (!cond.field) return false;
+    const raw = state.triggerData?.[cond.field];
+    const value = typeof raw === "number" ? raw : 0;
+    const target = cond.value ?? 0;
+    const op = cond.op || ">=";
+    switch (op) {
+      case ">=": return value >= target;
+      case "<=": return value <= target;
+      case ">":  return value > target;
+      case "<":  return value < target;
+      case "==": return value === target;
+      case "!=": return value !== target;
+      default: return false;
+    }
   }
   return false;
 }

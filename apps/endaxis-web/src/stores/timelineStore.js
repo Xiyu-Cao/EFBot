@@ -18,9 +18,10 @@ import { projectGaugeSeries as projGaugeSeries } from '@/simulation/projection/p
 import { projectWeaponBuffTimeline } from '@/simulation/projection/projectWeaponBuffTimeline'
 import { projectSelfBuffTimeline } from '@/simulation/projection/projectSelfBuffTimeline'
 import { CATEGORY_TO_SET_ID } from '@/simulation/equipment/registry'
-import { simulate as simulateV2, extractStaggerWindows } from '@/simulation/v2/kernel'
+import { simulate as simulateV2, extractStaggerWindows, extractInterruptedHeavies } from '@/simulation/v2/kernel'
 import { projectBuffBars, projectStackBuffBars, projectAnomalyBars, projectAttachmentBars, projectBreakBars, projectHitEffects, projectActionBars, projectSpSeries as v2ProjectSpSeries, projectGaugeSeries as v2ProjectGaugeSeries, projectStaggerMonitorSeries } from '@/simulation/v2/projections'
 import { buildV2Inputs } from '@/simulation/v2/storeAdapter'
+import { canInterrupt as v2CanInterrupt } from '@/simulation/v2/interrupts'
 import { adaptAllProjections } from '@/simulation/v2/v2ProjectionAdapter'
 import { checkConditionsMet } from '@/simulation/legality/checkActionLegality'
 import { i18n } from '@/i18n'
@@ -1574,7 +1575,11 @@ export const useTimelineStore = defineStore('timeline', () => {
         if (!linkSkill) return
         _playheadDirtyFlag = false
         // skipConditions: queue's 6s window already validated the trigger condition
-        addSkillToTrack(first.trackId, linkSkill, playheadTime.value, { skipConditions: true })
+        // triggerData: passthrough from the LinkQueueEntry (e.g. POGRANICHNK consumedBreakStacks)
+        addSkillToTrack(first.trackId, linkSkill, playheadTime.value, {
+            skipConditions: true,
+            triggerData: first.triggerData,
+        })
     }
 
     // ── Blocking warning (prevents input spam) ──
@@ -1774,14 +1779,13 @@ export const useTimelineStore = defineStore('timeline', () => {
                 prevSeqIdx = Number(action.attackSequenceIndex) || 1
                 lastAtkEnd = aStart + aDur
                 cumulOtherTime = 0
-            } else if (action.type === 'execution') {
-                prevSeqIdx = 0
-                lastAtkEnd = aStart + aDur
-                cumulOtherTime = 0
             } else if (action.type === 'dodge') {
                 lastDodgeEnd = aStart + aDur
                 cumulOtherTime = 0
-            } else if (action.type !== 'attack') {
+            } else {
+                // Skills, ultimate, link, execution (处决), aerial (下落攻击) and all
+                // non-combo actions pause the combo timer but neither advance nor
+                // reset the combo counter.
                 const refTime = Math.max(lastAtkEnd, lastDodgeEnd)
                 if (aStart >= refTime) cumulOtherTime += aDur
             }
@@ -3852,17 +3856,14 @@ export const useTimelineStore = defineStore('timeline', () => {
                     prevSeqIdx = Number(action.attackSequenceIndex) || 1
                     lastAtkEnd = aStart + aDur
                     cumulOtherTime = 0
-                } else if (action.type === 'execution') {
-                    // Execution resets combo to 1a
-                    prevSeqIdx = 0
-                    lastAtkEnd = aStart + aDur
-                    cumulOtherTime = 0
                 } else if (action.type === 'dodge') {
                     // Dodge resets the combo timer (idle time restarts)
                     lastDodgeEnd = aStart + aDur
                     cumulOtherTime = 0
-                } else if (action.type !== 'attack') {
-                    // Skills pause the combo timer (their duration doesn't count as idle)
+                } else {
+                    // Skills, ultimate, link, execution (处决), aerial (下落攻击)
+                    // and all non-combo actions pause the combo timer but neither
+                    // advance nor reset the combo counter.
                     const refTime = Math.max(lastAtkEnd, lastDodgeEnd)
                     if (aStart >= refTime) cumulOtherTime += aDur
                 }
@@ -3954,7 +3955,33 @@ export const useTimelineStore = defineStore('timeline', () => {
             return
         }
 
+        // ── Overlap snap (skill-skill interaction) ──
+        // For skill / link / ultimate / dodge, if the placement overlaps with
+        // existing actions that the incoming skill cannot interrupt, snap
+        // startTime to the max end of those non-interruptible overlaps.
+        // Attacks (attack_auto/group/segment) handled by their own branches
+        // above; aerial & execution are deferred to validation-time resolver.
+        const incomingType = skill.type
+        if (incomingType === 'skill' || incomingType === 'link' || incomingType === 'ultimate' || incomingType === 'dodge') {
+            const newDur = Number(skill.duration) || 0
+            let snapTo = startTime
+            for (const existing of track.actions) {
+                if (existing.isDisabled) continue
+                const exStart = Number(existing.startTime) || 0
+                const exDur = Number(existing.duration) || 0
+                const exEnd = exStart + exDur
+                // Overlap test: [startTime, startTime+newDur) ∩ [exStart, exEnd)
+                if (exEnd <= startTime || exStart >= startTime + newDur) continue
+                if (v2CanInterrupt(existing, skill)) continue
+                if (exEnd > snapTo) snapTo = exEnd
+            }
+            if (snapTo > startTime) startTime = snapTo
+        }
+
         const newAction = createActionFromSkill(skill, startTime)
+        // Attach trigger-time metadata (e.g. POGRANICHNK link: consumedBreakStacks).
+        // V2 storeAdapter forwards this to PlacedSkill.triggerData for variant selection.
+        if (options.triggerData) newAction.triggerData = options.triggerData
         track.actions.push(newAction)
         track.actions.sort((a, b) => a.startTime - b.startTime)
         if (skill.type === 'link' || skill.type === 'ultimate') {
@@ -5311,7 +5338,8 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     function validateTimeline() {
         // ── Try V2 kernel first ──
-        const v2Inputs = buildV2Inputs(
+        // Build once without pendingHeavy info for pass 1.
+        let v2Inputs = buildV2Inputs(
             tracks.value,
             characterRoster.value,
             weaponDatabase.value,
@@ -5322,12 +5350,28 @@ export const useTimelineStore = defineStore('timeline', () => {
         )
         if (v2Inputs) {
             try {
-                // Two-pass: first pass determines stagger windows, second pass uses them for execution
+                // Pass 1: discovers stagger windows AND heavy attacks interrupted
+                // before their hit1 (combo should not advance after those).
                 const pass1 = simulateV2(
                     v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
                     v2Inputs.config,
                     v2Inputs.triggersByActor,
                 )
+                const pendingHeavyInfo = extractInterruptedHeavies(pass1.events, v2Inputs.skills)
+                if (pendingHeavyInfo.size > 0) {
+                    // Rebuild placed skills with heavy-aware combo so subsequent attacks
+                    // after an aborted 重击 resolve back to heavy. Inputs for pass 2.
+                    v2Inputs = buildV2Inputs(
+                        tracks.value,
+                        characterRoster.value,
+                        weaponDatabase.value,
+                        systemConstants.value,
+                        resolveTrackConfiguredStats,
+                        getTrackGaugeMax,
+                        getActiveSetBonusCategories,
+                        pendingHeavyInfo,
+                    ) || v2Inputs
+                }
                 const staggerWindows = extractStaggerWindows(pass1.events, v2Inputs.enemyConfig.staggerBreakDuration)
                 const result = simulateV2(
                     v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
