@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { preloadV2Modules } from "./characters/adapter";
-import { buildV2Inputs } from "./storeAdapter";
+import { buildV2Inputs, buildAllPanels, collectPotentialCooldownMods, adjustSkillCooldowns } from "./storeAdapter";
 
 // ── Helper: minimal track with actions ──
 function makeTrack(id: string, actions: any[]) {
@@ -156,3 +156,147 @@ describe("storeAdapter — attack chain detection", () => {
     expect(attacks[3].skill.isHeavyAttack).toBe(true);
   });
 });
+
+describe("storeAdapter — cooldown_modifier flat-seconds application", () => {
+  it("collectPotentialCooldownMods sums only active potentials (level ≤ chosen)", () => {
+    const mod = {
+      potentials: [
+        { level: 3, effects: [{ type: "cooldown_modifier", stat: "link", value: -1 }] },
+        { level: 5, effects: [{ type: "cooldown_modifier", stat: "link", value: -2 }] },
+        { level: 5, effects: [{ type: "cooldown_modifier", stat: "skill", value: -3 }] },
+      ],
+    };
+    // At P2: no potentials active
+    expect(collectPotentialCooldownMods(mod, 2)).toEqual({ link: 0, skill: 0, ultimate: 0 });
+    // At P3: only first applies
+    expect(collectPotentialCooldownMods(mod, 3)).toEqual({ link: -1, skill: 0, ultimate: 0 });
+    // At P5: all apply — link stacks (-1 + -2), skill separately
+    expect(collectPotentialCooldownMods(mod, 5)).toEqual({ link: -3, skill: -3, ultimate: 0 });
+  });
+
+  it("collectPotentialCooldownMods ignores non-cooldown_modifier effects", () => {
+    const mod = {
+      potentials: [
+        { level: 1, effects: [
+          { type: "stat_bonus", stat: "will", value: 20 },
+          { type: "cooldown_modifier", stat: "link", value: -1 },
+        ] },
+      ],
+    };
+    expect(collectPotentialCooldownMods(mod, 1)).toEqual({ link: -1, skill: 0, ultimate: 0 });
+  });
+
+  it("adjustSkillCooldowns: produces new skill objects with reduced cooldowns, doesn't mutate source", () => {
+    const origLink = { id: "lnk", type: "link", cooldown: 10, duration: 1, hits: [] } as any;
+    const origSkill = { id: "sk", type: "skill", cooldown: 8, duration: 1, hits: [] } as any;
+    const origUlt = { id: "ult", type: "ultimate", cooldown: 20, duration: 1, hits: [] } as any;
+    const skills = { link: origLink, skill: origSkill, ultimate: origUlt };
+    const adjusted = adjustSkillCooldowns(skills, { link: -2, skill: -3, ultimate: -5 });
+
+    expect(adjusted.link.cooldown).toBe(8);     // 10 - 2
+    expect(adjusted.skill.cooldown).toBe(5);    // 8 - 3
+    expect(adjusted.ultimate.cooldown).toBe(15); // 20 - 5
+
+    // Source unchanged
+    expect(origLink.cooldown).toBe(10);
+    expect(origSkill.cooldown).toBe(8);
+    expect(origUlt.cooldown).toBe(20);
+  });
+
+  it("adjustSkillCooldowns: flat reduction clamped at 0 (cooldown can't go negative)", () => {
+    const origLink = { id: "lnk", type: "link", cooldown: 3, duration: 1, hits: [] } as any;
+    const adjusted = adjustSkillCooldowns({ link: origLink }, { link: -10, skill: 0, ultimate: 0 });
+    expect(adjusted.link.cooldown).toBe(0);
+  });
+
+  it("adjustSkillCooldowns: skills with cooldown=0 are left untouched (no adjustment)", () => {
+    const origLink = { id: "lnk", type: "link", cooldown: 0, duration: 1, hits: [] } as any;
+    const adjusted = adjustSkillCooldowns({ link: origLink }, { link: -2, skill: 0, ultimate: 0 });
+    // Returns original reference (cooldown=0 skills don't need adjustment)
+    expect(adjusted.link).toBe(origLink);
+    expect(adjusted.link.cooldown).toBe(0);
+  });
+
+  it("adjustSkillCooldowns: handles array-valued `link` (variants)", () => {
+    const origLinks = [
+      { id: "l1", type: "link", cooldown: 10, duration: 1, hits: [] } as any,
+      { id: "l2", type: "link", cooldown: 12, duration: 1, hits: [] } as any,
+    ];
+    const adjusted = adjustSkillCooldowns({ link: origLinks }, { link: -2, skill: 0, ultimate: 0 });
+    expect(adjusted.link[0].cooldown).toBe(8);
+    expect(adjusted.link[1].cooldown).toBe(10);
+    expect(origLinks[0].cooldown).toBe(10);
+  });
+
+  it("adjustSkillCooldowns: skillInChain is adjusted by the `skill` key (shared stat bucket)", () => {
+    const base = { id: "sk", type: "skill", cooldown: 6, duration: 1, hits: [] } as any;
+    const chain = { id: "sk_chain", type: "skill", cooldown: 6, duration: 1, hits: [] } as any;
+    const adjusted = adjustSkillCooldowns({ skill: base, skillInChain: chain }, { link: 0, skill: -2, ultimate: 0 });
+    expect(adjusted.skill.cooldown).toBe(4);
+    expect(adjusted.skillInChain.cooldown).toBe(4);
+  });
+});
+
+describe("storeAdapter — buildAllPanels + precomputedPanels passthrough", () => {
+  beforeAll(async () => {
+    await preloadV2Modules();
+  });
+
+  it("buildAllPanels: returns one panel per V2-ready active track", () => {
+    const tracks = [
+      makeTrack("LASTRITE", [makeAction({ type: "skill", startTime: 0, duration: 1 })]),
+      makeTrack("POGRANICHNK", [makeAction({ type: "link", startTime: 0, duration: 1 })]),
+    ];
+    const panels = buildAllPanels(tracks, [], () => null, () => 300);
+    expect(panels).not.toBeNull();
+    expect(panels!.length).toBe(2);
+    expect(panels!.map(p => p.actorId).sort()).toEqual(["LASTRITE", "POGRANICHNK"]);
+    expect(panels!.every(p => Array.isArray(p.triggers))).toBe(true);
+  });
+
+  it("buildAllPanels: returns null when any active track is not V2-ready", () => {
+    const tracks = [
+      makeTrack("LASTRITE", [makeAction({ type: "skill", startTime: 0, duration: 1 })]),
+      makeTrack("UNKNOWN_CHAR", [makeAction({ type: "skill", startTime: 0, duration: 1 })]),
+    ];
+    const panels = buildAllPanels(tracks, [], () => null, () => 300);
+    expect(panels).toBeNull();
+  });
+
+  it("buildV2Inputs with precomputedPanels produces equivalent kernel inputs", () => {
+    const tracks = [
+      makeTrack("LASTRITE", [
+        makeAction({ type: "attack", startTime: 0, duration: f(55), kind: "attack_auto_placed", attackSequenceIndex: 1 }),
+        makeAction({ type: "skill", startTime: f(55), duration: f(103) }),
+      ]),
+    ];
+    const panels = buildAllPanels(tracks, [], () => null, () => 300)!;
+
+    const fresh = buildV2Inputs(tracks as any, [], [], SYSTEM, () => null, () => 300);
+    const cached = buildV2Inputs(tracks as any, [], [], SYSTEM, () => null, () => 300, undefined, undefined, panels);
+
+    expect(fresh).not.toBeNull();
+    expect(cached).not.toBeNull();
+
+    // Same number of placed skills, same order, same resolved CDs.
+    expect(cached!.skills.length).toBe(fresh!.skills.length);
+    for (let i = 0; i < fresh!.skills.length; i++) {
+      expect(cached!.skills[i].skill.id).toBe(fresh!.skills[i].skill.id);
+      expect(cached!.skills[i].skill.cooldown).toBe(fresh!.skills[i].skill.cooldown);
+    }
+    // Same triggers count per actor.
+    for (const actorId of fresh!.triggersByActor.keys()) {
+      expect(cached!.triggersByActor.get(actorId)?.length).toBe(fresh!.triggersByActor.get(actorId)?.length);
+    }
+  });
+
+  it("buildV2Inputs ignores precomputedPanels for tracks that have been removed", () => {
+    const tracksFull = [makeTrack("LASTRITE", [makeAction({ type: "skill", startTime: 0, duration: 1 })])];
+    const panels = buildAllPanels(tracksFull, [], () => null, () => 300)!;
+
+    // Now call buildV2Inputs with NO active tracks but panels present.
+    const empty = buildV2Inputs([] as any, [], [], SYSTEM, () => null, () => 300, undefined, undefined, panels);
+    expect(empty).toBeNull(); // no active tracks → null regardless of cached panels
+  });
+});
+

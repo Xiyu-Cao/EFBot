@@ -2019,3 +2019,128 @@ describe("V2 Kernel — break stacking & duration refresh", () => {
     expect(expiry.time).toBeCloseTo(50, 5);      // refresh still happens at cap
   });
 });
+
+describe("V2 Kernel — per-skill cooldown gating + link_cd_reduction %", () => {
+  // Helper: zero-hit skill (just occupies duration + participates in CD tracking)
+  function cdSkill(id: string, type: "link" | "skill" | "ultimate", cooldown: number): Skill {
+    return {
+      id, type, name: id,
+      element: "cold", duration: 1, spCost: 0, cooldown,
+      hits: [], checkpoints: [],
+    };
+  }
+
+  it("link cooldown gates re-placement: second link within CD window is rejected", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link = cdSkill("test_link", "link", 10);
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link, startTime: 5 }, // within 10s CD (end=1, expiry=11)
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+
+    // 2nd placement should be rejected with ISSUE_COOLDOWN_ACTIVE
+    expect((result.validationError ? 1 : 0)).toBe(1);
+    expect(result.validationError!.code).toBe("ISSUE_COOLDOWN_ACTIVE");
+    expect(result.validationError!.actionId).toBe("a2");
+  });
+
+  it("link cooldown: second link after CD window is accepted", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link = cdSkill("test_link", "link", 10);
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link, startTime: 12 }, // after 11s expiry
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+
+    expect((result.validationError ? 1 : 0)).toBe(0);
+  });
+
+  it("skill cooldown (non-link): gates re-placement by the same rules", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const sk = cdSkill("test_skill", "skill", 5);
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: sk, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: sk, startTime: 3 }, // within 5s CD (end=1, expiry=6)
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+
+    expect((result.validationError ? 1 : 0)).toBe(1);
+    expect(result.validationError!.code).toBe("ISSUE_COOLDOWN_ACTIVE");
+    expect(result.validationError!.message).toContain("战技");
+  });
+
+  it("ultimate cooldown: gated by kernel", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const ult = cdSkill("test_ult", "ultimate", 20);
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: ult, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: ult, startTime: 10 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+
+    expect((result.validationError ? 1 : 0)).toBe(1);
+    expect(result.validationError!.code).toBe("ISSUE_COOLDOWN_ACTIVE");
+    expect(result.validationError!.message).toContain("终结技");
+  });
+
+  it("per-skill tracking: two different skills with independent cooldowns both gated individually", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link = cdSkill("link_A", "link", 10);
+    const ult = cdSkill("ult_B", "ultimate", 10);
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: ult, startTime: 1.5 }, // different skill, CD tracked independently
+      { actionId: "a3", actorId: "ACTOR", skill: link, startTime: 3 }, // same as a1, still within CD
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+
+    // a1 accepted, a2 accepted (different skill), a3 rejected
+    expect((result.validationError ? 1 : 0)).toBe(1);
+    expect(result.validationError!.actionId).toBe("a3");
+  });
+
+  it("link_cd_reduction stat reduces effective CD: cd*(1-pct/100)", () => {
+    function makeCdReductionBuild(pct: number) {
+      const input: CharacterInput = {
+        id: "CDR", name: "CDR", element: "cold", rarity: 6,
+        promotion: 4, potentialLevel: 0, talentLevels: {},
+        baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+        baseAttack: 300, baseHp: 1000,
+        mainAttribute: "strength", subAttribute: "agility",
+        weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+        equipmentSetId: null, baseGaugeMax: 300,
+        statModifiers: [
+          { source: "test", stat: "link_cd_reduction", value: pct, type: "flat" as const },
+        ],
+      };
+      return computeCharacterBuild(input);
+    }
+
+    // cd=10s, reduction 25% → effective = 7.5s. Action ends at 1, expiry = 1+7.5 = 8.5.
+    const build = makeCdReductionBuild(25);
+    const link = cdSkill("lnk", "link", 10);
+
+    // Placement at t=8 should be REJECTED (8 < 8.5).
+    const rejected = simulate([build], [
+      { actionId: "a1", actorId: "CDR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "CDR", skill: link, startTime: 8 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((rejected.validationError ? 1 : 0)).toBe(1);
+    expect(rejected.validationError!.actionId).toBe("a2");
+
+    // Placement at t=9 should be ACCEPTED (9 > 8.5).
+    const accepted = simulate([build], [
+      { actionId: "a1", actorId: "CDR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "CDR", skill: link, startTime: 9 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((accepted.validationError ? 1 : 0)).toBe(0);
+  });
+
+  it("without link_cd_reduction, cd applies raw: placement at 8s < 11s expiry is rejected", () => {
+    // Sanity baseline for the reduction test — 0% reduction means full CD applies.
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link = cdSkill("lnk", "link", 10);
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link, startTime: 8 }, // end=1, expiry=11
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((result.validationError ? 1 : 0)).toBe(1);
+  });
+});

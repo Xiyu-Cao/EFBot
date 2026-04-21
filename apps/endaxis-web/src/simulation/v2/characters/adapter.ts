@@ -9,6 +9,10 @@
  */
 
 import type { Skill } from "../types";
+// NOTE: Cooldown resolution (ultimate from ultimateCooldowns.json, link from
+// mod.skillData levelData at actor level, plus potential `cooldown_modifier`
+// flat-seconds) is owned by `simulation/v2/panel.ts#buildCharacterPanel`.
+// `loadV2Module` returns the raw, unmutated module.
 
 // ── Known v2-ready character modules ──
 // Lazy-loaded to avoid importing all at startup

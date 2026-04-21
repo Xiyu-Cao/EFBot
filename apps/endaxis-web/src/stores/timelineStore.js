@@ -11,7 +11,7 @@ import { ULTIMATE_ENHANCEMENT_EXTENDERS } from '@/simulation/compiler/enhancers'
 import { applyV2Overrides, preloadV2Modules, V2_READY_IDS, getV2Module } from '@/simulation/v2/characters/adapter'
 import { simulate as simulateV2, extractStaggerWindows, extractInterruptedHeavies } from '@/simulation/v2/kernel'
 import { projectBuffBars, projectStackBuffBars, projectAnomalyBars, projectAttachmentBars, projectBreakBars, projectHitEffects, projectActionBars, projectSpSeries as v2ProjectSpSeries, projectGaugeSeries as v2ProjectGaugeSeries, projectStaggerMonitorSeries } from '@/simulation/v2/projections'
-import { buildV2Inputs } from '@/simulation/v2/storeAdapter'
+import { buildV2Inputs, buildAllPanels } from '@/simulation/v2/storeAdapter'
 import { canInterrupt as v2CanInterrupt } from '@/simulation/v2/interrupts'
 import { adaptAllProjections } from '@/simulation/v2/v2ProjectionAdapter'
 import { i18n } from '@/i18n'
@@ -5184,9 +5184,24 @@ export const useTimelineStore = defineStore('timeline', () => {
     const legalityIssuesByAction = computed(() => new Map())
     const sortedLegalityIssues = computed(() => [])
 
+    // ── V2 Character Panels (auto-cached via Vue reactivity) ──
+    // Rebuild only when a track's level / equipment / weapon / potential / talents
+    // actually change. All reactive reads below (tracks / weaponDatabase / track.stats
+    // / track.growth / track.weaponId via buildAllPanels) are auto-tracked.
+    const v2Panels = computed(() => {
+        return buildAllPanels(
+            tracks.value,
+            weaponDatabase.value,
+            resolveTrackConfiguredStats,
+            getTrackGaugeMax,
+            getActiveSetBonusCategories,
+        )
+    })
+
     // ── Validation (Free Mode) ──
 
     function validateTimeline() {
+        const cachedPanels = v2Panels.value || undefined
         let v2Inputs = buildV2Inputs(
             tracks.value,
             characterRoster.value,
@@ -5195,6 +5210,8 @@ export const useTimelineStore = defineStore('timeline', () => {
             resolveTrackConfiguredStats,
             getTrackGaugeMax,
             getActiveSetBonusCategories,
+            undefined,
+            cachedPanels,
         )
         if (!v2Inputs) {
             validationResult.value = { passed: true, issues: [] }
@@ -5223,6 +5240,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                     getTrackGaugeMax,
                     getActiveSetBonusCategories,
                     pendingHeavyInfo,
+                    cachedPanels,
                 ) || v2Inputs
             }
             const staggerWindows = extractStaggerWindows(pass1.events, v2Inputs.enemyConfig.staggerBreakDuration)
@@ -6868,6 +6886,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         computedActionConditionResults,
         computedConvertEvents,
         computedAnomalyDebuffsEffective,
+        v2Panels,
         v2HitEffects: computed(() => _v2ProjectedData.value?.hitEffects || []),
         v2ActionBars: computed(() => _v2ProjectedData.value?.actionBars || null),
         v2AttackSegments: computed(() => _v2AttackSegmentMap.value || null),

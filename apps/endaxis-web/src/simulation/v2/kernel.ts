@@ -477,8 +477,27 @@ export function simulate(
   // startTime lets us tell whether `time` is past the skill's last-hit offset,
   // which in turn enables the 后摇 relaxed-interrupt rule.
   const activeActions = new Map<string, { placed: PlacedSkill; skill: Skill; startTime: number; endTime: number }>();
-  // Track link cooldowns per actor: Map<actorId, cooldownExpiresAt>
-  const linkCooldowns = new Map<string, number>();
+  // Track per-skill cooldowns: Map<`${actorId}/${skillId}`, expiresAt>.
+  // Gates any skill with `skill.cooldown > 0` (link/skill/ultimate).
+  const cooldowns = new Map<string, number>();
+  const cdKey = (actorId: string, skillId: string) => `${actorId}/${skillId}`;
+  /**
+   * Effective cooldown after stat reductions.
+   * TODO(confirm-formula): current ordering is `cd * (1 - pct/100) - flat`.
+   *   - link_cd_reduction (%) from stats applies as `pct`.
+   *   - Potential-sourced flat-seconds reduction is already baked into `skill.cooldown`
+   *     by storeAdapter.adjustSkillCooldowns, so `flat` here is 0 (placeholder for
+   *     future runtime buff paths like 庄方宜 ult → link CD rate ×5).
+   */
+  function effectiveCooldown(skill: Skill, build: CharacterBuild): number {
+    const baseCd = skill.cooldown;
+    if (baseCd <= 0) return 0;
+    let pct = 0;
+    if (skill.type === "link") pct = build.stats.linkCdReduction || 0;
+    // TODO: skill_cd_reduction / ultimate_cd_reduction stats not defined yet.
+    const flat = 0;
+    return Math.max(0, baseCd * (1 - pct / 100) - flat);
+  }
 
   // ── Main control & interrupt tracking ──
   let currentMainControl: string | null = null;
@@ -684,14 +703,15 @@ export function simulate(
         }
         executionUsedInWindow.add(scan.windowStart);
       }
-      // Link CD check
-      if (skill.type === "link") {
-        const cdExpiry = linkCooldowns.get(actorId) || 0;
+      // Per-skill CD check (link / skill / ultimate — any skill with cooldown > 0).
+      if (skill.cooldown > 0) {
+        const cdExpiry = cooldowns.get(cdKey(actorId, skill.id)) || 0;
         if (time < cdExpiry - 0.001) {
+          const typeLabel = skill.type === "link" ? "连携技" : skill.type === "ultimate" ? "终结技" : skill.type === "skill" ? "战技" : "技能";
           validationError = {
             actorId, actionId, time,
             code: "ISSUE_COOLDOWN_ACTIVE",
-            message: `连携技冷却中: ${(cdExpiry - time).toFixed(1)}s后可用`,
+            message: `${typeLabel}冷却中: ${(cdExpiry - time).toFixed(1)}s后可用`,
           };
           break;
         }
@@ -809,11 +829,12 @@ export function simulate(
       globalHits.push({ hit, hitTime, hitIdx, actorId, actionId, build, skill, selectedVariant });
     }
 
-    // ── 4. Track action end + link cooldown (action_end emitted after Phase A) ──
+    // ── 4. Track action end + per-skill cooldown (action_end emitted after Phase A) ──
     const endTime = startTime + skill.duration;
 
-    if (skill.type === "link" && skill.cooldown > 0) {
-      linkCooldowns.set(actorId, endTime + skill.cooldown);
+    if (skill.cooldown > 0) {
+      const effCd = effectiveCooldown(skill, build);
+      cooldowns.set(cdKey(actorId, skill.id), endTime + effCd);
     }
 
     actionEndRecords.set(actionId, {

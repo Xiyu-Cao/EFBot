@@ -11,16 +11,24 @@
 import type {
   CharacterBuild,
   Skill,
-  DamageElement,
   PassiveTrigger,
 } from "./types";
 import type { PlacedSkill, EnemyConfig, KernelConfig } from "./kernel";
-import type { CharacterInput, StatModifier } from "./characterBuild";
+import type { StatModifier } from "./characterBuild";
 import { computeCharacterBuild } from "./characterBuild";
 import { V2_READY_IDS, getV2Module } from "./characters/adapter";
 import { V2_WEAPON_REGISTRY, convertWeaponTriggers } from "./weapons/definitions";
 import { V2_EQUIPMENT_SET_REGISTRY, convertSetTriggers } from "./equipment/definitions";
 import { canInterrupt, isPostLastHit } from "./interrupts";
+import {
+  type CharacterPanel,
+  type ResolvedSkills,
+  buildCharacterPanel,
+  buildEnemyPanel,
+  makeLabelResolver,
+} from "./panel";
+// Re-exports so existing tests targeting these helpers via storeAdapter keep working.
+export { collectPotentialCooldownMods, adjustSkillCooldowns } from "./panel";
 
 // ═══════════════════════════════════════════════════════════════════
 // Types for store data (loosely typed — store is JS)
@@ -101,9 +109,74 @@ export interface V2Inputs {
 }
 
 /**
+ * Build CharacterPanels for every V2-ready track, including external triggers
+ * (character module triggers + weapon tier triggers + equipment set triggers).
+ *
+ * This function is pure — identical inputs produce identical output. Callers
+ * that want automatic caching wrap it in a Vue `computed` (see
+ * `timelineStore.js#v2PanelByActor`); panels invalidate when a track's
+ * `stats` / `weaponId` / `equip*` / `growth` fields change.
+ *
+ * Returns null if any active track is not V2-ready or its module isn't loaded.
+ */
+export function buildAllPanels(
+  tracks: StoreTrack[],
+  weaponDatabase: StoreWeapon[],
+  resolveTrackConfiguredStats: (trackId: string) => Record<string, number> | null,
+  resolveGaugeMax: (trackId: string) => number,
+  resolveActiveSetCategories?: (trackId: string) => string[],
+): CharacterPanel[] | null {
+  const activeTracks = tracks.filter(t => t.id && t.actions?.length >= 0);
+  if (activeTracks.length === 0) return null;
+
+  for (const t of activeTracks) {
+    if (!V2_READY_IDS.has(t.id)) return null;
+  }
+
+  const panels: CharacterPanel[] = [];
+  for (const track of activeTracks) {
+    const mod = getV2Module(track.id);
+    if (!mod) return null;
+
+    const panel = buildCharacterPanel(
+      track as any,
+      mod,
+      weaponDatabase,
+      (t: any) => collectStatModifiers(t as StoreTrack, resolveTrackConfiguredStats),
+      resolveGaugeMax,
+    );
+    if (!panel) continue;
+
+    // Append triggers that live outside the character module (weapon tiers, equipment sets).
+    panel.triggers.push(...(mod.triggers ? [...mod.triggers] : []));
+    if (track.weaponId) {
+      const weaponDef = V2_WEAPON_REGISTRY[track.weaponId];
+      if (weaponDef) {
+        const tierIdx = Math.max(0, Math.min(8, (track.weaponBuffTier || 9) - 1));
+        panel.triggers.push(...convertWeaponTriggers(weaponDef, tierIdx));
+      }
+    }
+    if (resolveActiveSetCategories) {
+      for (const cat of resolveActiveSetCategories(track.id)) {
+        const setDef = V2_EQUIPMENT_SET_REGISTRY[cat];
+        if (setDef) panel.triggers.push(...convertSetTriggers(setDef));
+      }
+    }
+
+    panels.push(panel);
+  }
+
+  return panels.length > 0 ? panels : null;
+}
+
+/**
  * Build V2 kernel inputs from store state.
  *
  * Returns null if any track's character is not V2-ready.
+ *
+ * When a caller has already built per-track panels (typically via the store's
+ * cached `v2PanelByActor` computed) they can pass them through `precomputedPanels`
+ * to skip the per-call panel-build pass.
  */
 export function buildV2Inputs(
   tracks: StoreTrack[],
@@ -120,6 +193,9 @@ export function buildV2Inputs(
    * keeps `comboIdx` on 重击 after these so the next attack re-casts heavy.
    */
   pendingHeavyInfo?: Map<string, number>,
+  /** Pre-built per-track panels (from store-level cache). Falls back to a fresh
+   *  build when omitted. */
+  precomputedPanels?: CharacterPanel[],
 ): V2Inputs | null {
   const activeTracks = tracks.filter(t => t.id && t.actions?.length >= 0);
   if (activeTracks.length === 0) { console.log('[buildV2Inputs] no active tracks'); return null; }
@@ -132,126 +208,57 @@ export function buildV2Inputs(
     }
   }
 
+  // ── 1. Use caller-supplied panels when available, otherwise build fresh ──
+  const panels: CharacterPanel[] = precomputedPanels
+    ? precomputedPanels.filter(p => activeTracks.some(t => t.id === p.actorId))
+    : (buildAllPanels(tracks, weaponDatabase, resolveTrackConfiguredStats, resolveGaugeMax, resolveActiveSetCategories) ?? []);
+
+  if (panels.length === 0) return null;
+
+  // ── 2. Derive kernel inputs from panels ──
+  const panelByActor = new Map<string, CharacterPanel>();
+  for (const p of panels) panelByActor.set(p.actorId, p);
+
   const builds: CharacterBuild[] = [];
   const allSkills: PlacedSkill[] = [];
   const triggersByActor = new Map<string, PassiveTrigger[]>();
   const attackSegmentMap = new Map<string, number>();
   const executionSkillByActor = new Map<string, Skill>();
 
-  for (const track of activeTracks) {
-    const mod = getV2Module(track.id);
-    if (!mod) { console.log('[buildV2Inputs] module not loaded for:', track.id); return null; }
-
-    // ── Build CharacterBuild ──
-    const build = buildCharacter(track, mod, weaponDatabase, resolveTrackConfiguredStats, resolveGaugeMax);
-    if (!build) continue;
+  for (const panel of panels) {
+    const build = computeCharacterBuild(panel.input);
+    if (panel.gaugeFromSelfOnly) build.gaugeFromSelfOnly = true;
     builds.push(build);
 
-    // ── Map actions to PlacedSkills (with combo re-evaluation) ──
-    const { placed, segMap } = mapActionsToPlacedSkills(track, mod, pendingHeavyInfo);
+    // Find this panel's store track (needed for action list + kind/type fields).
+    const track = activeTracks.find(t => t.id === panel.actorId);
+    if (!track) continue;
+
+    const { placed, segMap } = mapActionsToPlacedSkills(
+      track, panel.resolvedSkills, panel.variants, pendingHeavyInfo,
+    );
     allSkills.push(...placed);
     for (const [id, idx] of segMap) attackSegmentMap.set(id, idx);
 
-    // ── Collect execution skill for this actor ──
-    const execSkill = Array.isArray(mod.skills?.attack)
-      ? mod.skills.attack.find((s: Skill) => s.type === "execution")
-      : null;
-    if (execSkill) executionSkillByActor.set(track.id, execSkill);
-
-    // ── Collect triggers (character + weapon) ──
-    const triggers: PassiveTrigger[] = mod.triggers ? [...mod.triggers] : [];
-
-    // Weapon triggers
-    if (track.weaponId) {
-      const weaponDef = V2_WEAPON_REGISTRY[track.weaponId];
-      if (weaponDef) {
-        const tierIdx = Math.max(0, Math.min(8, (track.weaponBuffTier || 9) - 1));
-        triggers.push(...convertWeaponTriggers(weaponDef, tierIdx));
-      }
-    }
-
-    // Equipment set triggers
-    if (resolveActiveSetCategories) {
-      const categories = resolveActiveSetCategories(track.id);
-      for (const cat of categories) {
-        const setDef = V2_EQUIPMENT_SET_REGISTRY[cat];
-        if (setDef) {
-          triggers.push(...convertSetTriggers(setDef));
-        }
-      }
-    }
-
-    if (triggers.length > 0) {
-      triggersByActor.set(track.id, triggers);
-    }
+    if (panel.execSkill) executionSkillByActor.set(panel.actorId, panel.execSkill);
+    if (panel.triggers.length > 0) triggersByActor.set(panel.actorId, panel.triggers);
   }
 
-  if (builds.length === 0) return null;
-
-  // ── Build EnemyConfig ──
-  const staggerNodes = buildStaggerNodes(
-    systemConstants.maxStagger,
-    systemConstants.staggerNodeCount,
-  );
-
-  const enemyConfig: EnemyConfig = {
-    defenseMultiplier: 1.0,
+  // ── 3. Build enemy panel + kernel resolver ──
+  const enemyPanel = buildEnemyPanel({
     maxStagger: systemConstants.maxStagger,
-    staggerNodes,
+    staggerNodeCount: systemConstants.staggerNodeCount,
+    staggerNodeDuration: systemConstants.staggerNodeDuration,
     staggerBreakDuration: systemConstants.staggerBreakDuration,
-    basePhysicalResist: 0,
-    baseMagicResist: 0,
-  };
+  });
+  const enemyConfig: EnemyConfig = enemyPanel.config;
 
-  // Build ref resolver from V2 module skillData
-  const skillDataByActor = new Map<string, any>();
-  for (const track of activeTracks) {
-    const mod = getV2Module(track.id);
-    if (mod?.skillData) {
-      skillDataByActor.set(track.id, mod.skillData);
-    }
-  }
-
-  // Pre-resolve talent values per actor: talentId → numeric value for the actor's
-  // current talent level. Picks the highest-promotion stage with promotion <= level.
-  // Used by `valueRef: "talent_X"` / `multiplierFromTalent: "talent_X"` style refs.
-  const talentValueByActor = new Map<string, Map<string, number>>();
-  for (const track of activeTracks) {
-    const mod = getV2Module(track.id);
-    const talentLevels = track.growth?.talentLevels || {};
-    if (!mod?.talents) continue;
-    const map = new Map<string, number>();
-    for (const talent of mod.talents) {
-      const level = Number(talentLevels[talent.id]) || 0;
-      if (level <= 0 || !Array.isArray(talent.stages)) continue;
-      const stage = [...talent.stages].reverse().find((s: any) => Number(s.promotion) <= level);
-      if (!stage) continue;
-      const value = stage.value ?? stage.damageMultiplier ?? stage.valuePerPoint ?? 0;
-      map.set(talent.id, Number(value) || 0);
-    }
-    talentValueByActor.set(track.id, map);
-  }
-
+  // Per-panel label resolver, dispatched by actor id.
+  const resolverByActor = new Map<string, (label: string) => number>();
+  for (const panel of panels) resolverByActor.set(panel.actorId, makeLabelResolver(panel));
   const resolveRef = (actorId: string, label: string): number => {
-    // Talent refs (e.g. "talent_0", "talent_1") — resolved from character module.
-    const talentMap = talentValueByActor.get(actorId);
-    if (talentMap?.has(label)) return talentMap.get(label) || 0;
-
-    const sd = skillDataByActor.get(actorId);
-    if (!sd) return 0;
-    // Search all skill sections for the label
-    for (const key of Object.keys(sd)) {
-      const section = sd[key];
-      if (!section?.levelData) continue;
-      for (const row of section.levelData) {
-        if (row.label === label) {
-          // Use M3 (index 11) value, parse "320%" → 320, "30" → 30
-          const raw = String(row.values?.[11] ?? row.values?.[row.values.length - 1] ?? "0");
-          return parseFloat(raw.replace("%", "").replace("s", "")) || 0;
-        }
-      }
-    }
-    return 0;
+    const fn = resolverByActor.get(actorId);
+    return fn ? fn(label) : 0;
   };
 
   const config: KernelConfig = {
@@ -261,99 +268,15 @@ export function buildV2Inputs(
     initialGaugeFull: systemConstants.initialGaugeFull || false,
   };
 
+  // Keep panelByActor accessible via closure if downstream code wants it later.
+  void panelByActor;
+
   return { builds, skills: allSkills, enemyConfig, config, triggersByActor, attackSegmentMap, executionSkillByActor };
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Character build
+// Stat modifier collection (from track.stats delta)
 // ═══════════════════════════════════════════════════════════════════
-
-function buildCharacter(
-  track: StoreTrack,
-  mod: any,
-  weaponDatabase: StoreWeapon[],
-  resolveTrackConfiguredStats: (trackId: string) => Record<string, number> | null,
-  resolveGaugeMax: (trackId: string) => number,
-): CharacterBuild | null {
-  const { identity, levelStats } = mod;
-  const growth = track.growth;
-  if (!growth) return null;
-
-  // Look up base stats from V2 level table
-  const level = growth.characterLevel || 90;
-  const baseStats = lookupLevelStats(levelStats, level);
-  if (!baseStats) return null;
-
-  // Find weapon
-  const weapon = track.weaponId
-    ? weaponDatabase.find(w => w.id === track.weaponId)
-    : null;
-
-  // Collect stat modifiers from store's configured stats delta
-  const statModifiers = collectStatModifiers(track, resolveTrackConfiguredStats);
-
-  const input: CharacterInput = {
-    id: identity.id,
-    name: identity.name,
-    element: identity.element as DamageElement,
-    rarity: identity.rarity,
-
-    promotion: growth.promotion || 4,
-    potentialLevel: growth.potentialLevel || 0,
-    talentLevels: growth.talentLevels || {},
-
-    baseStrength: baseStats.strength || 0,
-    baseAgility: baseStats.agility || 0,
-    baseIntellect: baseStats.intellect || 0,
-    baseWill: baseStats.will || 0,
-    baseAttack: baseStats.attack || 0,
-    baseHp: baseStats.hp || 0,
-
-    mainAttribute: identity.mainAttribute,
-    subAttribute: identity.subAttribute,
-
-    weaponId: track.weaponId || null,
-    weaponBaseAtk: weapon?.baseAtk || 0,
-    weaponLevel: weapon?.level || 90,
-
-    equipmentSetId: null, // TODO: detect from equipment slots
-
-    baseGaugeMax: resolveGaugeMax(track.id),
-
-    statModifiers,
-  };
-
-  const result = computeCharacterBuild(input);
-  if (mod.gaugeFromSelfOnly) result.gaugeFromSelfOnly = true;
-  return result;
-}
-
-/**
- * Look up base stats from V2 module's levelStats JSON.
- * Stats JSON format: { levels: { "1": { strength, agility, ... }, "90": { ... } } }
- */
-function lookupLevelStats(
-  levelStats: Record<string, any>,
-  level: number,
-): { strength: number; agility: number; intellect: number; will: number; attack: number; hp: number } | null {
-  // stats.json wraps data in a "levels" key
-  const table = levelStats.levels || levelStats;
-
-  // Try exact match
-  const exact = table[String(level)];
-  if (exact) return exact;
-
-  // Fallback to closest available level
-  const levels = Object.keys(table).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
-  if (levels.length === 0) return null;
-
-  // Find closest level that doesn't exceed
-  let best = levels[0];
-  for (const l of levels) {
-    if (l <= level) best = l;
-  }
-  return table[String(best)] || null;
-}
 
 /**
  * Collect stat modifiers from store's track.stats delta values.
@@ -410,10 +333,10 @@ function collectStatModifiers(
 
 function mapActionsToPlacedSkills(
   track: StoreTrack,
-  mod: any,
+  skills: ResolvedSkills,
+  variants: any,
   pendingHeavyInfo?: Map<string, number>,
 ): { placed: PlacedSkill[]; segMap: Map<string, number> } {
-  const { skills, variants } = mod;
   const result: PlacedSkill[] = [];
   const segMap = new Map<string, number>(); // actionInstanceId → recalculated 1-based segment index
 
@@ -600,15 +523,4 @@ function resolveSkillForAction(action: StoreAction, skills: any, _trackId: strin
   return null;
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// Stagger nodes
-// ═══════════════════════════════════════════════════════════════════
 
-function buildStaggerNodes(maxStagger: number, nodeCount: number): number[] {
-  if (nodeCount <= 0 || maxStagger <= 0) return [];
-  const nodes: number[] = [];
-  for (let i = 1; i <= nodeCount; i++) {
-    nodes.push(Math.round(maxStagger * i / (nodeCount + 1)));
-  }
-  return nodes;
-}

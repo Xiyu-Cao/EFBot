@@ -78,6 +78,9 @@ export function useDamageCalcState() {
   function runSimulation() {
     simError.value = null;
     try {
+      // Read the store's cached panels (auto-invalidated when any track's
+      // level / equipment / weapon / potential / talent changes).
+      const cachedPanels = store.v2Panels || undefined;
       const inputs = buildV2Inputs(
         store.tracks,
         store.characterRoster,
@@ -86,6 +89,8 @@ export function useDamageCalcState() {
         store.resolveTrackConfiguredStats,
         store.getTrackGaugeMax,
         store.getActiveSetBonusCategories,
+        undefined,
+        cachedPanels,
       );
       if (!inputs) {
         simError.value = "角色数据不完整或包含未支持的角色";
