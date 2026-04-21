@@ -62,7 +62,7 @@ import {
 } from "./anomaly";
 import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain, SP_CAP } from "./resources";
 import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef, type BuffModifierDef } from "./effects";
-import { getBuffMeta } from "../data/buffMetadata";
+import { getBuffMeta } from "./buffMetadata";
 import { TriggerProcessor, type TriggerEvent, type TriggerState } from "./triggers";
 import { canInterrupt, isPostLastHit, needsMainControl } from "./interrupts";
 import {

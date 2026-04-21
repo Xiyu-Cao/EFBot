@@ -15,7 +15,7 @@ import type {
 } from "./projections";
 import type { BuffStatus } from "../projection/projectWeaponBuffTimeline";
 import type { SelfBuffBar } from "../projection/projectSelfBuffTimeline";
-import { getBuffMeta, getBuffIcon, resolveBuffIcon } from "../data/buffMetadata";
+import { getBuffMeta, getBuffIcon, resolveBuffIcon } from "./buffMetadata";
 import { resolveSourceIcons } from "./sourceIconResolver";
 
 // ── Buff color resolution ──

@@ -18,7 +18,7 @@ import { buildRng, type SimulationRngOptions } from "./engine/rng.ts";
 import type { LegalityPolicy, LegalityIssue } from "./legality/types.ts";
 import type { MagicElement, PhysicalAnomalyType, AnomalyDebuffType } from "./anomaly/types.ts";
 import { getSkillBuffZone, isRoutableSkillBuff, resolveBonuses } from "./data/skillBuffZoneRegistry.ts";
-import { getBuffMeta, getBuffIcon } from "./data/buffMetadata.ts";
+import { getBuffMeta, getBuffIcon } from "./v2/buffMetadata";
 import { registerCarrierConsumptionHandlers, applyEndminLinkedDebuff } from "./events/carrierConsumptionHandlers.ts";
 import { getMultiplierFactor, applyDurationModifier } from "./data/potentialModifiers.ts";
 

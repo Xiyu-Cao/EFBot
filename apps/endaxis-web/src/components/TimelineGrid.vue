@@ -14,7 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { snapMs } from '@/utils/precision.js'
 import { getRectPos } from '@/utils/layoutUtils.js'
 import { V2_READY_IDS, UNSUPPORTED_IDS } from '@/simulation/v2/characters/adapter'
-import { getBuffIcon } from '@/simulation/data/buffMetadata'
+import { getBuffIcon } from '@/simulation/v2/buffMetadata'
 
 const store = useTimelineStore()
 const connectionHandler = useDragConnection()

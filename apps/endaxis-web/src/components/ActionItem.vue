@@ -5,7 +5,7 @@ import { useDragConnection } from '../composables/useDragConnection.js'
 import ActionLinkPorts from './ActionLinkPorts.vue'
 import { getRectPos } from '@/utils/layoutUtils.js'
 import { useI18n } from 'vue-i18n'
-import { getBuffIcon, resolveBuffIcon } from '@/simulation/data/buffMetadata'
+import { getBuffIcon, resolveBuffIcon } from '@/simulation/v2/buffMetadata'
 import { resolveSourceIcons } from '@/simulation/v2/sourceIconResolver'
 
 const props = defineProps({

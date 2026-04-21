@@ -229,7 +229,7 @@ import type { PassiveTrigger } from "./types";
 import { convertWeaponTriggers } from "./weapons/converter";
 import { wpn_claym_0013, wpn_sword_0016, wpn_sword_0021, V2_WEAPON_REGISTRY } from "./weapons/definitions";
 import { convertSetTriggers, V2_EQUIPMENT_SET_REGISTRY } from "./equipment/definitions";
-import { resolveBuffIcon } from "../data/buffMetadata";
+import { resolveBuffIcon } from "./buffMetadata";
 
 // ── Shared helpers ──
 
