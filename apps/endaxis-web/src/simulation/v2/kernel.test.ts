@@ -1912,3 +1912,110 @@ describe("V2 Kernel — magic attachment stacking (burst + duration refresh)", (
     expect(allDamages.length).toBe(5 + 4); // 5 skill hits + 4 bursts
   });
 });
+
+describe("V2 Kernel — break stacking & duration refresh", () => {
+  // Build a skill with physical-anomaly / break_apply effects at given offsets.
+  function makePhysSkill(entries: { offset: number; effect: any }[]): Skill {
+    const hits: Hit[] = entries.map(({ offset, effect }) => ({
+      offset, checkpointIndex: 0,
+      damage: { multiplier: 0, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+      effects: [effect],
+      standardLogic: true,
+    }));
+    return {
+      id: "phys_skill", type: "skill", name: "Phys", element: "cold",
+      duration: entries[entries.length - 1].offset + 1, spCost: 0, cooldown: 0,
+      hits, checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, entries.length - 1] }],
+    };
+  }
+
+  // BREAK_DURATION is 30s (anomaly.ts). Refresh test: apply break at t=0.5 (expiry=30.5),
+  // then the probe action at t=20 (should refresh to 50 if correctly handled).
+  function collectBreakChanges(events: any[]) {
+    return events.filter(e => e.type === "break_change");
+  }
+
+  it("launch on already-broken enemy: stacks +1 AND duration refreshed", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const skill = makePhysSkill([
+      { offset: 0.5, effect: { type: "break_apply", params: { stacks: 1 } } },    // 0→1 break at t=0.5 (expiry=30.5)
+      { offset: 20,  effect: { type: "physical_anomaly", params: { physicalType: "launch" } } },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const changes = collectBreakChanges(result.events);
+    const applied = changes.filter(c => c.stacks > 0);
+    expect(applied.length).toBe(2);
+    expect(applied[0].stacks).toBe(1);
+    expect(applied[1].stacks).toBe(2);           // +1 from launch
+    expect(applied[1].prevStacks).toBe(1);
+
+    // Expiry should be 50 (20 + 30), NOT 30.5 (no refresh would give 30.5)
+    const expiry = changes.find(c => c.stacks === 0);
+    expect(expiry).toBeTruthy();
+    expect(expiry.time).toBeCloseTo(50, 5);
+  });
+
+  it("knockdown on already-broken enemy: stacks +1 AND duration refreshed", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const skill = makePhysSkill([
+      { offset: 0.5, effect: { type: "break_apply", params: { stacks: 2 } } },    // 0→2 at t=0.5
+      { offset: 20,  effect: { type: "physical_anomaly", params: { physicalType: "knockdown" } } },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const changes = collectBreakChanges(result.events);
+    const applied = changes.filter(c => c.stacks > 0);
+    expect(applied.length).toBe(2);
+    expect(applied[1].stacks).toBe(3);           // 2 + 1
+    expect(applied[1].prevStacks).toBe(2);
+
+    const expiry = changes.find(c => c.stacks === 0);
+    expect(expiry.time).toBeCloseTo(50, 5);      // refreshed
+  });
+
+  it("break_apply on already-broken enemy: stacks += N AND duration refreshed", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const skill = makePhysSkill([
+      { offset: 0.5, effect: { type: "break_apply", params: { stacks: 1 } } },
+      { offset: 20,  effect: { type: "break_apply", params: { stacks: 2 } } },
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const changes = collectBreakChanges(result.events);
+    const applied = changes.filter(c => c.stacks > 0);
+    expect(applied.length).toBe(2);
+    expect(applied[1].stacks).toBe(3);           // 1 + 2
+    expect(applied[1].prevStacks).toBe(1);
+
+    const expiry = changes.find(c => c.stacks === 0);
+    expect(expiry.time).toBeCloseTo(50, 5);      // refreshed
+  });
+
+  it("break stacks cap at BREAK_MAX_STACKS (4): duration still refreshes at cap", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const skill = makePhysSkill([
+      { offset: 0.5, effect: { type: "break_apply", params: { stacks: 4 } } },   // 0→4 at t=0.5
+      { offset: 20,  effect: { type: "physical_anomaly", params: { physicalType: "launch" } } },  // cap-stay
+    ]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const changes = collectBreakChanges(result.events);
+    const applied = changes.filter(c => c.stacks > 0);
+    expect(applied.length).toBe(2);
+    expect(applied[0].stacks).toBe(4);
+    expect(applied[1].stacks).toBe(4);           // capped
+    expect(applied[1].prevStacks).toBe(4);
+
+    const expiry = changes.find(c => c.stacks === 0);
+    expect(expiry.time).toBeCloseTo(50, 5);      // refresh still happens at cap
+  });
+});

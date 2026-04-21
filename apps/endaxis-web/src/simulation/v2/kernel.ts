@@ -998,6 +998,9 @@ export function simulate(
     if (hitExpiryChanges.attachmentExpired) {
       emit({ type: "attachment_change", time: hitExpiryChanges.attachmentExpired.expiresAt, element: null, stacks: 0, prevElement: hitExpiryChanges.attachmentExpired.element, prevStacks: hitExpiryChanges.attachmentExpired.stacks });
     }
+    if (hitExpiryChanges.breakExpired) {
+      emit({ type: "break_change", time: hitExpiryChanges.breakExpired.expiredAt, stacks: 0, prevStacks: hitExpiryChanges.breakExpired.prevStacks });
+    }
     if (hitExpiryChanges.anomaliesExpired) {
       for (const a of hitExpiryChanges.anomaliesExpired) {
         emit({ type: "anomaly_remove", time: hitTime, anomalyType: a.type, level: a.level, sourceId: "" });
@@ -1261,6 +1264,9 @@ export function simulate(
   const finalExpiry = enemy.advanceTime(Infinity);
   if (finalExpiry.attachmentExpired) {
     emit({ type: "attachment_change", time: finalExpiry.attachmentExpired.expiresAt, element: null, stacks: 0, prevElement: finalExpiry.attachmentExpired.element, prevStacks: finalExpiry.attachmentExpired.stacks });
+  }
+  if (finalExpiry.breakExpired) {
+    emit({ type: "break_change", time: finalExpiry.breakExpired.expiredAt, stacks: 0, prevStacks: finalExpiry.breakExpired.prevStacks });
   }
   if (finalExpiry.anomaliesExpired) {
     for (const a of finalExpiry.anomaliesExpired) {

@@ -416,9 +416,11 @@ export function projectBreakBars(
     }
   }
 
-  // Close unclosed (cap at startTime + BREAK_DURATION)
+  // Close unclosed (cap at last-refresh + BREAK_DURATION — each stack change refreshes expiry).
+  // Kernel normally emits a break_change stacks=0 at the real expiry, so this fallback
+  // only runs for edge cases where no expiry event was produced.
   if (current) {
-    const cap = Math.min(endTime, current.startTime + BREAK_DURATION);
+    const cap = Math.min(endTime, current.currentSegStart + BREAK_DURATION);
     closeSegment(cap);
     bars.push({
       id: `break_${counter}`,
