@@ -5,7 +5,6 @@ import { executeFetch } from '@/api/fetchStrategy.js'
 import { compressGzip, decompressGzip } from '@/utils/gzipUtils'
 import { CORE_STATS, createDefaultStats } from '@/utils/coreStats.js'
 import { lookupBaseStats, createWikiDataLoader } from '@/utils/operatorStats.js'
-import { applySkillMultiplierOverlay } from '@/simulation/data/skillMultipliers'
 import { lookupOperatorStats, loadOperator } from '@/data/operators/loader.js'
 import { compileScenario } from '@/simulation/compiler/compileScenario'
 import { ULTIMATE_ENHANCEMENT_EXTENDERS } from '@/simulation/compiler/enhancers'
@@ -18,15 +17,6 @@ import { adaptAllProjections } from '@/simulation/v2/v2ProjectionAdapter'
 import { i18n } from '@/i18n'
 import { snapMs } from '@/utils/precision.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-    calcSpellBurstDamage,
-    calcSpellAnomalyTriggerDamage,
-    calcCombustionDotTick,
-    calcFreezeConsumeDamage,
-    calcLiftKnockdownDamage,
-    calcCrushDamage,
-    calcBreachDamage,
-} from '@/utils/anomalyCalc.js'
 
 const tr = (key, params) => i18n.global.t(key, params)
 const getI18nSkillType = (type) => {
