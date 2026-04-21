@@ -1238,6 +1238,14 @@ export function simulate(
     });
   }
 
+  // Events are emitted across two phases (Phase A: skill-order, Phase B:
+  // hit-order), so the raw array is not globally time-sorted. Projections
+  // that fold over events in order — notably projectGaugeSeries — need the
+  // full stream in chronological order to produce well-formed curves.
+  // Array.prototype.sort is stable in ES2019+, so within-time ordering is
+  // preserved.
+  events.sort((a, b) => a.time - b.time);
+
   return {
     events,
     finalState: {
