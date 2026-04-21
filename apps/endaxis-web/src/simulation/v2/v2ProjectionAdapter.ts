@@ -281,22 +281,40 @@ export function adaptAttachmentBars(bars: AttachmentBar[]): AdaptedAnomalyDebuff
 // BreakBar → attachment-like debuff format (破防显示在附着行)
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Split each break lifecycle into one adapted entry per stack-level segment,
+ * mirroring the attachment-bar pattern. A 1→2→3 break sequence produces three
+ * entries (at the respective stack-change times), each with its own icon and
+ * level badge on the UI. Only the final segment carries consumed/consumedBy so
+ * the consume marker renders at the real end of the lifecycle.
+ */
 export function adaptBreakBars(bars: BreakBar[]): AdaptedAnomalyDebuff[] {
-  return bars.map(bar => ({
-    id: bar.id,
-    anomalyType: "break",
-    startTime: bar.startTime,
-    endTime: bar.endTime,
-    duration: bar.endTime - bar.startTime,
-    stacks: bar.stacks,
-    sourceTrackId: "",
-    sourceActionInstanceId: "",
-    icon: "",
-    hideDuration: false,
-    consumedBy: bar.consumedBy,
-    consumed: !!bar.consumedBy,
-    preshifted: true,
-  }));
+  const out: AdaptedAnomalyDebuff[] = [];
+  for (const bar of bars) {
+    const segs = bar.segments && bar.segments.length > 0
+      ? bar.segments
+      : [{ stacks: bar.stacks, startTime: bar.startTime, endTime: bar.endTime }];
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      const isLastSeg = i === segs.length - 1;
+      out.push({
+        id: segs.length > 1 ? `${bar.id}_s${i}` : bar.id,
+        anomalyType: "break",
+        startTime: seg.startTime,
+        endTime: seg.endTime,
+        duration: seg.endTime - seg.startTime,
+        stacks: seg.stacks,
+        sourceTrackId: "",
+        sourceActionInstanceId: "",
+        icon: "",
+        hideDuration: false,
+        consumedBy: isLastSeg ? bar.consumedBy : undefined,
+        consumed: isLastSeg ? !!bar.consumedBy : false,
+        preshifted: true,
+      });
+    }
+  }
+  return out;
 }
 
 // ═══════════════════════════════════════════════════════════════════
