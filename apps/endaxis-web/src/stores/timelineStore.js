@@ -8,22 +8,13 @@ import { lookupBaseStats, createWikiDataLoader } from '@/utils/operatorStats.js'
 import { applySkillMultiplierOverlay } from '@/simulation/data/skillMultipliers'
 import { lookupOperatorStats, loadOperator } from '@/data/operators/loader.js'
 import { compileScenario } from '@/simulation/compiler/compileScenario'
-import { simulate } from '@/simulation/simulator'
 import { ULTIMATE_ENHANCEMENT_EXTENDERS } from '@/simulation/compiler/enhancers'
-import { projectSpSeries } from '@/simulation/projection/projectSpSeries'
 import { applyV2Overrides, preloadV2Modules, V2_READY_IDS, getV2Module } from '@/simulation/v2/characters/adapter'
-import { projectStaggerSeries } from '@/simulation/projection/projectStaggerSeries'
-import { projectLinkTriggerSeries, computeLinkQueueAt } from '@/simulation/projection/projectLinkTriggerSeries'
-import { projectGaugeSeries as projGaugeSeries } from '@/simulation/projection/projectGaugeSeries'
-import { projectWeaponBuffTimeline } from '@/simulation/projection/projectWeaponBuffTimeline'
-import { projectSelfBuffTimeline } from '@/simulation/projection/projectSelfBuffTimeline'
-import { CATEGORY_TO_SET_ID } from '@/simulation/equipment/registry'
 import { simulate as simulateV2, extractStaggerWindows, extractInterruptedHeavies } from '@/simulation/v2/kernel'
 import { projectBuffBars, projectStackBuffBars, projectAnomalyBars, projectAttachmentBars, projectBreakBars, projectHitEffects, projectActionBars, projectSpSeries as v2ProjectSpSeries, projectGaugeSeries as v2ProjectGaugeSeries, projectStaggerMonitorSeries } from '@/simulation/v2/projections'
 import { buildV2Inputs } from '@/simulation/v2/storeAdapter'
 import { canInterrupt as v2CanInterrupt } from '@/simulation/v2/interrupts'
 import { adaptAllProjections } from '@/simulation/v2/v2ProjectionAdapter'
-import { checkConditionsMet } from '@/simulation/legality/checkActionLegality'
 import { i18n } from '@/i18n'
 import { snapMs } from '@/utils/precision.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -5170,118 +5161,10 @@ export const useTimelineStore = defineStore('timeline', () => {
         return compiledScenario.value?.timeline;
     });
 
-    const simulation = computed(() => {
-        // V1 simulation disabled — all computation goes through V2 kernel
-        // Legacy code preserved below for reference only
-        return null;
-        /* eslint-disable no-unreachable */
-        const scenario = compiledScenario.value;
-        if (!scenario) return null;
-        const { timeline, teamConfig, enemyConfig, actors } = scenario;
+    const simulation = computed(() => null);
 
-        // Build db + equipment configs for the simulation pipeline.
-        // This enables weapon triggered passives and set bonus registration.
-        const db = {
-            weaponDatabase: weaponDatabase.value,
-            equipmentDatabase: equipmentDatabase.value,
-        };
-
-        // Build equipmentConfigs from tracks with auto set bonus detection.
-        // CATEGORY_TO_SET_ID imported from registry.ts — single source of truth.
-        const eqDb = db.equipmentDatabase || []
-        const equipConfigs = tracks.value
-            .filter(t => t.weaponId || t.equipArmorId || t.equipGlovesId || t.equipAccessory1Id || t.equipAccessory2Id)
-            .map(t => {
-                // Auto-detect set bonus from equipped item categories
-                const equippedIds = [t.equipArmorId, t.equipGlovesId, t.equipAccessory1Id, t.equipAccessory2Id].filter(Boolean)
-                let detectedSetId = undefined
-                if (equippedIds.length >= 3 && eqDb.length > 0) {
-                    const catCounts = new Map()
-                    for (const eqId of equippedIds) {
-                        const item = eqDb.find(e => e.id === eqId)
-                        const cat = item?.category
-                        if (cat) catCounts.set(cat, (catCounts.get(cat) || 0) + 1)
-                    }
-                    for (const [cat, count] of catCounts) {
-                        if (count >= 3 && CATEGORY_TO_SET_ID[cat]) {
-                            detectedSetId = CATEGORY_TO_SET_ID[cat]
-                            break
-                        }
-                    }
-                }
-
-                return {
-                    actorId: t.id,
-                    weaponId: undefined,   // mapped inside registerEquipmentPassives
-                    weaponDatabaseId: t.weaponId || undefined,
-                    setId: detectedSetId,
-                }
-            })
-            .filter(c => c.weaponDatabaseId || c.setId);
-
-        // Collect action instanceIds that are in enhanced/variant state
-        const enhancedIds = new Set(computedEffectiveActions.value.keys());
-
-        // Build per-track skill level map for multiplier selection
-        const skillLevelMap = {}
-        for (const t of tracks.value) {
-            if (!t.id) continue
-            const g = getTrackGrowth(t.id)
-            skillLevelMap[t.id] = {
-                attack: skillToUnified(g.skillLevels.attack),
-                skill: skillToUnified(g.skillLevels.skill),
-                link: skillToUnified(g.skillLevels.link),
-                ultimate: skillToUnified(g.skillLevels.ultimate),
-            }
-        }
-
-        // Crit mode: "expected" for deterministic damage stats, "real" for actual simulation
-        // TODO: expose this as a UI toggle per timeline mode
-        const critMode = 'expected'
-
-        try {
-            return simulate(timeline, teamConfig, enemyConfig, actors, {
-                equipmentConfigs: equipConfigs.length > 0 ? equipConfigs : undefined,
-                db: (db.weaponDatabase?.length || db.equipmentDatabase?.length) ? db : undefined,
-                critMode,
-                legalityPolicy: legalityPolicy.value,
-                enhancedActionIds: enhancedIds.size > 0 ? enhancedIds : undefined,
-                skillLevelMap,
-            });
-        } catch (err) {
-            console.error('[simulation] runtime error:', err)
-            return null
-        }
-    });
-
-    // ── V2 Kernel Simulation ──
-    // Auto simulation disabled — only runs via validateTimeline()
-    const v2Simulation = computed(() => {
-        return null
-        /* eslint-disable no-unreachable */
-        try {
-            const inputs = buildV2Inputs(
-                tracks.value,
-                characterRoster.value,
-                weaponDatabase.value,
-                systemConstants.value,
-                resolveTrackConfiguredStats,
-                getTrackGaugeMax,
-                getActiveSetBonusCategories,
-            )
-            if (!inputs) return null
-            // Two-pass: first pass gets stagger windows, second pass does execution conversion
-            const pass1 = simulateV2(inputs.builds, inputs.skills, inputs.enemyConfig, inputs.config, inputs.triggersByActor)
-            const windows = extractStaggerWindows(pass1.events, inputs.enemyConfig.staggerBreakDuration)
-            if (windows.length > 0 && inputs.executionSkillByActor.size > 0) {
-                return simulateV2(inputs.builds, inputs.skills, inputs.enemyConfig, inputs.config, inputs.triggersByActor, inputs.executionSkillByActor, windows)
-            }
-            return pass1
-        } catch (err) {
-            console.error('[v2 simulation] runtime error:', err)
-            return null
-        }
-    })
+    // V2 auto-simulation disabled — only runs via validateTimeline()
+    const v2Simulation = computed(() => null)
 
     // ── V2 Projected data (buff/debuff/anomaly/attachment) ──
     // Sources: auto simulation (non-free mode) OR validation result (free mode)
@@ -5308,37 +5191,12 @@ export const useTimelineStore = defineStore('timeline', () => {
         return { ...adapted, hitEffects, actionBars }
     })
 
-    /**
-     * Legality issues grouped by action instanceId.
-     * Map<actionId, LegalityIssue[]>
-     *
-     * UI components can use this to show warning/error indicators on action nodes.
-     * Issues come from the simulation engine's authoritative legality checker.
-     */
-    // Re-verify GAUGE_INSUFFICIENT using store's calculateGaugeData as fallback.
-    // Check gauge just BEFORE the ultimate start (issue.time - epsilon),
-    // because calculateGaugeData deducts gaugeCost at the same time point.
-    function _filterGaugeIssues(issues) {
-        return issues.filter(issue => {
-            if (issue.code !== 'GAUGE_INSUFFICIENT') return true
-            const gaugeData = calculateGaugeData(issue.actorId)
-            const gaugeBeforeAction = _interpolateSeriesAt(gaugeData, issue.time - 0.001, 'val')
-            const charI = characterRoster.value.find(c => c.id === issue.actorId)
-            const trackObj = tracks.value.find(t => t.id === issue.actorId)
-            const maxG = (charI && trackObj) ? resolveGaugeMax(issue.actorId, trackObj, charI) : 300
-            return gaugeBeforeAction < maxG - 1
-        })
-    }
-
-    // V1 legality disabled — V2 kernel handles validation via validateTimeline()
     const legalityIssuesByAction = computed(() => new Map())
     const sortedLegalityIssues = computed(() => [])
 
     // ── Validation (Free Mode) ──
 
     function validateTimeline() {
-        // ── Try V2 kernel first ──
-        // Build once without pendingHeavy info for pass 1.
         let v2Inputs = buildV2Inputs(
             tracks.value,
             characterRoster.value,
@@ -5348,399 +5206,79 @@ export const useTimelineStore = defineStore('timeline', () => {
             getTrackGaugeMax,
             getActiveSetBonusCategories,
         )
-        if (v2Inputs) {
-            try {
-                // Pass 1: discovers stagger windows AND heavy attacks interrupted
-                // before their hit1 (combo should not advance after those).
-                const pass1 = simulateV2(
-                    v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
-                    v2Inputs.config,
-                    v2Inputs.triggersByActor,
-                )
-                const pendingHeavyInfo = extractInterruptedHeavies(pass1.events, v2Inputs.skills)
-                if (pendingHeavyInfo.size > 0) {
-                    // Rebuild placed skills with heavy-aware combo so subsequent attacks
-                    // after an aborted 重击 resolve back to heavy. Inputs for pass 2.
-                    v2Inputs = buildV2Inputs(
-                        tracks.value,
-                        characterRoster.value,
-                        weaponDatabase.value,
-                        systemConstants.value,
-                        resolveTrackConfiguredStats,
-                        getTrackGaugeMax,
-                        getActiveSetBonusCategories,
-                        pendingHeavyInfo,
-                    ) || v2Inputs
-                }
-                const staggerWindows = extractStaggerWindows(pass1.events, v2Inputs.enemyConfig.staggerBreakDuration)
-                const result = simulateV2(
-                    v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
-                    { ...v2Inputs.config, validateConditions: true },
-                    v2Inputs.triggersByActor,
-                    v2Inputs.executionSkillByActor,
-                    staggerWindows,
-                )
-                // Store result for buff display (even on partial failure)
-                _v2ValidationResult.value = result
-                _v2AttackSegmentMap.value = v2Inputs.attackSegmentMap
-
-                if (result.validationError) {
-                    const err = result.validationError
-                    validationResult.value = {
-                        passed: false,
-                        issues: [{
-                            actorId: err.actorId,
-                            actionId: err.actionId,
-                            code: err.code,
-                            message: err.message,
-                            time: err.time,
-                            severity: 'error',
-                            resolution: 'block',
-                        }],
-                    }
-                    validationPassed.value = false
-                } else {
-                    validationResult.value = { passed: true, issues: [] }
-                    validationPassed.value = true
-                }
-            } catch (err) {
-                console.error('[validateTimeline V2] runtime error:', err)
-                validationResult.value = { passed: false, issues: [], error: String(err) }
-                validationPassed.value = false
-            }
-            validationDialogVisible.value = true
-            return
-        }
-
-        // ── Fallback: V1 engine ──
-        const scenario = compiledScenario.value
-        if (!scenario) {
+        if (!v2Inputs) {
             validationResult.value = { passed: true, issues: [] }
-            validationDialogVisible.value = true
             validationPassed.value = true
+            validationDialogVisible.value = true
             return
         }
-        const { timeline, teamConfig, enemyConfig, actors } = scenario
-        const db = {
-            weaponDatabase: weaponDatabase.value,
-            equipmentDatabase: equipmentDatabase.value,
-        }
-        const eqDb = db.equipmentDatabase || []
-        const equipConfigs = tracks.value
-            .filter(t => t.weaponId || t.equipArmorId || t.equipGlovesId || t.equipAccessory1Id || t.equipAccessory2Id)
-            .map(t => {
-                const equippedIds = [t.equipArmorId, t.equipGlovesId, t.equipAccessory1Id, t.equipAccessory2Id].filter(Boolean)
-                let detectedSetId = undefined
-                if (equippedIds.length >= 3 && eqDb.length > 0) {
-                    const catCounts = new Map()
-                    for (const eqId of equippedIds) {
-                        const item = eqDb.find(e => e.id === eqId)
-                        const cat = item?.category
-                        if (cat) catCounts.set(cat, (catCounts.get(cat) || 0) + 1)
-                    }
-                    for (const [cat, count] of catCounts) {
-                        if (count >= 3 && CATEGORY_TO_SET_ID[cat]) {
-                            detectedSetId = CATEGORY_TO_SET_ID[cat]
-                            break
-                        }
-                    }
-                }
-                return {
-                    actorId: t.id,
-                    weaponId: undefined,
-                    weaponDatabaseId: t.weaponId || undefined,
-                    setId: detectedSetId,
-                }
-            })
-            .filter(c => c.weaponDatabaseId || c.setId)
-
-        const enhancedIds = new Set(computedEffectiveActions.value.keys())
-        const skillLevelMap = {}
-        for (const t of tracks.value) {
-            if (!t.id) continue
-            const g = getTrackGrowth(t.id)
-            skillLevelMap[t.id] = {
-                attack: skillToUnified(g.skillLevels.attack),
-                skill: skillToUnified(g.skillLevels.skill),
-                link: skillToUnified(g.skillLevels.link),
-                ultimate: skillToUnified(g.skillLevels.ultimate),
-            }
-        }
-
         try {
-            const result = simulate(timeline, teamConfig, enemyConfig, actors, {
-                equipmentConfigs: equipConfigs.length > 0 ? equipConfigs : undefined,
-                db: (db.weaponDatabase?.length || db.equipmentDatabase?.length) ? db : undefined,
-                critMode: 'expected',
-                legalityPolicy: 'strict',
-                enhancedActionIds: enhancedIds.size > 0 ? enhancedIds : undefined,
-                skillLevelMap,
-            })
-            const rawIssues = result.legalityIssues ?? []
-            const issues = _filterGaugeIssues(rawIssues)
-            validationResult.value = {
-                passed: issues.length === 0,
-                issues: [...issues].sort((a, b) => a.time - b.time),
+            // Pass 1: discovers stagger windows AND heavy attacks interrupted
+            // before their hit1 (combo should not advance after those).
+            const pass1 = simulateV2(
+                v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
+                v2Inputs.config,
+                v2Inputs.triggersByActor,
+            )
+            const pendingHeavyInfo = extractInterruptedHeavies(pass1.events, v2Inputs.skills)
+            if (pendingHeavyInfo.size > 0) {
+                // Rebuild placed skills with heavy-aware combo so subsequent attacks
+                // after an aborted 重击 resolve back to heavy. Inputs for pass 2.
+                v2Inputs = buildV2Inputs(
+                    tracks.value,
+                    characterRoster.value,
+                    weaponDatabase.value,
+                    systemConstants.value,
+                    resolveTrackConfiguredStats,
+                    getTrackGaugeMax,
+                    getActiveSetBonusCategories,
+                    pendingHeavyInfo,
+                ) || v2Inputs
             }
-            validationPassed.value = issues.length === 0
+            const staggerWindows = extractStaggerWindows(pass1.events, v2Inputs.enemyConfig.staggerBreakDuration)
+            const result = simulateV2(
+                v2Inputs.builds, v2Inputs.skills, v2Inputs.enemyConfig,
+                { ...v2Inputs.config, validateConditions: true },
+                v2Inputs.triggersByActor,
+                v2Inputs.executionSkillByActor,
+                staggerWindows,
+            )
+            _v2ValidationResult.value = result
+            _v2AttackSegmentMap.value = v2Inputs.attackSegmentMap
+
+            if (result.validationError) {
+                const err = result.validationError
+                validationResult.value = {
+                    passed: false,
+                    issues: [{
+                        actorId: err.actorId,
+                        actionId: err.actionId,
+                        code: err.code,
+                        message: err.message,
+                        time: err.time,
+                        severity: 'error',
+                        resolution: 'block',
+                    }],
+                }
+                validationPassed.value = false
+            } else {
+                validationResult.value = { passed: true, issues: [] }
+                validationPassed.value = true
+            }
         } catch (err) {
-            console.error('[validateTimeline] runtime error:', err)
+            console.error('[validateTimeline V2] runtime error:', err)
             validationResult.value = { passed: false, issues: [], error: String(err) }
             validationPassed.value = false
         }
         validationDialogVisible.value = true
     }
 
-    // ── Playhead Simulation (Realistic Mode) ──
-
-    /**
-     * Run simulation up to a target time for skill availability checking.
-     * Filters compiled timeline actions to those starting <= targetTime,
-     * then runs the full simulation pipeline.
-     */
-    function _runSimulationUpTo(_targetTime) {
-        // V1 playhead simulation disabled — V2 kernel handles this
-        return null
-        /* eslint-disable no-unreachable */
-        const scenario = compiledScenario.value
-        if (!scenario) return null
-        const { timeline, teamConfig, enemyConfig, actors } = scenario
-
-        // Filter timeline actions to only include those at or before targetTime
-        const filteredActions = timeline.actions.filter(a => a.startTime <= targetTime)
-        const filteredTimeline = { ...timeline, actions: filteredActions }
-
-        const db = {
-            weaponDatabase: weaponDatabase.value,
-            equipmentDatabase: equipmentDatabase.value,
-        }
-        const eqDb = db.equipmentDatabase || []
-        const equipConfigs = tracks.value
-            .filter(t => t.weaponId || t.equipArmorId || t.equipGlovesId || t.equipAccessory1Id || t.equipAccessory2Id)
-            .map(t => {
-                const equippedIds = [t.equipArmorId, t.equipGlovesId, t.equipAccessory1Id, t.equipAccessory2Id].filter(Boolean)
-                let detectedSetId = undefined
-                if (equippedIds.length >= 3 && eqDb.length > 0) {
-                    const catCounts = new Map()
-                    for (const eqId of equippedIds) {
-                        const item = eqDb.find(e => e.id === eqId)
-                        const cat = item?.category
-                        if (cat) catCounts.set(cat, (catCounts.get(cat) || 0) + 1)
-                    }
-                    for (const [cat, count] of catCounts) {
-                        if (count >= 3 && CATEGORY_TO_SET_ID[cat]) {
-                            detectedSetId = CATEGORY_TO_SET_ID[cat]
-                            break
-                        }
-                    }
-                }
-                return {
-                    actorId: t.id,
-                    weaponId: undefined,
-                    weaponDatabaseId: t.weaponId || undefined,
-                    setId: detectedSetId,
-                }
-            })
-            .filter(c => c.weaponDatabaseId || c.setId)
-
-        const enhancedIds = new Set(computedEffectiveActions.value.keys())
-        const skillLevelMap = {}
-        for (const t of tracks.value) {
-            if (!t.id) continue
-            const g = getTrackGrowth(t.id)
-            skillLevelMap[t.id] = {
-                attack: skillToUnified(g.skillLevels.attack),
-                skill: skillToUnified(g.skillLevels.skill),
-                link: skillToUnified(g.skillLevels.link),
-                ultimate: skillToUnified(g.skillLevels.ultimate),
-            }
-        }
-
-        try {
-            return simulate(filteredTimeline, teamConfig, enemyConfig, actors, {
-                equipmentConfigs: equipConfigs.length > 0 ? equipConfigs : undefined,
-                db: (db.weaponDatabase?.length || db.equipmentDatabase?.length) ? db : undefined,
-                critMode: 'expected',
-                legalityPolicy: 'strict',
-                enhancedActionIds: enhancedIds.size > 0 ? enhancedIds : undefined,
-                skillLevelMap,
-            })
-        } catch (err) {
-            console.error('[playheadSimulation] runtime error:', err)
-            return null
-        }
-    }
-
-    const playheadSimulation = computed(() => {
-        if (timelineEditorMode.value !== 'realistic') return null
-        return _runSimulationUpTo(playheadTime.value)
-    })
-
-    /**
-     * Map<skillId, { available: boolean, reasons: string[] }>
-     * Shows which skills can be cast at the current playhead position.
-     */
-    const playheadSkillAvailability = computed(() => {
-        if (timelineEditorMode.value !== 'realistic') return null
-        const sim = playheadSimulation.value
-        const result = new Map()
-        const activeId = activeTrackId.value
-        if (!activeId || !sim) return result
-
-        const state = sim.state
-        const time = playheadTime.value
-        const actor = state.actors?.get(activeId)
-        if (!actor) return result
-
-        // Project SP at playhead time (accounts for regen between last event and playhead)
-        const spSeriesData = projectSpSeries(sim.simLog, sim.state.getInitialSnapshot())
-        const currentSp = _interpolateSeriesAt(spSeriesData, time, 'sp')
-
-        for (const skill of activeSkillLibrary.value) {
-            const reasons = []
-            let available = true
-
-            // SP check
-            const spCost = Number(skill.spCost) || 0
-            if (spCost > 0 && currentSp < spCost - 0.01) {
-                available = false
-                reasons.push('技力不足')
-            }
-
-            // Gauge check (ultimate)
-            if (skill.type === 'ultimate') {
-                const gauge = actor.getGauge()
-                const maxGauge = actor.getMaxGauge()
-                if (gauge < maxGauge - 0.01) {
-                    available = false
-                    reasons.push('能量不足')
-                }
-            }
-
-            // Cooldown check
-            const skillId = skill.skillId || skill.id
-            if (skillId && actor.isOnCooldown && actor.isOnCooldown(skillId, time)) {
-                available = false
-                reasons.push('冷却中')
-            }
-
-            // Condition check (link skills with allowedTypes)
-            if (skill.allowedTypes?.length > 0) {
-                try {
-                    const conditionMet = checkConditionsMet(skill.allowedTypes, state, time)
-                    if (!conditionMet) {
-                        available = false
-                        reasons.push('施放条件未满足')
-                    }
-                } catch (e) {
-                    // If condition check fails, don't block
-                }
-            }
-
-            result.set(skill.id, { available, reasons })
-        }
-        return result
-    })
-
-    // ── Link Queue at Playhead (Realistic Mode) ──
-    const linkQueueAtPlayhead = computed(() => {
-        if (timelineEditorMode.value !== 'realistic') return []
-        const sim = playheadSimulation.value
-        if (!sim) return []
-
-        // Collect already-cast links (needed by both projection and queue)
-        const castLinks = []
-        for (const track of tracks.value) {
-            for (const a of track.actions) {
-                if (a.type === 'link' && !a.isDisabled) castLinks.push({ trackId: track.id, time: Number(a.startTime) || 0 })
-            }
-        }
-
-        // Build track configs from link_trigger conditions
-        const trackConfigs = tracks.value.map((track, idx) => {
-            const char = characterRoster.value.find(c => c.id === track.id)
-            if (!char?.link_trigger?.trigger) return null
-            return {
-                trackId: track.id,
-                trackIndex: idx,
-                condition: char.link_trigger,
-                avatar: char.avatar || '',
-                linkCooldown: Number(char.link_cooldown) || 0,
-            }
-        }).filter(Boolean)
-        if (!trackConfigs.length) return []
-
-        const triggers = projectLinkTriggerSeries(sim.simLog, trackConfigs, castLinks, computedConvertEvents.value)
-
-        // Collect locked operators (have active action at playhead time)
-        const lockedIds = new Set()
-        for (const cfg of trackConfigs) {
-            try {
-                const actor = sim.state.actors?.get(cfg.trackId)
-                if (actor?.getActiveAction?.()) lockedIds.add(cfg.trackId)
-            } catch {}
-        }
-
-        return computeLinkQueueAt(triggers, playheadTime.value, trackConfigs, lockedIds, sim.state, castLinks)
-    })
-
-    /**
-     * Check skill availability at an arbitrary future time (for drag-to-future).
-     * Runs a simulation up to targetTime and checks the specific skill.
-     */
-    function checkSkillAvailabilityAt(trackId, skill, targetTime, options = {}) {
-        const sim = _runSimulationUpTo(targetTime)
-        if (!sim) return { available: true, reasons: [] }
-
-        const state = sim.state
-        const actor = state.actors?.get(trackId)
-        if (!actor) return { available: true, reasons: [] }
-
-        const reasons = []
-        let available = true
-
-        // Project SP at targetTime using spSeries (accounts for regen between events)
-        const spSeriesData = projectSpSeries(sim.simLog, sim.state.getInitialSnapshot())
-        const currentSp = _interpolateSeriesAt(spSeriesData, targetTime, 'sp')
-        const spCost = Number(skill.spCost) || 0
-        if (spCost > 0 && currentSp < spCost - 0.01) {
-            available = false
-            reasons.push('技力不足')
-        }
-
-        if (skill.type === 'ultimate') {
-            // Use store's gauge calculation (accounts for gaugeGain + efficiency) instead of simulation engine
-            const gaugeData = calculateGaugeData(trackId)
-            const gauge = _interpolateSeriesAt(gaugeData, targetTime, 'val')
-            const charInfo = characterRoster.value.find(c => c.id === trackId)
-            const trackObj = tracks.value.find(t => t.id === trackId)
-            const maxGauge = (charInfo && trackObj) ? resolveGaugeMax(trackId, trackObj, charInfo) : (actor.getMaxGauge())
-            if (gauge < maxGauge - 0.01) {
-                available = false
-                reasons.push(`能量不足 (${Math.floor(gauge)}/${maxGauge})`)
-            }
-        }
-
-        const skillId = skill.skillId || skill.id
-        if (skillId && actor.isOnCooldown && actor.isOnCooldown(skillId, targetTime)) {
-            available = false
-            reasons.push('冷却中')
-        }
-
-        // Skip condition check when casting from link queue (6s window handles it)
-        if (!options.skipConditions && skill.allowedTypes?.length > 0) {
-            try {
-                const conditionMet = checkConditionsMet(skill.allowedTypes, state, targetTime)
-                if (!conditionMet) {
-                    available = false
-                    reasons.push('施放条件未满足')
-                }
-            } catch (e) {
-                // If condition check fails, don't block
-            }
-        }
-
-        return { available, reasons }
+    // Playhead skill availability + link queue: V1 paths removed, V2 wire-up TBD.
+    const playheadSimulation = computed(() => null)
+    const playheadSkillAvailability = computed(() => new Map())
+    const linkQueueAtPlayhead = computed(() => [])
+    function checkSkillAvailabilityAt() {
+        return { available: true, reasons: [] }
     }
 
     // SP series: use store-based calculation (handles regen, pause windows, time extensions correctly)
@@ -6807,377 +6345,15 @@ export const useTimelineStore = defineStore('timeline', () => {
         return result
     }
 
-    const computedPhysicalVulnerable = computed(() => {
-        // V1 manual computation disabled — V2 projections handle this
-        return []
-        /* eslint-disable no-unreachable */
-        const viewDur = viewDuration.value
-        const vulIcon = iconDatabase.value['break'] || iconDatabase.value['physical_vulnerable'] || ''
-        const raw = []
+    // V1 manual computation removed — V2 projections drive the display.
+    const computedPhysicalVulnerable = computed(() => [])
+    const computedAnomalyDebuffs = computed(() => [])
 
-        for (const track of tracks.value) {
-            if (!track?.id || !track.actions) continue
-            for (const action of track.actions) {
-                if (action.isDisabled) continue
-                const anomalies = action.physicalAnomaly
-                if (!Array.isArray(anomalies) || anomalies.length === 0) continue
-                const rows = Array.isArray(anomalies[0]) ? anomalies : [anomalies]
-                const actionStart = Number(action.startTime) || 0
+    // Self-buff + release-condition simulation was V1-only; V2 projections replace it.
+    const computedSelfBuffsByTrack = computed(() => _v2ProjectedData.value?.selfBuffsByTrack || new Map())
+    const computedActionConditionResults = computed(() => new Map())
+    const computedConvertEvents = computed(() => [])
 
-                for (const row of rows) {
-                    if (!Array.isArray(row)) continue
-                    for (const effect of row) {
-                        if (!effect?.type || !PHYSICAL_TRIGGER_TYPES.has(effect.type)) continue
-                        const offset = Number(effect.offset) || 0
-                        const effectStart = snapMs(actionStart + offset)
-                        raw.push({
-                            id: `phytrig_${action.instanceId}_${effect._id || `${effect.type}_${offset}`}`,
-                            anomalyType: effect.type,
-                            startTime: effectStart,
-                        })
-                    }
-                }
-            }
-        }
-
-        return _computePhysicalVulnerable(raw, viewDur, vulIcon)
-    })
-
-    const computedAnomalyDebuffs = computed(() => {
-        // V1 manual anomaly computation disabled — V2 projections handle this
-        return []
-        /* eslint-disable no-unreachable */
-        const viewDur = viewDuration.value
-        const raw = []
-
-        const resolveIcon = (effect, charInfo) => {
-            let effectIcon = iconDatabase.value[effect.type] || ''
-            if (charInfo?.exclusive_buffs) {
-                const excl = charInfo.exclusive_buffs.find(b => b.key === effect.type)
-                if (excl?.path) effectIcon = excl.path
-            }
-            return effectIcon
-        }
-
-        for (const track of tracks.value) {
-            if (!track?.id || !track.actions) continue
-            const charInfo = characterRoster.value.find(c => c.id === track.id)
-            for (const action of track.actions) {
-                if (action.isDisabled) continue
-                let anomalies = action.physicalAnomaly
-                if (!Array.isArray(anomalies) || anomalies.length === 0) continue
-                const rows = Array.isArray(anomalies[0]) ? anomalies : [anomalies]
-                const actionStart = Number(action.startTime) || 0
-
-                for (const row of rows) {
-                    if (!Array.isArray(row)) continue
-                    for (const effect of row) {
-                        if (!effect?.type || !isDebuffAnomalyType(effect.type)) continue
-                        const offset = Number(effect.offset) || 0
-                        const effectStart = snapMs(actionStart + offset)
-                        const barDur = _resolveAnomalyDebuffBarDuration(effect.type, effect.duration, effectStart, viewDur)
-                        if (barDur <= 0) continue
-
-                        const endTime = snapMs(effectStart + barDur)
-                        const stackVal = Math.min(DEBUFF_STACK_CAP, Math.max(1, Number(effect.stacks) || 1))
-
-                        raw.push({
-                            id: `anomdebuff_${action.instanceId}_${effect._id || `${effect.type}_${offset}`}`,
-                            anomalyType: effect.type,
-                            startTime: effectStart,
-                            endTime,
-                            stacks: stackVal,
-                            sourceTrackId: track.id,
-                            sourceActionInstanceId: action.instanceId,
-                            icon: resolveIcon(effect, charInfo),
-                            hideDuration: ATTACH_LIKE_DEBUFF_TYPES.has(effect.type),
-                        })
-                    }
-                }
-            }
-        }
-
-        const iconForType = (atype, sampleSeg) =>
-            (sampleSeg && sampleSeg.icon) || iconDatabase.value[atype] || ''
-
-        // 在反应计算前，应用 blaze_to_magma 转化：终止已被熔火吸收的 blaze_attach 段
-        const converts = computedSelfBuffSimulation.value.convertEvents
-        let processedRaw = raw
-        if (converts.length) {
-            processedRaw = []
-            for (const seg of raw) {
-                if (seg.anomalyType !== 'blaze_attach') { processedRaw.push(seg); continue }
-                const applicable = converts
-                    .filter(ev => ev.time > seg.startTime && ev.time <= seg.endTime)
-                    .sort((a, b) => a.time - b.time)
-                if (!applicable.length) { processedRaw.push(seg); continue }
-                let curStacks = seg.stacks
-                let segStart = seg.startTime
-                for (const ev of applicable) {
-                    if (ev.time > segStart && curStacks > 0)
-                        processedRaw.push({ ...seg, startTime: segStart, endTime: ev.time, stacks: curStacks })
-                    curStacks = Math.max(0, curStacks - ev.amount)
-                    segStart = ev.time
-                    if (curStacks === 0) break
-                }
-                if (curStacks > 0 && segStart < seg.endTime)
-                    processedRaw.push({ ...seg, startTime: segStart, endTime: seg.endTime, stacks: curStacks })
-            }
-        }
-        return _timeSliceAnomalyDebuffs(_applyAttachReactions(processedRaw, iconForType), iconForType)
-    })
-
-    // ── 角色自身 Buff（专属 buff 类型，如熔火）──────────────────────────────
-    const SELF_BUFF_MAX_STACKS = 4
-
-    // ── 释放条件求值引擎 ──────────────────────────────────────────────────
-
-    function _evalOp(actual, op, expected) {
-        switch (op) {
-            case '>=': return actual >= expected
-            case '<=': return actual <= expected
-            case '>':  return actual > expected
-            case '<':  return actual < expected
-            case '==': return actual === expected
-            case '!=': return actual !== expected
-            default:   return false
-        }
-    }
-
-    /** 对单个条件组求值，全部满足返回 true */
-    function _evalConditions(conditions, state) {
-        return conditions.every(c => {
-            if (c.type === 'selfBuff') {
-                const stacks = state.selfBuff[c.key] ?? 0
-                return _evalOp(stacks, c.op, c.value)
-            }
-            if (c.type === 'ultimateActive') {
-                return state.ultimateActive === true
-            }
-            return false
-        })
-    }
-
-    /**
-     * 单次顺序模拟，同时产出：
-     *   selfBuffsByTrack         — Map<trackId, bar[]>  用于自身增益栏渲染
-     *   conditionResultsByAction — Map<instanceId, result>  用于技能效果替换
-     *
-     * 将二者合并计算以消除循环依赖：自身 buff 堆叠状态 → 条件判断 → 消耗 buff / 选用变体 physicalAnomaly
-     */
-    const computedSelfBuffSimulation = computed(() => {
-        // V1 manual self-buff computation disabled — V2 projections handle this
-        return { selfBuffsByTrack: new Map(), conditionResultsByAction: new Map(), convertEvents: [] }
-        /* eslint-disable no-unreachable */
-        const viewDur = viewDuration.value
-        const selfBuffsByTrack = new Map()
-        const conditionResultsByAction = new Map()
-        const convertEvents = [] // [{ time, amount }]
-
-        // 辅助：直接从原始轨道动作构建 blaze_attach 时间线（不依赖 computedAnomalyDebuffs，避免循环依赖）
-        function _getBlazeStacksAt(time) {
-            const blazeSegs = []
-            for (const trk of tracks.value) {
-                if (!trk?.id || !trk.actions) continue
-                for (const act of trk.actions) {
-                    if (act.isDisabled) continue
-                    const anoms = act.physicalAnomaly
-                    if (!Array.isArray(anoms) || anoms.length === 0) continue
-                    const arows = Array.isArray(anoms[0]) ? anoms : [anoms]
-                    const aStart = Number(act.startTime) || 0
-                    for (const arow of arows) {
-                        if (!Array.isArray(arow)) continue
-                        for (const eff of arow) {
-                            if (eff?.type !== 'blaze_attach') continue
-                            const off = Number(eff.offset) || 0
-                            const t0 = snapMs(aStart + off)
-                            const dur = Number(eff.duration) || ATTACH_DURATION
-                            const st = Math.min(DEBUFF_STACK_CAP, Math.max(1, Number(eff.stacks) || 1))
-                            blazeSegs.push({ startTime: t0, endTime: t0 + dur, stacks: st })
-                        }
-                    }
-                }
-            }
-            blazeSegs.sort((a, b) => a.startTime - b.startTime)
-            // 同元素叠加逻辑（同 _applyAttachReactions 中的同元素分支）
-            const builtBlaze = []
-            for (const seg of blazeSegs) {
-                const t = seg.startTime
-                const activeSame = builtBlaze.filter(s => s.startTime <= t && s.endTime > t)
-                if (activeSame.length > 0) {
-                    const existingStacks = Math.min(DEBUFF_STACK_CAP, activeSame.reduce((sum, s) => sum + s.stacks, 0))
-                    for (const s of builtBlaze) { if (s.endTime > t) s.endTime = t }
-                    builtBlaze.push({ startTime: t, endTime: seg.endTime, stacks: Math.min(DEBUFF_STACK_CAP, existingStacks + seg.stacks) })
-                } else {
-                    builtBlaze.push({ ...seg })
-                }
-            }
-            for (const seg of builtBlaze) {
-                if (seg.startTime <= time && seg.endTime > time) return seg.stacks
-            }
-            return 0
-        }
-
-        // 跨 track 统计已消耗的 blaze_attach（处理同次模拟内的多次转化）
-        let _blazeConsumedTotal = 0
-
-        for (const track of tracks.value) {
-            if (!track?.id || !track.actions) continue
-            const charInfo = characterRoster.value.find(c => c.id === track.id)
-            if (!charInfo?.exclusive_buffs?.length) continue
-
-            const exclusiveKeySet = new Set(charInfo.exclusive_buffs.map(b => b.key))
-
-            // 按 startTime 升序处理
-            const sortedActions = [...track.actions]
-                .filter(a => !a.isDisabled)
-                .sort((a, b) => (Number(a.startTime) || 0) - (Number(b.startTime) || 0))
-
-            // 预计算终结技强化窗口：[start, end)
-            const ultimateWindows = []
-            if (charInfo.ultimate_enhancementTime) {
-                const enhOffset = Number(charInfo.ultimate_animationTime) || 0
-                const enhDur = Number(charInfo.ultimate_enhancementTime) || 0
-                for (const act of sortedActions) {
-                    if (act.type === 'ultimate') {
-                        const tStart = (Number(act.startTime) || 0) + enhOffset
-                        ultimateWindows.push({ start: tStart, end: tStart + enhDur })
-                    }
-                }
-            }
-
-            // 事件列表（按 buffPrefix 归类），order=0 消耗优先于 order=1 新增
-            const eventsByPrefix = new Map() // prefix -> [{ time, order, stacks?, isConsume? }]
-
-            // 运行时堆叠状态，供条件判断使用
-            const stackState = {} // { prefix: currentStacks }
-
-            for (const action of sortedActions) {
-                const actionStart = Number(action.startTime) || 0
-
-                // 1. 条件判断（基于当前 stackState 快照）
-                let condResult = null
-                if (charInfo.releaseConditions) {
-                    const condList = charInfo.releaseConditions[action.type]
-                    if (condList?.length) {
-                        const ultimateActive = ultimateWindows.some(w => actionStart >= w.start && actionStart < w.end)
-                        const state = { selfBuff: { ...stackState }, ultimateActive }
-                        const sortedConds = [...condList].sort((a, b) => (b.priority || 0) - (a.priority || 0))
-                        for (const cond of sortedConds) {
-                            if (_evalConditions(cond.conditions, state)) {
-                                condResult = cond.result
-                                break
-                            }
-                        }
-                    }
-                }
-
-                if (condResult) {
-                    conditionResultsByAction.set(action.instanceId, condResult)
-
-                    // 消耗 buff（order=0，同时刻先于新增执行）
-                    if (condResult.consumeSelfBuffs?.length) {
-                        for (const consume of condResult.consumeSelfBuffs) {
-                            const prefix = consume.key
-                            if ((stackState[prefix] || 0) > 0) {
-                                if (!eventsByPrefix.has(prefix)) eventsByPrefix.set(prefix, [])
-                                eventsByPrefix.get(prefix).push({ time: snapMs(actionStart), order: 0, isConsume: true })
-                                stackState[prefix] = 0
-                            }
-                        }
-                    }
-                }
-
-                // 2. 选取 physicalAnomaly：命中变体则用变体的，否则用 action 原始的
-                let anomalies = action.physicalAnomaly
-                if (condResult?.variantId) {
-                    const variantSuffix = condResult.variantId.replace(`${track.id}_variant_`, '')
-                    const variant = charInfo.variants?.find(v => v.id === variantSuffix)
-                    if (variant) anomalies = variant.physicalAnomaly ?? []
-                }
-                if (!Array.isArray(anomalies) || anomalies.length === 0) continue
-
-                const rows = Array.isArray(anomalies[0]) ? anomalies : [anomalies]
-                for (const row of rows) {
-                    if (!Array.isArray(row)) continue
-                    for (const effect of row) {
-                        if (!effect?.type) continue
-                        const offset = Number(effect.offset) || 0
-                        const effectTime = snapMs(actionStart + offset)
-
-                        // 火焰附着 → 熔火 转化
-                        if (effect.type === 'blaze_to_magma') {
-                            const rawBlaze = _getBlazeStacksAt(effectTime)
-                            const available = Math.max(0, rawBlaze - _blazeConsumedTotal)
-                            const canAdd = SELF_BUFF_MAX_STACKS - (stackState['magma'] || 0)
-                            const amount = Math.min(available, canAdd)
-                            if (amount > 0) {
-                                _blazeConsumedTotal += amount
-                                convertEvents.push({ time: effectTime, amount })
-                                if (!eventsByPrefix.has('magma')) eventsByPrefix.set('magma', [])
-                                eventsByPrefix.get('magma').push({ time: effectTime, order: 1, stacks: amount })
-                                stackState['magma'] = Math.min(SELF_BUFF_MAX_STACKS, (stackState['magma'] || 0) + amount)
-                            }
-                            continue
-                        }
-
-                        if (!exclusiveKeySet.has(effect.type)) continue
-                        const stacks = Math.max(1, Number(effect.stacks) || 1)
-                        const prefix = effect.type.replace(/_\d+$/, '')
-
-                        if (!eventsByPrefix.has(prefix)) eventsByPrefix.set(prefix, [])
-                        eventsByPrefix.get(prefix).push({ time: effectTime, order: 1, stacks })
-
-                        stackState[prefix] = Math.min(SELF_BUFF_MAX_STACKS, (stackState[prefix] || 0) + stacks)
-                    }
-                }
-            }
-
-            // 3. 由事件列表生成可视化 bar
-            const bars = []
-            for (const [prefix, events] of eventsByPrefix) {
-                events.sort((a, b) => a.time - b.time || a.order - b.order)
-
-                let currentStacks = 0
-                for (let i = 0; i < events.length; i++) {
-                    const ev = events[i]
-                    if (ev.isConsume) {
-                        currentStacks = 0
-                    } else {
-                        currentStacks = Math.min(SELF_BUFF_MAX_STACKS, currentStacks + ev.stacks)
-                    }
-                    const nextTime = i + 1 < events.length ? events[i + 1].time : viewDur
-                    if (currentStacks > 0) {
-                        const stackKey = `${prefix}_${currentStacks}`
-                        const stackExcl = charInfo.exclusive_buffs.find(b => b.key === stackKey)
-                        const baseExcl  = charInfo.exclusive_buffs.find(b => b.key.startsWith(prefix + '_'))
-                        bars.push({
-                            id: `selfbuff_${track.id}_${prefix}_${i}`,
-                            type: prefix,
-                            name: stackExcl?.name || prefix,
-                            icon: baseExcl?.path || '',
-                            stackIcon: stackExcl?.path || baseExcl?.path || '',
-                            startTime: ev.time,
-                            endTime: snapMs(nextTime),
-                            stacks: currentStacks,
-                            color: '#ffa940',
-                        })
-                    }
-                }
-            }
-
-            if (bars.length > 0) selfBuffsByTrack.set(track.id, bars)
-        }
-
-        return { selfBuffsByTrack, conditionResultsByAction, convertEvents }
-    })
-
-    // V2 only — no V1 fallback
-    const computedSelfBuffsByTrack = computed(() => {
-        return _v2ProjectedData.value?.selfBuffsByTrack || new Map()
-    })
-    const computedActionConditionResults = computed(() => computedSelfBuffSimulation.value.conditionResultsByAction)
-    const computedConvertEvents = computed(() => computedSelfBuffSimulation.value.convertEvents)
 
     /**
      * computedAnomalyDebuffsEffective
@@ -7193,50 +6369,15 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
 
     const computedAnomalyDebuffsEffective = computed(() => {
-        // V2 data: attachment + anomaly debuffs from kernel events
         const v2 = _v2ProjectedData.value
-        if (v2) {
-            const all = [...(v2.attachmentDebuffs || []), ...(v2.anomalyDebuffs || []), ...(v2.breakDebuffs || [])]
-            const FALLBACK_ICONS = { break: '/icons/icon_battle_physical_no_guard.webp' }
-            for (const d of all) {
-                if (!d.icon) d.icon = iconDatabase.value[d.anomalyType] || FALLBACK_ICONS[d.anomalyType] || ''
-                if (!d.color) d.color = ANOMALY_ELEMENT_COLORS[d.anomalyType] || '#999'
-            }
-            return all
+        if (!v2) return []
+        const all = [...(v2.attachmentDebuffs || []), ...(v2.anomalyDebuffs || []), ...(v2.breakDebuffs || [])]
+        const FALLBACK_ICONS = { break: '/icons/icon_battle_physical_no_guard.webp' }
+        for (const d of all) {
+            if (!d.icon) d.icon = iconDatabase.value[d.anomalyType] || FALLBACK_ICONS[d.anomalyType] || ''
+            if (!d.color) d.color = ANOMALY_ELEMENT_COLORS[d.anomalyType] || '#999'
         }
-        return []
-        /* eslint-disable no-unreachable */
-        const base = computedAnomalyDebuffs.value
-        const converts = computedSelfBuffSimulation.value.convertEvents
-        if (!converts.length) return base
-
-        const result = []
-        for (const seg of base) {
-            if (seg.anomalyType !== 'blaze_attach') {
-                result.push(seg)
-                continue
-            }
-            const applicable = converts
-                .filter(ev => ev.time > seg.startTime && ev.time <= seg.startTime + seg.duration)
-                .sort((a, b) => a.time - b.time)
-            if (!applicable.length) {
-                result.push(seg)
-                continue
-            }
-            let currentStacks = seg.stacks
-            let segStart = seg.startTime
-            for (const ev of applicable) {
-                if (ev.time > segStart && currentStacks > 0) {
-                    result.push({ ...seg, startTime: segStart, duration: ev.time - segStart, stacks: currentStacks })
-                }
-                currentStacks = Math.max(0, currentStacks - ev.amount)
-                segStart = ev.time
-            }
-            if (currentStacks > 0 && segStart < seg.startTime + seg.duration) {
-                result.push({ ...seg, startTime: segStart, duration: seg.startTime + seg.duration - segStart, stacks: currentStacks })
-            }
-        }
-        return result
+        return all
     })
 
     /**
@@ -7276,513 +6417,9 @@ export const useTimelineStore = defineStore('timeline', () => {
         return map
     })
 
-    // ══════════════════════════════════════════════════════════════════════
-    // 伤害统计计算
-    // ══════════════════════════════════════════════════════════════════════
-
-    const ARTS_ELEMENTS = new Set(['blaze', 'emag', 'cold', 'nature'])
-    const ELEM_DMG_KEY = { blaze: 'blaze_dmg', emag: 'emag_dmg', cold: 'cold_dmg', nature: 'nature_dmg', physical: 'physical_dmg' }
-    const TYPE_DMG_KEY = { attack: 'attack_dmg_bonus', skill: 'skill_dmg_bonus', link: 'link_dmg_bonus', ultimate: 'ultimate_dmg_bonus' }
-
-    function _calcHitDamage(attack, multiplier, element, skillType, stats, fragile, vulnerability, isBroken) {
-        // 增伤乘区（内部加算）
-        let bonusPct = 0
-        bonusPct += stats[ELEM_DMG_KEY[element] || 'physical_dmg'] || 0
-        if (ARTS_ELEMENTS.has(element)) bonusPct += stats.arts_dmg || 0
-        bonusPct += stats[TYPE_DMG_KEY[skillType] || 'skill_dmg_bonus'] || 0
-        bonusPct += stats.all_skill_dmg_bonus || 0
-        const dmgBonus = 1 + bonusPct / 100
-
-        const defense      = 0.5
-        const resistance   = 1.0  // 暂不计入抗性（由外部传入，后续扩展）
-        const staggerFactor = isBroken ? 1.3 : 1.0
-        const fragileFactor = 1 + (fragile || 0) / 100
-        const vulnFactor    = 1 + (vulnerability || 0) / 100
-
-        // 期望暴击：crit_dmg 存储为 1.5 格式（=150%），默认 1.5
-        const critRate = Math.min(stats.crit_rate || 0, 1)
-        const critDmg  = (stats.crit_dmg > 1) ? stats.crit_dmg : 1.5
-        const expectedCrit = 1 + critRate * (critDmg - 1)
-
-        return attack * multiplier * dmgBonus * defense * resistance * staggerFactor * fragileFactor * vulnFactor * expectedCrit
-    }
-
-    /** 从 compiledScenario.timeline 提取 debuff 时间段（不受 DEBUFF_STACK_CAP 限制） */
-    function _buildRawDebuffSegments(timeline) {
-        const segments = []
-        for (const action of timeline.actions) {
-            for (const effect of action.effects) {
-                const type = effect.node.type
-                const startTime = effect.realStartTime
-                const dur = Number(effect.realDuration) || 0
-                if (dur <= 0) continue
-                const value = Number(effect.node.stacks) || 0
-                segments.push({ type, startTime, endTime: startTime + dur, value })
-            }
-        }
-        return segments
-    }
-
-    /**
-     * damageSummary — 全轴伤害汇总
-     * 按 compiledScenario 实时计算，随轨道变化自动更新。
-     * 仅计算有 multiplier 字段的 damage tick。
-     */
-    const damageSummary = computed(() => {
-        const scenario = compiledScenario.value
-        if (!scenario) return null
-
-        const { timeline, actors } = scenario
-        const actorStats = new Map(actors.map(a => [a.id, a.stats]))
-
-        // debuff 时间段（原始值，不限制堆叠上限）
-        const debuffSegs = _buildRawDebuffSegments(timeline)
-
-        const byActor = new Map()  // actorId → { name, damage, actions: [] }
-        let totalDamage = 0
-
-        // ── AVYWENNA thunderlance tracking (per-actor persistent instances) ──
-        // Lances are created by link (3× 雷枪) and ultimate (1× 强雷枪).
-        // Skill recall: each surviving lance triggers independent damage.
-        // Duration: 30s base (potential +20s not yet in system — future hook).
-        const LANCE_BASE_DURATION = 30 // seconds
-        const _avyLances = new Map() // trackId → [ { type: 'normal'|'strong', expiryTime } ]
-        function _avyGetLances(trackId) {
-            if (!_avyLances.has(trackId)) _avyLances.set(trackId, [])
-            return _avyLances.get(trackId)
-        }
-        function _avyCleanExpired(trackId, currentTime) {
-            const list = _avyGetLances(trackId)
-            // Remove expired lances
-            for (let i = list.length - 1; i >= 0; i--) {
-                if (list[i].expiryTime <= currentTime) list.splice(i, 1)
-            }
-        }
-
-        for (const action of timeline.actions) {
-            const stats = actorStats.get(action.trackId)
-            if (!stats) continue
-
-            const skillType = action.node.type    // 'skill' | 'link' | 'ultimate' | 'attack'
-            const element   = action.node.element || 'physical'
-
-            let actionDmg = 0
-            const ticks = []
-            let unsupportedTickCount = 0
-
-            // Build skill level for overlay
-            const _g = getTrackGrowth(action.trackId)
-            const _slType = skillType === 'attack' ? 'attack' : skillType
-            const _unifiedLvl = _g?.skillLevels?.[_slType] ? skillToUnified(_g.skillLevels[_slType]) : 12
-            const _tickCount = action.resolvedDamageTicks.length
-
-            for (let _ti = 0; _ti < _tickCount; _ti++) {
-                const rawTick = action.resolvedDamageTicks[_ti]
-                // Apply multiplier overlay (same as simulator.ts)
-                const tick = applySkillMultiplierOverlay(action.trackId, skillType, _ti, rawTick, false, _unifiedLvl, _tickCount)
-                const mult = tick.multiplier
-                if (!mult) { unsupportedTickCount++; continue }
-
-                const t = tick.realTime
-
-                // 找出该 tick 时刻所有生效的 debuff
-                const active = debuffSegs.filter(d => t >= d.startTime && t < d.endTime)
-                const spellFragile  = active.filter(d => d.type === 'spell_vulnerable').reduce((s, d) => s + d.value, 0)
-                const physFragile   = active.filter(d => d.type === 'physical_vulnerable').reduce((s, d) => s + d.value, 0)
-                // 法术伤害取 spell_vulnerable；物理取 physical_vulnerable
-                const fragile = ARTS_ELEMENTS.has(element) ? spellFragile : physFragile
-
-                const dmg = _calcHitDamage(stats.attack, mult, element, skillType, stats, fragile, 0, false)
-                actionDmg += dmg
-                ticks.push({ time: t, multiplier: mult, damage: dmg, fragile })
-            }
-
-            // ── AVYWENNA thunderlance: create / recall ──
-            if (action.trackId === 'AVYWENNA') {
-                const actionTime = action.realStartTime
-                _avyCleanExpired(action.trackId, actionTime)
-
-                if (skillType === 'link') {
-                    // Link creates 3 normal lances
-                    const lances = _avyGetLances(action.trackId)
-                    for (let li = 0; li < 3; li++) {
-                        lances.push({ type: 'normal', expiryTime: actionTime + LANCE_BASE_DURATION })
-                    }
-                } else if (skillType === 'ultimate') {
-                    // Ultimate creates 1 strong lance
-                    const lances = _avyGetLances(action.trackId)
-                    lances.push({ type: 'strong', expiryTime: actionTime + LANCE_BASE_DURATION })
-                } else if (skillType === 'skill') {
-                    // Skill recall: each surviving lance triggers independent damage
-                    const lances = _avyGetLances(action.trackId)
-                    if (lances.length > 0) {
-                        const recallTime = actionTime + 0.3 // 0.3s after skill start
-                        const active = debuffSegs.filter(d => recallTime >= d.startTime && recallTime < d.endTime)
-                        const spellFragile = active.filter(d => d.type === 'spell_vulnerable').reduce((s, d) => s + d.value, 0)
-                        const physFragile = active.filter(d => d.type === 'physical_vulnerable').reduce((s, d) => s + d.value, 0)
-                        const fragile = ARTS_ELEMENTS.has(element) ? spellFragile : physFragile
-
-                        // Multipliers from skills.json: 雷枪伤害倍率 / 强雷枪伤害倍率
-                        const opSkills = loadOperator('AVYWENNA').skills
-                        const skillRows = opSkills?.skill?.levelData || []
-                        const normalRow = skillRows.find(r => r.label === '雷枪伤害倍率')
-                        const strongRow = skillRows.find(r => r.label === '强雷枪伤害倍率')
-                        const levelIdx = Math.max(0, Math.min(11, _unifiedLvl - 1))
-                        const normalMult = normalRow ? parseFloat(String(normalRow.values[levelIdx]).replace('%', '')) / 100 : 0
-                        const strongMult = strongRow ? parseFloat(String(strongRow.values[levelIdx]).replace('%', '')) / 100 : 0
-
-                        for (const lance of lances) {
-                            const mult = lance.type === 'strong' ? strongMult : normalMult
-                            if (mult > 0) {
-                                const dmg = _calcHitDamage(stats.attack, mult, element, 'skill', stats, fragile, 0, false)
-                                actionDmg += dmg
-                                ticks.push({ time: recallTime, multiplier: mult, damage: dmg, fragile, lanceType: lance.type })
-                            }
-                        }
-                        // Consume all lances on recall
-                        lances.length = 0
-                    }
-                }
-            }
-
-            if (ticks.length === 0 && unsupportedTickCount === 0) continue
-
-            totalDamage += actionDmg
-
-            const trackId = action.trackId
-            if (!byActor.has(trackId)) {
-                const track = tracks.value.find(t => t.id === trackId)
-                byActor.set(trackId, { trackId, name: track?.id || trackId, damage: 0, actions: [], hasUnsupported: false })
-            }
-            const actorEntry = byActor.get(trackId)
-            actorEntry.damage += actionDmg
-            if (unsupportedTickCount > 0) actorEntry.hasUnsupported = true
-            actorEntry.actions.push({
-                actionId: action.id,
-                name: action.node.name,
-                type: skillType,
-                element,
-                damage: actionDmg,
-                ticks,
-                unsupportedTickCount,
-            })
-        }
-
-        return {
-            totalDamage,
-            byActor: [...byActor.values()].sort((a, b) => b.damage - a.damage),
-        }
-    })
-
-    // ── E1: Manual damage stats snapshot (from simulation simLog) ──
+    // TODO: wire V2 damage summary. V1 path removed.
     const damageStatsSnapshot = ref(null)
-
-    /**
-     * runDamageStats — 手动触发一次伤害统计
-     * 从 simulation.simLog 聚合真实伤害（包含导电/腐蚀/武器被动等全部运行时效果）。
-     * 结果写入 damageStatsSnapshot，DamageSummaryPanel 读取。
-     */
-    function runDamageStats() {
-        // V1 damage stats disabled — V2 projectDamageSummary handles this
-        // TODO: wire V2 damage summary
-        return
-        const sim = simulation.value
-        const scenario = compiledScenario.value
-        if (!sim || !scenario) {
-            damageStatsSnapshot.value = null
-            return
-        }
-
-        const { timeline } = scenario
-        // Build action metadata lookup: actionId → { trackId, name, type, element }
-        const actionMeta = new Map()
-        for (const action of timeline.actions) {
-            actionMeta.set(action.id, {
-                trackId: action.trackId,
-                name: action.node.name || action.node.id || '',
-                type: action.node.type,
-                element: action.node.element || 'physical',
-            })
-        }
-
-        const byActor = new Map()
-        let totalDamage = 0
-
-        // Aggregate DAMAGE_TICK entries (skill damage)
-        for (const entry of sim.simLog) {
-            if (entry.type === 'DAMAGE_TICK') {
-                const { sourceId, damage, actionId } = entry.payload
-                if (!damage || damage <= 0) continue
-                totalDamage += damage
-
-                if (!byActor.has(sourceId)) {
-                    byActor.set(sourceId, { trackId: sourceId, name: sourceId, damage: 0, actions: new Map(), hasUnsupported: false })
-                }
-                const actor = byActor.get(sourceId)
-                actor.damage += damage
-
-                const aKey = actionId || '__unknown__'
-                if (!actor.actions.has(aKey)) {
-                    const meta = actionMeta.get(actionId) || {}
-                    actor.actions.set(aKey, {
-                        actionId: aKey,
-                        name: meta.name || '未知',
-                        type: meta.type || 'skill',
-                        element: meta.element || 'physical',
-                        damage: 0,
-                        ticks: [],
-                        unsupportedTickCount: 0,
-                    })
-                }
-                actor.actions.get(aKey).damage += damage
-            }
-
-            // Aggregate ANOMALY_DAMAGE entries (burn DOT, reaction damage, burst, etc.)
-            if (entry.type === 'ANOMALY_DAMAGE') {
-                const { damage, tags } = entry.payload
-                if (!damage || damage <= 0) continue
-                totalDamage += damage
-
-                const sourceId = tags?.sourceActorId || '__anomaly__'
-                if (!byActor.has(sourceId)) {
-                    byActor.set(sourceId, { trackId: sourceId, name: sourceId, damage: 0, actions: new Map(), hasUnsupported: false })
-                }
-                const actor = byActor.get(sourceId)
-                actor.damage += damage
-
-                // Group all anomaly damage under a single synthetic action per actor
-                const aKey = `__anomaly_${sourceId}__`
-                if (!actor.actions.has(aKey)) {
-                    actor.actions.set(aKey, {
-                        actionId: aKey,
-                        name: '异常伤害',
-                        type: 'anomaly',
-                        element: 'nature',
-                        damage: 0,
-                        ticks: [],
-                        unsupportedTickCount: 0,
-                    })
-                }
-                actor.actions.get(aKey).damage += damage
-            }
-        }
-
-        // Finalize: convert action Maps to sorted arrays
-        const result = [...byActor.values()]
-            .map(actor => ({
-                ...actor,
-                actions: [...actor.actions.values()].sort((a, b) => b.damage - a.damage),
-            }))
-            .sort((a, b) => b.damage - a.damage)
-
-        damageStatsSnapshot.value = { totalDamage, byActor: result }
-    }
-
-    /**
-     * anomalyDamageSummary — 异常伤害汇总
-     * 独立计算法术爆发、法术异常触发（含燃烧 DoT）、冻结消耗及四种物理异常的伤害。
-     * 来源：从轨道 physicalAnomaly 字段直接读取事件，按时间顺序模拟状态机。
-     */
-    const anomalyDamageSummary = computed(() => {
-        const scenario = compiledScenario.value
-        if (!scenario) return null
-
-        const { actors, timeline } = scenario
-        const actorStatsMap = new Map(actors.map(a => [a.id, a.stats]))
-
-        // debuff 时间段（用于燃烧每 tick 查询法术脆弱）
-        const debuffSegs = _buildRawDebuffSegments(timeline)
-
-        // ─── 1. 收集所有法术附着事件与物理异常事件 ────────────────────────────
-        const spellAttachRaw = []   // { time, type, stacks, trackId, endTime }
-        const physRaw = []          // { time, type, stacks, trackId }
-
-        for (const track of tracks.value) {
-            if (!track?.id || !track.actions) continue
-            if (!actorStatsMap.has(track.id)) continue
-
-            for (const action of track.actions) {
-                if (action.isDisabled) continue
-                const anomalies = action.physicalAnomaly
-                if (!Array.isArray(anomalies) || anomalies.length === 0) continue
-                const rows = Array.isArray(anomalies[0]) ? anomalies : [anomalies]
-                const actionStart = Number(action.startTime) || 0
-
-                for (const row of rows) {
-                    if (!Array.isArray(row)) continue
-                    for (const effect of row) {
-                        if (!effect?.type) continue
-                        const offset = Number(effect.offset) || 0
-                        const t = snapMs(actionStart + offset)
-                        const stacks = Math.min(DEBUFF_STACK_CAP, Math.max(1, Number(effect.stacks) || 1))
-
-                        if (ATTACH_LIKE_DEBUFF_TYPES.has(effect.type)) {
-                            const dur = Number(effect.duration) || 0
-                            spellAttachRaw.push({
-                                time: t,
-                                type: effect.type,
-                                stacks,
-                                trackId: track.id,
-                                endTime: dur > 0 ? snapMs(t + dur) : Infinity,
-                            })
-                        } else if (PHYSICAL_TRIGGER_TYPES.has(effect.type)) {
-                            physRaw.push({ time: t, type: effect.type, stacks, trackId: track.id })
-                        }
-                    }
-                }
-            }
-        }
-
-        // ─── 2. 处理法术附着碰撞（爆发 / 异常反应）────────────────────────────
-        spellAttachRaw.sort((a, b) => a.time - b.time || a.type.localeCompare(b.type))
-
-        // 活跃附着：attachType → 可变段列表 { stacks, startTime, endTime, trackId }
-        const activeAttaches = new Map()
-        for (const t of ATTACH_LIKE_DEBUFF_TYPES) activeAttaches.set(t, [])
-
-        const byActor = new Map()   // trackId → { totalDamage, events[] }
-        const getActor = (trackId) => {
-            if (!byActor.has(trackId)) byActor.set(trackId, { trackId, totalDamage: 0, events: [] })
-            return byActor.get(trackId)
-        }
-
-        // 冻结区间（用于物理异常阶段判断冻结消耗）
-        const frozenIntervals = []  // { startTime, endTime (mutable), anomalyLevel }
-
-        for (const ev of spellAttachRaw) {
-            const t = ev.time
-            const incomingType = ev.type
-            const stats = actorStatsMap.get(ev.trackId)
-            if (!stats) continue
-            const artsPower = Number(stats.originium_arts_power) || 0
-
-            // 查找活跃的相同类型和不同类型附着
-            let sameTypeStacks = 0
-            let diffType = null
-            let diffTypeStacks = 0
-
-            for (const [atype, segs] of activeAttaches) {
-                const totalStacks = Math.min(
-                    DEBUFF_STACK_CAP,
-                    segs.filter(s => s.startTime <= t && s.endTime > t).reduce((s, seg) => s + seg.stacks, 0)
-                )
-                if (totalStacks === 0) continue
-                if (atype === incomingType) sameTypeStacks = totalStacks
-                else if (diffType === null) { diffType = atype; diffTypeStacks = totalStacks }
-            }
-
-            if (diffType !== null) {
-                // 异元素反应 → 法术异常
-                const reactionType = ELEMENTAL_REACTION_MAP[incomingType][diffType]
-                const anomalyLevel = diffTypeStacks  // 1-indexed
-
-                const actor = getActor(ev.trackId)
-                const triggerDmg = calcSpellAnomalyTriggerDamage(stats.attack, anomalyLevel, artsPower)
-                actor.totalDamage += triggerDmg
-                actor.events.push({ time: t, type: reactionType + '_trigger', damage: triggerDmg, anomalyLevel })
-
-                if (reactionType === 'burning') {
-                    // 每秒独立计算，实时查询法术脆弱
-                    let totalDotDmg = 0
-                    for (let i = 0; i < 10; i++) {
-                        const tickTime = t + i * 1000
-                        const spellFragile = debuffSegs
-                            .filter(d => d.type === 'spell_vulnerable' && tickTime >= d.startTime && tickTime < d.endTime)
-                            .reduce((s, d) => s + d.value, 0)
-                        const fragileFactor = 1 + spellFragile / 100
-                        const tickDmg = calcCombustionDotTick(stats.attack, anomalyLevel, artsPower) * fragileFactor
-                        totalDotDmg += tickDmg
-                        actor.events.push({ time: tickTime, type: 'burning_dot', damage: tickDmg, anomalyLevel, spellFragile })
-                    }
-                    actor.totalDamage += totalDotDmg
-                } else if (reactionType === 'frozen') {
-                    frozenIntervals.push({ startTime: t, endTime: Infinity, anomalyLevel })
-                }
-
-                // 消耗现有附着
-                for (const seg of activeAttaches.get(diffType)) {
-                    if (seg.endTime > t) seg.endTime = t
-                }
-                // incoming 被消耗，不加入活跃列表
-            } else if (sameTypeStacks > 0) {
-                // 同元素爆发
-                const reactionType = ELEMENTAL_REACTION_MAP[incomingType][incomingType]
-                const actor = getActor(ev.trackId)
-                const dmg = calcSpellBurstDamage(stats.attack, artsPower)
-                actor.totalDamage += dmg
-                actor.events.push({ time: t, type: reactionType, damage: dmg })
-
-                // 消耗现有同元素附着
-                for (const seg of activeAttaches.get(incomingType)) {
-                    if (seg.endTime > t) seg.endTime = t
-                }
-                // incoming 被消耗
-            } else {
-                // 无碰撞 → 加入活跃列表
-                activeAttaches.get(incomingType).push({
-                    stacks: ev.stacks,
-                    startTime: t,
-                    endTime: ev.endTime,
-                    trackId: ev.trackId,
-                })
-            }
-        }
-
-        // ─── 3. 处理物理异常事件 ──────────────────────────────────────────────
-        physRaw.sort((a, b) => a.time - b.time)
-
-        let physVulLevel = 0
-
-        for (const ev of physRaw) {
-            const t = ev.time
-            const type = ev.type
-            const stats = actorStatsMap.get(ev.trackId)
-            if (!stats) continue
-            const artsPower = Number(stats.originium_arts_power) || 0
-            const actor = getActor(ev.trackId)
-
-            // 检查目标是否处于冻结状态 → 触发冻结消耗
-            const frozenIdx = frozenIntervals.findIndex(s => s.startTime <= t && s.endTime > t)
-            if (frozenIdx !== -1) {
-                const frozen = frozenIntervals[frozenIdx]
-                const freezeDmg = calcFreezeConsumeDamage(stats.attack, frozen.anomalyLevel, artsPower)
-                actor.totalDamage += freezeDmg
-                actor.events.push({ time: t, type: 'ice_shatter', damage: freezeDmg, anomalyLevel: frozen.anomalyLevel })
-                frozenIntervals[frozenIdx].endTime = t  // 冻结被消耗
-            }
-
-            // 若无破防则生成 1 级
-            if (physVulLevel === 0) physVulLevel = 1
-
-            if (PHYSICAL_ADDSTACK_TYPES.has(type)) {
-                // 击飞/倒地：造成伤害 + 层数 +1
-                const dmg = calcLiftKnockdownDamage(stats.attack, artsPower)
-                actor.totalDamage += dmg
-                actor.events.push({ time: t, type, damage: dmg, physVulLevel })
-                physVulLevel = Math.min(PHYSICAL_VULNERABLE_CAP, physVulLevel + 1)
-            } else if (type === 'stagger') {
-                // 猛击：消耗全部破防层数
-                const stacks = physVulLevel
-                const dmg = calcCrushDamage(stats.attack, stacks, artsPower)
-                actor.totalDamage += dmg
-                actor.events.push({ time: t, type, damage: dmg, stacks })
-                physVulLevel = 0
-            } else if (type === 'armor_break') {
-                // 碎甲：消耗全部破防层数
-                const stacks = physVulLevel
-                const dmg = calcBreachDamage(stats.attack, stacks, artsPower)
-                actor.totalDamage += dmg
-                actor.events.push({ time: t, type, damage: dmg, stacks })
-                physVulLevel = 0
-            }
-        }
-
-        const totalDamage = [...byActor.values()].reduce((s, a) => s + a.totalDamage, 0)
-        return {
-            totalDamage,
-            byActor: [...byActor.values()].sort((a, b) => b.totalDamage - a.totalDamage),
-        }
-    })
+    function runDamageStats() {}
 
     function togglePrepExpanded() {
         prepExpanded.value = !prepExpanded.value
@@ -8259,8 +6896,6 @@ export const useTimelineStore = defineStore('timeline', () => {
         castSkillByShortcut, castLinkByShortcut, castAttackByShortcut, castFullAttackSequence,
         getMainControlTrackAt, switchMainControlTo, cycleMainControl, isWarningActive, showBlockingWarning, showBlockingRewind, manualSave,
         activeOperatorSegmentsByTrack,
-        damageSummary,
-        anomalyDamageSummary,
         damageStatsSnapshot, runDamageStats,
         // Operator growth (promotion, level, skill levels) + base stat lookup
         GROWTH_SKILL_KEYS, PROMO_CAPS, getTrackGrowth, setTrackPromotion, setTrackCharacterLevel, setTrackSkillLevel,
