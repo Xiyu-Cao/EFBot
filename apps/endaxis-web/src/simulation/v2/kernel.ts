@@ -482,21 +482,25 @@ export function simulate(
   const cooldowns = new Map<string, number>();
   const cdKey = (actorId: string, skillId: string) => `${actorId}/${skillId}`;
   /**
-   * Effective cooldown after stat reductions.
-   * TODO(confirm-formula): current ordering is `cd * (1 - pct/100) - flat`.
-   *   - link_cd_reduction (%) from stats applies as `pct`.
-   *   - Potential-sourced flat-seconds reduction is already baked into `skill.cooldown`
-   *     by storeAdapter.adjustSkillCooldowns, so `flat` here is 0 (placeholder for
-   *     future runtime buff paths like 庄方宜 ult → link CD rate ×5).
+   * Effective cooldown after stat reductions — in-game formula is
+   *   `(cd - flat) * (1 - pct/100)`
+   * with flat already baked into `skill.cooldown` by `panel.resolveSkillsForPanel`
+   * (potential `cooldown_modifier` flat-seconds). So at kernel time:
+   *   `effective = baseCd_already_reduced * (1 - pct/100)`
+   * which is algebraically identical to the full formula.
+   *
+   * `link_cd_reduction` feeds `pct` for link skills. skill / ultimate have no
+   * %-reduction stat wired yet (see panel.ts for when/if those appear).
+   *
+   * Future dynamic rate/flat sources (e.g. 庄方宜 ult → link CD rate ×5) will
+   * extend this: apply buff-originated flat inside the parens, then pct outside.
    */
   function effectiveCooldown(skill: Skill, build: CharacterBuild): number {
     const baseCd = skill.cooldown;
     if (baseCd <= 0) return 0;
     let pct = 0;
     if (skill.type === "link") pct = build.stats.linkCdReduction || 0;
-    // TODO: skill_cd_reduction / ultimate_cd_reduction stats not defined yet.
-    const flat = 0;
-    return Math.max(0, baseCd * (1 - pct / 100) - flat);
+    return Math.max(0, baseCd * (1 - pct / 100));
   }
 
   // ── Main control & interrupt tracking ──
