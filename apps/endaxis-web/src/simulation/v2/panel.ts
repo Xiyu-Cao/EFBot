@@ -15,6 +15,7 @@
 
 import type { Skill, PassiveTrigger, DamageElement } from "./types";
 import type { CharacterInput, StatModifier } from "./characterBuild";
+import { computeTalentRow1Bonus } from "./characterBuild";
 import type { EnemyConfig } from "./kernel";
 import ultimateCooldownsData from "../../data/operators/ultimateCooldowns.json";
 
@@ -246,6 +247,83 @@ export function lookupLevelStats(levelStats: any, level: number): BaseLevelStats
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Stat modifier collection — from the store's configured "干员面板"
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Map from store stat names → kernel stat names, with the `CORE_STATS` default.
+ * Attribute stats (strength/agility/intellect/will) and `attack` flat are NOT
+ * in this table — they're handled separately because their "base" isn't a
+ * constant default but the per-level `lookupLevelStats` value.
+ */
+const NON_ATTR_STAT_MAP: Record<string, { stat: string; type: "flat" | "percent"; defaultVal: number }> = {
+  attack_percent:       { stat: "attack_percent",       type: "flat", defaultVal: 0 },
+  crit_rate:            { stat: "crit_rate",            type: "flat", defaultVal: 0 },
+  crit_dmg:             { stat: "crit_damage",          type: "flat", defaultVal: 0 },
+  physical_dmg:         { stat: "physical_dmg",         type: "flat", defaultVal: 0 },
+  blaze_dmg:            { stat: "blaze_dmg",            type: "flat", defaultVal: 0 },
+  emag_dmg:             { stat: "emag_dmg",             type: "flat", defaultVal: 0 },
+  cold_dmg:             { stat: "cold_dmg",             type: "flat", defaultVal: 0 },
+  nature_dmg:           { stat: "nature_dmg",           type: "flat", defaultVal: 0 },
+  arts_dmg:             { stat: "arts_dmg",             type: "flat", defaultVal: 0 },
+  attack_dmg_bonus:     { stat: "attack_dmg_bonus",     type: "flat", defaultVal: 0 },
+  skill_dmg_bonus:      { stat: "skill_dmg_bonus",      type: "flat", defaultVal: 0 },
+  link_dmg_bonus:       { stat: "link_dmg_bonus",       type: "flat", defaultVal: 0 },
+  ultimate_dmg_bonus:   { stat: "ultimate_dmg_bonus",   type: "flat", defaultVal: 0 },
+  all_skill_dmg_bonus:  { stat: "all_skill_dmg_bonus",  type: "flat", defaultVal: 0 },
+  broken_dmg_bonus:     { stat: "broken_dmg_bonus",     type: "flat", defaultVal: 0 },
+  originium_arts_power: { stat: "originium_arts_power", type: "flat", defaultVal: 0 },
+  link_cd_reduction:    { stat: "link_cd_reduction",    type: "flat", defaultVal: 0 },
+  ult_charge_eff:       { stat: "ult_charge_eff",       type: "flat", defaultVal: 100 },
+};
+
+/**
+ * Convert the store's configured-stats snapshot (base level + weapon/equipment
+ * deltas + set bonuses + talent/potential static `stat_bonus` / `damage_bonus`)
+ * into a list of kernel `StatModifier`s.
+ *
+ * Non-attribute stats: modifier value = `configured - CORE_STATS.default`, which
+ * for zero-default stats is just the sum of all contributions. The `ult_charge_eff`
+ * default of 100 is subtracted so the kernel doesn't double-count its own base.
+ *
+ * Attribute stats (strength/agility/intellect/will) and flat `attack`: modifier
+ * value = `configured - base_level[attr]` (minus the `talent_row1` bonus for
+ * the main attribute, since `characterBuild` re-applies it from `input.promotion`).
+ */
+export function collectModifiersFromConfigured(
+  configured: Record<string, number>,
+  baseLevel: BaseLevelStats,
+  promotion: number,
+  mainAttribute: "strength" | "agility" | "intellect" | "will",
+): StatModifier[] {
+  const mods: StatModifier[] = [];
+
+  for (const [field, m] of Object.entries(NON_ATTR_STAT_MAP)) {
+    const abs = Number(configured[field]) || 0;
+    const delta = abs - m.defaultVal;
+    if (delta !== 0) mods.push({ source: "equipment", stat: m.stat, value: delta, type: m.type });
+  }
+
+  const row1 = computeTalentRow1Bonus(promotion);
+  const attrs = ["strength", "agility", "intellect", "will"] as const;
+  for (const attr of attrs) {
+    const abs = Number(configured[attr]) || 0;
+    const base = Number(baseLevel[attr]) || 0;
+    const subtractRow1 = attr === mainAttribute ? row1 : 0;
+    const delta = abs - base - subtractRow1;
+    if (delta !== 0) mods.push({ source: "equipment", stat: attr, value: delta, type: "flat" });
+  }
+
+  // Flat ATK (non-percent). Weapon passive ATK flat lives here too; characterBuild
+  // sums it into `attackFlat` on top of its own `input.baseAttack` (= baseLevel.attack).
+  const absAtk = Number(configured.attack) || 0;
+  const atkDelta = absAtk - (Number(baseLevel.attack) || 0);
+  if (atkDelta !== 0) mods.push({ source: "equipment", stat: "attack", value: atkDelta, type: "flat" });
+
+  return mods;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Panel construction
 // ═══════════════════════════════════════════════════════════════════
 
@@ -272,12 +350,18 @@ export interface WeaponPanelInput {
 }
 
 /** Build a CharacterPanel for a single track. Returns null if the module or
- *  level data is insufficient. `mod.skills` is not mutated. */
+ *  level data is insufficient. `mod.skills` is not mutated.
+ *
+ *  `resolveTrackConfiguredStats` is the store's 干员面板 aggregator — it returns
+ *  absolute (not delta) values for every `CORE_STATS` field including base
+ *  level, weapon/equipment deltas, equipment-set passives, and talent/potential
+ *  static `stat_bonus`/`damage_bonus` effects. The panel converts these into
+ *  kernel-side `StatModifier`s via `collectModifiersFromConfigured`. */
 export function buildCharacterPanel(
   track: TrackPanelInput,
   mod: any,
   weaponDatabase: WeaponPanelInput[],
-  collectStatModifiers: (track: TrackPanelInput) => StatModifier[],
+  resolveTrackConfiguredStats: (trackId: string) => Record<string, number> | null,
   resolveGaugeMax: (trackId: string) => number,
 ): CharacterPanel | null {
   const identity = mod?.identity;
@@ -290,6 +374,14 @@ export function buildCharacterPanel(
   if (!baseStats) return null;
 
   const weapon = track.weaponId ? weaponDatabase.find(w => w.id === track.weaponId) || null : null;
+
+  const configured = resolveTrackConfiguredStats(track.id) || {};
+  const statModifiers = collectModifiersFromConfigured(
+    configured,
+    baseStats,
+    growth.promotion || 4,
+    identity.mainAttribute,
+  );
 
   const input: CharacterInput = {
     id: identity.id,
@@ -319,7 +411,7 @@ export function buildCharacterPanel(
 
     baseGaugeMax: resolveGaugeMax(track.id),
 
-    statModifiers: collectStatModifiers(track),
+    statModifiers,
   };
 
   const skillLevels = growth.skillLevels || {};

@@ -14,7 +14,6 @@ import type {
   PassiveTrigger,
 } from "./types";
 import type { PlacedSkill, EnemyConfig, KernelConfig } from "./kernel";
-import type { StatModifier } from "./characterBuild";
 import { computeCharacterBuild } from "./characterBuild";
 import { V2_READY_IDS, getV2Module } from "./characters/adapter";
 import { V2_WEAPON_REGISTRY, convertWeaponTriggers } from "./weapons/definitions";
@@ -142,7 +141,7 @@ export function buildAllPanels(
       track as any,
       mod,
       weaponDatabase,
-      (t: any) => collectStatModifiers(t as StoreTrack, resolveTrackConfiguredStats),
+      resolveTrackConfiguredStats,
       resolveGaugeMax,
     );
     if (!panel) continue;
@@ -272,59 +271,6 @@ export function buildV2Inputs(
   void panelByActor;
 
   return { builds, skills: allSkills, enemyConfig, config, triggersByActor, attackSegmentMap, executionSkillByActor };
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// Stat modifier collection (from track.stats delta)
-// ═══════════════════════════════════════════════════════════════════
-
-/**
- * Collect stat modifiers from store's track.stats delta values.
- * These come from weapon common slots, equipment substats, etc.
- */
-function collectStatModifiers(
-  track: StoreTrack,
-  _resolveTrackConfiguredStats: (trackId: string) => Record<string, number> | null,
-): StatModifier[] {
-  const modifiers: StatModifier[] = [];
-  const stats = track.stats;
-  if (!stats) return modifiers;
-
-  // Map store stat field names to V2 stat names
-  const STAT_MAP: Record<string, { stat: string; type: "flat" | "percent" }> = {
-    attack_percent: { stat: "attack_percent", type: "flat" },
-    crit_rate: { stat: "crit_rate", type: "flat" },
-    crit_dmg: { stat: "crit_damage", type: "flat" },
-    physical_dmg: { stat: "physical_dmg", type: "flat" },
-    blaze_dmg: { stat: "blaze_dmg", type: "flat" },
-    emag_dmg: { stat: "emag_dmg", type: "flat" },
-    cold_dmg: { stat: "cold_dmg", type: "flat" },
-    nature_dmg: { stat: "nature_dmg", type: "flat" },
-    arts_dmg: { stat: "arts_dmg", type: "flat" },
-    attack_dmg_bonus: { stat: "attack_dmg_bonus", type: "flat" },
-    skill_dmg_bonus: { stat: "skill_dmg_bonus", type: "flat" },
-    link_dmg_bonus: { stat: "link_dmg_bonus", type: "flat" },
-    ultimate_dmg_bonus: { stat: "ultimate_dmg_bonus", type: "flat" },
-    all_skill_dmg_bonus: { stat: "all_skill_dmg_bonus", type: "flat" },
-    broken_dmg_bonus: { stat: "broken_dmg_bonus", type: "flat" },
-    originium_arts_power: { stat: "originium_arts_power", type: "flat" },
-    link_cd_reduction: { stat: "link_cd_reduction", type: "flat" },
-    ult_charge_eff: { stat: "ult_charge_eff", type: "flat" },
-  };
-
-  for (const [field, mapping] of Object.entries(STAT_MAP)) {
-    const value = Number(stats[field]) || 0;
-    if (value !== 0) {
-      modifiers.push({
-        source: "equipment",
-        stat: mapping.stat,
-        value,
-        type: mapping.type,
-      });
-    }
-  }
-
-  return modifiers;
 }
 
 // ═══════════════════════════════════════════════════════════════════

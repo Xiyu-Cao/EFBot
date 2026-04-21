@@ -5198,6 +5198,42 @@ export const useTimelineStore = defineStore('timeline', () => {
         )
     })
 
+    /**
+     * V2 effective cooldowns per actor, in seconds, post-all-reductions.
+     * Formula: `(cd - flat) * (1 - pct/100)` — flat (potential cooldown_modifier)
+     * is already baked into `panel.resolvedSkills.*.cooldown`; pct comes from
+     * `statModifiers` of matching stat.
+     *
+     * Only populated for V2-ready actors. UI falls back to legacy logic otherwise.
+     */
+    const v2EffectiveCooldowns = computed(() => {
+        const map = new Map()
+        const panels = v2Panels.value
+        if (!panels) return map
+        const clampPct = (val) => Math.max(0, Math.min(100, Number(val) || 0))
+        const sumStat = (panel, statName) => (panel.input?.statModifiers || [])
+            .filter(m => m.stat === statName && m.type === 'flat')
+            .reduce((s, m) => s + (Number(m.value) || 0), 0)
+        const firstCd = (s) => {
+            if (!s) return 0
+            if (Array.isArray(s)) return Number(s[0]?.cooldown) || 0
+            return Number(s.cooldown) || 0
+        }
+        for (const panel of panels) {
+            const linkBase = firstCd(panel.resolvedSkills?.link)
+            const skillBase = firstCd(panel.resolvedSkills?.skill)
+            const ultBase = firstCd(panel.resolvedSkills?.ultimate)
+            const linkPct = clampPct(sumStat(panel, 'link_cd_reduction'))
+            // skill_cd_reduction / ultimate_cd_reduction not wired yet — apply 0%.
+            map.set(panel.actorId, {
+                link: linkBase > 0 ? linkBase * (1 - linkPct / 100) : 0,
+                skill: skillBase,
+                ultimate: ultBase,
+            })
+        }
+        return map
+    })
+
     // ── Validation (Free Mode) ──
 
     function validateTimeline() {
@@ -6887,6 +6923,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         computedConvertEvents,
         computedAnomalyDebuffsEffective,
         v2Panels,
+        v2EffectiveCooldowns,
         v2HitEffects: computed(() => _v2ProjectedData.value?.hitEffects || []),
         v2ActionBars: computed(() => _v2ProjectedData.value?.actionBars || null),
         v2AttackSegments: computed(() => _v2AttackSegmentMap.value || null),

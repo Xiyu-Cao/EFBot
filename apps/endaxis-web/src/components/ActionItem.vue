@@ -193,18 +193,31 @@ function getDamageTickTitle(tick) {
   })
 }
 
-// 连携冷却计算
+// Effective cooldown for the CD bar overlay.
+// V2-ready actors: source of truth is `store.v2EffectiveCooldowns` — post-
+//   `(cd - flat) * (1 - pct/100)`, already accounts for mastery level +
+//   potential flat-seconds + equipment link_cd_reduction %.
+// Non-V2 actors: fall back to library `action.cooldown` × link %-reduction,
+//   which was the previous behavior.
 const effectiveCooldown = computed(() => {
   const baseCd = props.action.cooldown || 0
-  if (props.action.type !== 'link') return baseCd
   const track = store.tracks.find(t => t.actions?.some(a => a.instanceId === props.action.instanceId))
+  if (!track) return baseCd
+
+  // V2 path: prefer kernel/panel-resolved CD when available.
+  const v2Map = store.v2EffectiveCooldowns
+  const v2Cd = v2Map?.get?.(track.id)?.[props.action.type]
+  if (typeof v2Cd === 'number' && v2Cd > 0) return v2Cd
+
+  // Legacy fallback (non-V2 actors, or skill types with no panel CD).
+  if (props.action.type !== 'link') return baseCd
   const clamp = (val) => {
     const num = Number(val) || 0
     if (num < 0) return 0
     if (num > 100) return 100
     return num
   }
-  const reduction = clamp(track?.linkCdReduction ?? store.systemConstants.linkCdReduction ?? 0)
+  const reduction = clamp(track.linkCdReduction ?? store.systemConstants.linkCdReduction ?? 0)
   return baseCd * (1 - reduction / 100)
 })
 
