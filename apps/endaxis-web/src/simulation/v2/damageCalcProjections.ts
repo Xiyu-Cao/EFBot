@@ -13,8 +13,6 @@ import type {
   DamageEvent,
   DamageElement,
   DamageSchool,
-  ActionType,
-  ActionEvent,
   BuffEvent,
 } from "./types";
 

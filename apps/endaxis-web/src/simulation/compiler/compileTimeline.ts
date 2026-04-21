@@ -280,51 +280,6 @@ function resolveActions(
   return { resolvedActions, actionMap, effectMap };
 }
 
-// ── Dodge interruption resolution ──
-
-function resolveInterruptions(resolvedActions: ResolvedAction[]) {
-  const dodgeActions = resolvedActions.filter(
-    (a) => a.node.type === "dodge"
-  );
-
-  for (const dodge of dodgeActions) {
-    const dodgeStart = dodge.realStartTime;
-
-    for (const action of resolvedActions) {
-      if (action === dodge) continue;
-      if (action.trackId !== dodge.trackId) continue;
-      if (action.node.type === "dodge") continue;
-
-      const checkpoints = action.node.checkpoints;
-      if (!checkpoints || checkpoints.length === 0) continue;
-
-      const actionEnd = action.realStartTime + action.realDuration;
-      if (dodgeStart < action.realStartTime || dodgeStart >= actionEnd) continue;
-
-      // Compute interrupt offset relative to action start
-      const interruptOffset = round(dodgeStart - action.realStartTime);
-
-      // Find the first cancelled segment:
-      // Segments with all checkpoints <= interruptOffset are committed.
-      let cancelledFromSegment = 0;
-      for (let i = 0; i < checkpoints.length; i++) {
-        if (interruptOffset >= checkpoints[i]) {
-          cancelledFromSegment = i + 1;
-        }
-      }
-
-      action.isInterrupted = true;
-      action.interruptOffset = interruptOffset;
-      action.cancelledFromSegment = cancelledFromSegment;
-
-      // Truncate action duration to interrupt point
-      action.realDuration = round(interruptOffset);
-
-      break; // One dodge interrupts at most one action
-    }
-  }
-}
-
 export function compileTimeline(
   actions: ActionNode[],
   connections: Connection[] = []
@@ -348,9 +303,6 @@ export function compileTimeline(
   if (connections.length > 0) {
     resolveConsumption(resolvedActions, connections);
   }
-
-  // TODO: re-enable when checkpoint data is filled in
-  // resolveInterruptions(resolvedActions);
 
   const totalDuration = resolvedActions.reduce(
     (max, a) => Math.max(max, round(a.realStartTime + a.realDuration)),

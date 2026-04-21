@@ -10,7 +10,6 @@ import { describe, it, expect } from "vitest";
 import { simulate, type PlacedSkill, type EnemyConfig, type KernelConfig } from "./kernel";
 import { computeCharacterBuild, type CharacterInput } from "./characterBuild";
 import { skills as arclightSkills, variants as arclightVariants, triggers as arclightTriggers } from "./characters/arclight";
-import arclightSkillData from "../../data/operators/ARCLIGHT/skills.json";
 
 function makeArclightBuild() {
   const input: CharacterInput = {
@@ -35,8 +34,6 @@ function makeArclightBuild() {
     equipmentSetId: null,
     baseGaugeMax: 90,
     statModifiers: [],
-    skillLevels: { attack: 6, skill: 6, link: 6, ultimate: 6 },
-    skillData: arclightSkillData as any,
   };
   return computeCharacterBuild(input);
 }

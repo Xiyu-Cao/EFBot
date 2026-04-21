@@ -2,7 +2,7 @@
  * V2 Weapon Data Types
  */
 
-import type { TriggerEventType, TriggerCondition, DamageElement, DamageSchool, ActionType } from "../types";
+import type { TriggerEventType, TriggerCondition, ActionType } from "../types";
 
 /** Common slot modifier — shared across weapons of same tier/size */
 export interface CommonSlotDef {

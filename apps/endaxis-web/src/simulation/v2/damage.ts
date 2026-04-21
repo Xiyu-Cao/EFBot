@@ -141,11 +141,6 @@ function sumFlat(bd: { base: number; flatModifiers: { value: number }[] }): numb
   return bd.base + bd.flatModifiers.reduce((s, m) => s + m.value, 0);
 }
 
-/** Sum a StatBreakdown's percent modifiers. */
-function sumPercent(bd: { percentModifiers: { value: number }[] }): number {
-  return bd.percentModifiers.reduce((s, m) => s + m.value, 0);
-}
-
 /**
  * Compute effective ATK from build stats and current buffs.
  *

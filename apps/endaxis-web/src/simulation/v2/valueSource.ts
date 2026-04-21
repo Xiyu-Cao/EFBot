@@ -15,12 +15,12 @@
  */
 
 import type {
-  TriggerEvent,
   MagicElement,
   DamageElement,
   ActionType,
   AnomalyType,
 } from "./types";
+import type { TriggerEvent } from "./triggers";
 
 // ═══════════════════════════════════════════════════════════════════
 // EventContext — normalized trigger event shape

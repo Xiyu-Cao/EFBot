@@ -4,6 +4,8 @@
 
 Endaxis 是《明日方舟：终末地》的排轴编辑器与伤害模拟工具。基于 [end-axis](https://github.com/floating-sky/end-axis) 二次开发，当前已独立演化，核心模拟引擎（V2 kernel）和大部分前端逻辑为全新实现。前端 + 模拟引擎均为纯客户端 TypeScript，无需后端即可完成全部计算。
 
+> 2026-04-21 完成 V1 清理：`simulation/` 下只剩 `compiler/`（提供 timeline 编译）和 `v2/`（唯一计算路径）。
+
 线上地址: https://www.endfieldbot.com
 beta版: https://www.endfeildbot.com
 
@@ -23,20 +25,17 @@ npm run build        # 生产构建
 ```
 apps/endaxis-web/src/
 ├── simulation/                 # ★ 核心模拟引擎 (纯 TS，无 Vue 依赖)
-│   ├── v2/                    # ☆ V2 计算内核（当前唯一活跃计算路径）
+│   ├── v2/                    # ☆ V2 计算内核（唯一活跃计算路径）
 │   │   ├── characters/        #   角色数据文件 + adapter.ts
-│   │   ├── equipment/         #   武器系统
+│   │   ├── equipment/         #   装备套装定义
 │   │   ├── weapons/           #   武器定义
 │   │   ├── kernel.ts          #   主循环（全局 hit 排序 + 5 阶段模型）
 │   │   ├── damage.ts          #   11 乘区伤害计算
 │   │   ├── projections.ts     #   EventLog → UI 数据投影
 │   │   ├── storeAdapter.ts    #   Store → kernel 输入桥接
+│   │   ├── buffMetadata.ts    #   buff 图标/名称注册表
 │   │   └── ...                #   anomaly/effects/resources/triggers/types
-│   ├── calculation/           #   V1 伤害计算（已禁用，代码保留）
-│   ├── compiler/              #   V1 场景编译
-│   ├── engine/                #   V1 事件引擎
-│   ├── effects/               #   V1 效果系统
-│   └── ...                    #   V1 其余模块
+│   └── compiler/              #   排轴编译（Store 场景 → ResolvedTimeline）
 ├── components/                #   Vue 组件
 ├── stores/                    #   Pinia 状态管理
 ├── views/                     #   页面 (TimelineEditor, DamageCalcView 等)
@@ -45,11 +44,13 @@ apps/endaxis-web/src/
 └── utils/                     #   工具函数
 ```
 
+> `compiler/` 只负责把 Store 的 tracks/actions 规范化成 ResolvedTimeline（处理连携技推移、checkpoints、TimeContext 等），**不做任何计算**。所有伤害/资源/状态逻辑全在 `v2/` 里。
+
 ## V2 计算内核（当前活跃系统）
 
 位置: `apps/endaxis-web/src/simulation/v2/`
 
-V1 所有计算路径已禁用（代码保留但 return null/empty）。所有计算集中在 V2 kernel。
+所有计算集中在 V2 kernel。V1 已于 2026-04-21 全部删除，不再有"保留但禁用"的死代码。
 
 ### 三层架构
 
@@ -103,7 +104,7 @@ Phase B: globalHits 按绝对时间排序，逐个处理:
 - 通过 `adapter.ts` 转换为前端管线格式，自动覆盖 gamedata.json 数据
 - 新角色只需: 写 `characters/xxx.ts` + `adapter.ts` 注册 `V2_MODULES` + `buffMetadata` 加图标
 
-**V2-ready 角色**: ENDMINISTRATOR, POGRANICHNK, LASTRITE
+**V2-ready 角色**: ENDMINISTRATOR, POGRANICHNK, LASTRITE, LIFENG, ARCLIGHT
 **不支持角色**: EMBER, CATCHER, SNOWSHINE（需敌方攻击/治疗系统）
 
 ### 模块速查
@@ -142,24 +143,18 @@ finalDamage = floor(
 
 终结技(5) > 闪避(4) > 连携技(3) > 战技(2) > 普攻(1)
 
-## V1 模拟引擎（已禁用）
-
-V1 代码保留在 `simulation/` 根目录（compiler/engine/effects/events 等），但所有计算路径已 return null/empty。
-V1 采用事件驱动架构（优先队列 + Handler 分发），与 V2 的全局 hit 排序模型不同。
-待 V2 完善后会清理 V1 代码（见 memory: project_cleanup_plan.md）。
-
 ## 编码规范
 
 ### 命名
 
 | 类别 | 风格 | 示例 |
 |------|------|------|
-| 函数 | camelCase | `simulate()`, `registerEquipmentPassives()` |
-| 类 | PascalCase | `DamageResolver`, `SimulationEngine` |
-| 常量 | UPPER_SNAKE_CASE | `SP_REGEN_RATE`, `PHYSICAL_BONUS` |
-| 接口/类型 | PascalCase | `DamageContext`, `ActorSnapshot` |
-| 类文件 | PascalCase | `DamageResolver.ts`, `GameState.ts` |
-| 函数/工具文件 | camelCase | `simulator.ts`, `attackFormula.ts` |
+| 函数 | camelCase | `simulate()`, `resolveDamage()` |
+| 类 | PascalCase | `BuffManager`, `GaugeState` |
+| 常量 | UPPER_SNAKE_CASE | `SP_REGEN_RATE`, `SP_CAP` |
+| 接口/类型 | PascalCase | `DamageContext`, `CharacterBuild` |
+| 类文件 | PascalCase | — |
+| 函数/工具文件 | camelCase | `kernel.ts`, `damage.ts` |
 | 测试文件 | `.test.ts` 后缀 | `kernel.test.ts`, `storeAdapter.test.ts` |
 
 ### 注释
@@ -184,10 +179,9 @@ npx vitest@4.0.17 run src/simulation/v2/     # 运行指定目录
 ```
 
 - 测试文件与源文件同目录，后缀 `.test.ts`
-- 辅助函数: `makeAction()`, `makeStats()`, `makeActor()`, `makeEngine()` 用于快速构建测试上下文
 - 数值断言: `toBe()` (精确整数) 或 `toBeCloseTo()` (浮点)
 - vitest **必须** pin 4.0.17（4.1.2 有 `@/` 路径解析 bug）
-- 当前: 26 测试文件，350 用例 (336 通过 / 14 失败，失败集中在 V1 的 skillMultipliers/legality 测试)
+- 当前: 6 测试文件，79 用例全部通过（V1 测试随引擎一起于批次 4 删除）
 
 ## 开发原则
 
@@ -197,7 +191,6 @@ npx vitest@4.0.17 run src/simulation/v2/     # 运行指定目录
 - **前端 = kernel 投影**: 前端不做模拟/预测，全部显示来自 V2 kernel 事件
 - **修复在 kernel**: 状态过期、buff 生命周期等逻辑在 kernel 处理，不在投影层 hack
 - 长报告输出到 `reports/` 目录
-- 新功能直接基于 V2 开发，不在 V1 修补
 
 ## 前端：拟真排轴系统
 
@@ -273,7 +266,8 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 | `reports/v2-combat-glossary.md` | 战斗术语对照 |
 | `reports/damage-calc-page-2026-04-16.md` | 伤害计算页面设计 |
 | `reports/buff-timing-audit.md` | 效果结算规则 |
-| `reports/implementation-audit-2026-04-08.md` | V1 实现审计 |
+| `reports/kernel-mechanics-audit-2026-04-09.md` | V2 内核力学规格说明书 |
+| `reports/trigger-timing-refactor-2026-04-17.md` | 触发器时机重构记录 |
 
 ## 其他
 
@@ -286,7 +280,7 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
-| **P0** | V2 角色数据 | 3/25 完成 | 需手动测算 hit timing/duration 等数据后提供，当前仅 ENDMINISTRATOR/POGRANICHNK/LASTRITE |
+| **P0** | V2 角色数据 | 5/25 完成 | 需手动测算 hit timing/duration 等数据后提供，当前：ENDMINISTRATOR、POGRANICHNK、LASTRITE、LIFENG、ARCLIGHT |
 | **P1** | 伤害计算系统 | 骨架已搭建 | 路由 `/damage`，等排轴系统完整后再完善（11 乘区展开、buff 叠加等） |
 | **P2** | 武器 & 装备词条 | 待核对 | 武器/装备套装数据核对 + 部分特殊词条需单独处理逻辑 |
 | **P3** | 重击 duration 重测 | 待测 | ENDMINISTRATOR/POGRANICHNK/LASTRITE 的重击 duration 需用接普攻方式重测（当前为移动取消，偏大）。这三个角色不常作为主控，优先级低 |

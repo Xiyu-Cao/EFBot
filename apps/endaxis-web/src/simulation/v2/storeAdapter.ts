@@ -18,7 +18,7 @@ import type { PlacedSkill, EnemyConfig, KernelConfig } from "./kernel";
 import type { CharacterInput, StatModifier } from "./characterBuild";
 import { computeCharacterBuild } from "./characterBuild";
 import { V2_READY_IDS, getV2Module } from "./characters/adapter";
-import { V2_WEAPON_REGISTRY, extractWeaponPassiveStats, convertWeaponTriggers } from "./weapons/definitions";
+import { V2_WEAPON_REGISTRY, convertWeaponTriggers } from "./weapons/definitions";
 import { V2_EQUIPMENT_SET_REGISTRY, convertSetTriggers } from "./equipment/definitions";
 import { canInterrupt, isPostLastHit } from "./interrupts";
 

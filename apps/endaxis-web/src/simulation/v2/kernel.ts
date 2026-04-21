@@ -48,19 +48,19 @@ import type {
   BuffTarget,
   PassiveTrigger,
   TriggerSourceRef,
+  TriggerEventType,
+  StaggerEvent,
 } from "./types";
-import type { BuildStats } from "./characterBuild";
 import { resolveDamage, computeEffectiveATK, emptyBuffModifiers, type BuffModifiers, type DamageContext } from "./damage";
 import {
   resolveMagicAttachment, resolvePhysicalAnomaly, resolveStagger,
-  ATTACHMENT_MAX_STACKS, ATTACHMENT_DURATION, BREAK_MAX_STACKS, BREAK_DURATION,
-  CROSS_ELEMENT_ANOMALY, getAnomalyDuration,
-  magicBurstMult, spellAnomalyTriggerMult, burningTickMult, iceShatterMult,
+  ATTACHMENT_DURATION, BREAK_MAX_STACKS, BREAK_DURATION,
+  getAnomalyDuration,
+  magicBurstMult,
   launchKnockdownMult, slamMult, armorBreakMult,
-  conductionVulnerability, armorBreakVulnerability, armorBreakVulnDuration,
-  corrosionParams,
+  armorBreakVulnerability, armorBreakVulnDuration,
 } from "./anomaly";
-import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain, SP_CAP } from "./resources";
+import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain } from "./resources";
 import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef, type BuffModifierDef } from "./effects";
 import { getBuffMeta } from "./buffMetadata";
 import { TriggerProcessor, type TriggerEvent, type TriggerState } from "./triggers";
@@ -465,9 +465,8 @@ export function simulate(
       const mods = mgr.aggregateModifiers(time);
       Object.assign(base, mods);
     }
-    // Also aggregate enemy debuffs that affect damage zones
-    const enemyMods = enemy.buffManager.aggregateModifiers(time);
-    // Enemy debuffs contribute to vulnerability/fragility via the target context, not here
+    // Enemy debuffs contribute to vulnerability/fragility via the target context,
+    // not here — they're applied where the DamageContext.target is built.
     return base;
   }
 
@@ -1410,14 +1409,6 @@ export function simulate(
     }
   }
 
-  /** Check if a buff is active on any actor. (Used by condition evaluation.) */
-  function _hasActorBuff(buffId: string, time: number): boolean {
-    for (const [, mgr] of actorBuffs) {
-      if (mgr.getStacks(buffId, time) > 0) return true;
-    }
-    return false;
-  }
-
   // ═════════════════════════════════════════════════════════════════
   // Effect processor (inner function with access to kernel state)
   // ═════════════════════════════════════════════════════════════════
@@ -1431,7 +1422,9 @@ export function simulate(
     build: CharacterBuild,
     emit: (e: SimEvent) => void,
     effectDamages: EffectDamage[],
-    deferredActions: (() => void)[],
+    /** Reserved — no current effect handler defers actions this way; kept in the
+     *  signature so callers can continue to pass their queues through unchanged. */
+    _deferredActions: (() => void)[],
     hitTriggerEvents?: TriggerEvent[],
     /** Action type context for trigger event data. */
     skillType?: ActionType,

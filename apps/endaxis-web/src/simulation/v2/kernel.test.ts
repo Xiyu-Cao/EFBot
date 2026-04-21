@@ -8,7 +8,7 @@
  * Verifies: damage events, gauge charging, SP consumption, stagger.
  */
 import { describe, it, expect } from "vitest";
-import { simulate, type PlacedSkill, type EnemyConfig, type KernelConfig } from "./kernel";
+import { simulate, type PlacedSkill, type EnemyConfig } from "./kernel";
 import { computeCharacterBuild, type CharacterInput } from "./characterBuild";
 import type { Skill, Hit, DamageElement } from "./types";
 

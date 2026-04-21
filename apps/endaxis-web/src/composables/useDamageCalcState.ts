@@ -15,9 +15,8 @@ import { useRouter } from "vue-router";
 import { useTimelineStore } from "@/stores/timelineStore.js";
 import { buildV2Inputs } from "@/simulation/v2/storeAdapter";
 import { simulate } from "@/simulation/v2/kernel";
-import type { SimulationResult, SimEvent, DamageElement } from "@/simulation/v2/types";
+import type { SimulationResult, SimEvent } from "@/simulation/v2/types";
 import {
-  projectDamageSummary,
   projectBuffBars,
   projectStackBuffBars,
   projectAnomalyBars,
@@ -25,8 +24,6 @@ import {
   projectBreakBars,
   projectHitEffects,
   projectActionBars,
-  projectSpSeries,
-  projectGaugeSeries,
   projectStaggerSeries,
 } from "@/simulation/v2/projections";
 import {
@@ -39,7 +36,6 @@ import type {
   FullDamageSummary,
   TrackMeta,
   BuffDetail,
-  BuffBar,
 } from "@/simulation/v2/damageCalcProjections";
 import { adaptAllProjections } from "@/simulation/v2/v2ProjectionAdapter";
 
