@@ -56,9 +56,10 @@ import {
   resolveMagicAttachment, resolvePhysicalAnomaly, resolveStagger,
   ATTACHMENT_DURATION, BREAK_MAX_STACKS, BREAK_DURATION,
   getAnomalyDuration,
-  magicBurstMult,
+  magicBurstMult, spellAnomalyTriggerMult,
   launchKnockdownMult, slamMult, armorBreakMult,
   armorBreakVulnerability, armorBreakVulnDuration,
+  conductionVulnerability, corrosionParams,
 } from "./anomaly";
 import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain } from "./resources";
 import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef, type BuffModifierDef } from "./effects";
@@ -130,6 +131,10 @@ interface EffectDamage {
   school: DamageSchool;
   sourceType: ActionType;
   canCrit: boolean;
+  /** When true, the damage does not receive sourceType-based bonuses
+   *  (attack/skill/link/ultimate/allSkill). Used for magic anomaly trigger
+   *  damage — anomalies are not classified as skills. */
+  skipSourceTypeBonus?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -235,12 +240,42 @@ class EnemyState {
    */
   armorBreakVuln: { value: number; expiresAt: number } | null = null;
 
+  /** Conduction-applied magic fragility. Captured with source artsPower at reaction time. */
+  conductionFragility: { value: number; expiresAt: number } | null = null;
+
+  /**
+   * Corrosion-applied resist reduction. Accrues over time:
+   *   current = min(maxValue, immediate + perSecond × (time - appliedAt))
+   * Captured with source artsPower at reaction time.
+   */
+  corrosionResistDown: {
+    immediate: number; perSecond: number; maxValue: number;
+    appliedAt: number; expiresAt: number;
+  } | null = null;
+
   buffManager = new BuffManager();
 
   /** Physical fragility at `time`, summing baseline sources with armor-break vuln (if still active). */
   getPhysicalFragility(time: number): number {
     const abv = this.armorBreakVuln && time < this.armorBreakVuln.expiresAt ? this.armorBreakVuln.value : 0;
     return this.physicalFragility + abv;
+  }
+
+  /** Magic fragility at `time`, summing baseline with conduction (if still active). */
+  getMagicFragility(time: number): number {
+    const cv = this.conductionFragility && time < this.conductionFragility.expiresAt ? this.conductionFragility.value : 0;
+    return this.magicFragility + cv;
+  }
+
+  /** Resist reduction at `time`, summing baseline with corrosion (time-accrued, if still active). */
+  getResistReduction(time: number): number {
+    if (!this.corrosionResistDown || time >= this.corrosionResistDown.expiresAt) {
+      return this.resistReduction;
+    }
+    const { immediate, perSecond, maxValue, appliedAt } = this.corrosionResistDown;
+    const elapsed = Math.max(0, time - appliedAt);
+    const corroded = Math.min(maxValue, immediate + perSecond * elapsed);
+    return this.resistReduction + corroded;
   }
 
   advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: boolean } {
@@ -260,6 +295,14 @@ class EnemyState {
     if (this.armorBreakVuln && time >= this.armorBreakVuln.expiresAt) {
       changes.armorBreakVulnExpired = true;
       this.armorBreakVuln = null;
+    }
+    // Expire conduction magic fragility
+    if (this.conductionFragility && time >= this.conductionFragility.expiresAt) {
+      this.conductionFragility = null;
+    }
+    // Expire corrosion resist reduction
+    if (this.corrosionResistDown && time >= this.corrosionResistDown.expiresAt) {
+      this.corrosionResistDown = null;
     }
     // Expire stagger state
     if (this.isStaggered && time >= this.staggerEndTime) {
@@ -1009,11 +1052,11 @@ export function simulate(
               resistEmag: enemyConfig.baseMagicResist,
               resistCold: enemyConfig.baseMagicResist,
               resistNature: enemyConfig.baseMagicResist,
-              resistReduction: enemy.resistReduction,
+              resistReduction: enemy.getResistReduction(hitTime),
               isStaggered: enemy.isStaggered,
               vulnerability: enemy.vulnerability,
               physicalFragility: enemy.getPhysicalFragility(hitTime),
-              magicFragility: enemy.magicFragility,
+              magicFragility: enemy.getMagicFragility(hitTime),
               elementFragility: { ...enemy.elementFragility },
             },
             multiplier: eDmg.multiplier,
@@ -1021,6 +1064,7 @@ export function simulate(
             school: eDmg.school,
             sourceType: eDmg.sourceType,
             canCrit: eDmg.canCrit,
+            skipSourceTypeBonus: eDmg.skipSourceTypeBonus,
             critMode: config.critMode,
             rng,
           };
@@ -1105,11 +1149,11 @@ export function simulate(
             resistEmag: enemyConfig.baseMagicResist,
             resistCold: enemyConfig.baseMagicResist,
             resistNature: enemyConfig.baseMagicResist,
-            resistReduction: enemy.resistReduction,
+            resistReduction: enemy.getResistReduction(hitTime),
             isStaggered: enemy.isStaggered,
             vulnerability: enemy.vulnerability,
             physicalFragility: enemy.getPhysicalFragility(hitTime),
-            magicFragility: enemy.magicFragility,
+            magicFragility: enemy.getMagicFragility(hitTime),
             elementFragility: { ...enemy.elementFragility },
           },
           multiplier: mult,
@@ -1378,11 +1422,11 @@ export function simulate(
           resistEmag: enemyConfig.baseMagicResist,
           resistCold: enemyConfig.baseMagicResist,
           resistNature: enemyConfig.baseMagicResist,
-          resistReduction: enemy.resistReduction,
+          resistReduction: enemy.getResistReduction(time),
           isStaggered: enemy.isStaggered,
           vulnerability: enemy.vulnerability,
           physicalFragility: enemy.getPhysicalFragility(time),
-          magicFragility: enemy.magicFragility,
+          magicFragility: enemy.getMagicFragility(time),
           elementFragility: { ...enemy.elementFragility },
         },
         multiplier: eDmg.multiplier,
@@ -1390,6 +1434,7 @@ export function simulate(
         school: eDmg.school,
         sourceType: eDmg.sourceType,
         canCrit: eDmg.canCrit,
+        skipSourceTypeBonus: eDmg.skipSourceTypeBonus,
         critMode: config.critMode,
         rng,
       };
@@ -1503,6 +1548,36 @@ export function simulate(
                 type: "anomaly_apply", time: attachTime,
                 anomalyType, level, sourceId: actorId, duration,
               });
+              // 法术异常触发 instant damage — all four anomaly reactions fire this
+              // (spec §3.2: `0.8 × (1+level) × spellLevelCoef × artsPowerDmg`).
+              // Burning cannot crit; frozen/conduction/corrosion can. Element = incoming
+              // DamageElement (frozen uses cold_dmg; 碎冰 is physical and handled elsewhere).
+              // Skips sourceType-based bonuses (anomalies are not skills).
+              const artsPowerRxn = build.stats.originiumArtsPower;
+              const rxnMult = spellAnomalyTriggerMult(level, artsPowerRxn);
+              effectDamages.push({
+                sourceId: actorId, actionId,
+                multiplier: rxnMult, stagger: 0,
+                element: p.element, school: "magic", sourceType: "skill",
+                canCrit: anomalyType !== "burning",
+                skipSourceTypeBonus: true,
+              });
+              // Conduction: apply magic fragility (spell vulnerability) debuff on the enemy.
+              if (anomalyType === "conduction") {
+                const vuln = conductionVulnerability(level, artsPowerRxn);
+                enemy.conductionFragility = { value: vuln, expiresAt: attachTime + duration };
+              }
+              // Corrosion: apply time-accruing resist reduction.
+              if (anomalyType === "corrosion") {
+                const cp = corrosionParams(level, artsPowerRxn);
+                enemy.corrosionResistDown = {
+                  immediate: cp.immediate,
+                  perSecond: cp.perSecond,
+                  maxValue: cp.maxValue,
+                  appliedAt: attachTime,
+                  expiresAt: attachTime + cp.duration,
+                };
+              }
               hitTriggerEvents?.push({
                 type: "anomaly_applied", time: attachTime, sourceActorId: actorId,
                 data: { anomalyType, level, actionType: skillType },
@@ -2029,11 +2104,11 @@ export function simulate(
               resistEmag: enemyConfig.baseMagicResist,
               resistCold: enemyConfig.baseMagicResist,
               resistNature: enemyConfig.baseMagicResist,
-              resistReduction: enemy.resistReduction,
+              resistReduction: enemy.getResistReduction(dmgTime),
               isStaggered: enemy.isStaggered,
               vulnerability: enemy.vulnerability,
               physicalFragility: enemy.getPhysicalFragility(dmgTime),
-              magicFragility: enemy.magicFragility,
+              magicFragility: enemy.getMagicFragility(dmgTime),
               elementFragility: { ...enemy.elementFragility },
             },
             multiplier: mult,

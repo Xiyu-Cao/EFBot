@@ -1474,3 +1474,441 @@ describe("V2 Kernel — physical_anomaly_type trigger condition", () => {
     }).not.toThrow();
   });
 });
+
+describe("V2 Kernel — magic attachment stacking (burst + duration refresh)", () => {
+  // Cold skill with N single-stack hits at fixed offsets so we can assert per-hit outcomes.
+  function coldSkillAt(offsets: number[]): Skill {
+    const hits: Hit[] = offsets.map((off) => ({
+      offset: off,
+      checkpointIndex: 0,
+      damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+      effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }],
+      standardLogic: true,
+    }));
+    return {
+      id: "attach_test", type: "skill", name: "Attach Test",
+      element: "cold", duration: offsets[offsets.length - 1] + 1, spCost: 0, cooldown: 0,
+      hits, checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, offsets.length - 1] }],
+    };
+  }
+
+  it("first same-element hit: stacks 0→1, no burst", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: coldSkillAt([0.5]), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const attachChanges = result.events.filter(e => e.type === "attachment_change") as any[];
+    const applied = attachChanges.filter(c => c.stacks > 0);
+    expect(applied.length).toBe(1);
+    expect(applied[0].stacks).toBe(1);
+    expect(applied[0].prevStacks).toBe(0);
+
+    // Only the skill hit itself should emit a damage event; no burst damage on first hit.
+    const actionDamages = result.events.filter(e => e.type === "damage" && (e as any).actionId === "a");
+    expect(actionDamages.length).toBe(1);
+  });
+
+  it("second same-element hit: stacks 1→2, burst fires with stacks=2, duration refreshed", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    const skill = coldSkillAt([0.5, 5.5]); // 5s apart — attachment still alive
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // attachment_change events: 0→1, 1→2, plus end-of-sim expiry at t=35.5 (stacks=0).
+    const attachChanges = result.events.filter(e => e.type === "attachment_change") as any[];
+    const applied = attachChanges.filter(c => c.stacks > 0);
+    expect(applied.length).toBe(2);
+    expect(applied[0].stacks).toBe(1);
+    expect(applied[0].time).toBeCloseTo(0.5, 5);
+    expect(applied[1].stacks).toBe(2);
+    expect(applied[1].prevStacks).toBe(1);
+    expect(applied[1].time).toBeCloseTo(5.5, 5);
+
+    // Duration refresh proof: the single expiry event sits at refreshed time (5.5+30=35.5),
+    // not at the original 0.5+30=30.5.
+    const expiry = attachChanges.find(c => c.stacks === 0);
+    expect(expiry).toBeTruthy();
+    expect(expiry.time).toBeCloseTo(35.5, 5);
+  });
+
+  it("burst stacks value scales with current attachment stacks (1→2→3→4)", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    // 4 hits, all within 30s window → stacks go 1,2,3,4
+    const skill = coldSkillAt([0.5, 1.0, 1.5, 2.0]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const attachChanges = result.events.filter(e => e.type === "attachment_change") as any[];
+    const applied = attachChanges.filter(c => c.stacks > 0);
+    expect(applied.map(c => c.stacks)).toEqual([1, 2, 3, 4]);
+
+    // magic_burst damage events: emitted on hits 2,3,4 (not on hit 1).
+    // Identify burst damage via being a damage event whose (sourceId, actionId) matches
+    // but multiplier differs from the skill's raw 100. They share actionId="a" and hitIndex=0.
+    // The kernel tags burst damage with the original actionId and hitIndex=0 — the skill
+    // hit damage is tagged with multiplier 100 (scaled later). Distinguish by multiplier value.
+    const allDamages = result.events.filter(e => e.type === "damage" && (e as any).actionId === "a") as any[];
+    // Skill hits: 4 events with multiplier derived from the 100 raw %. Burst: 3 extra events.
+    // They can share the same timestamp as the hit — use the count only.
+    expect(allDamages.length).toBe(4 + 3); // 4 skill hits + 3 bursts (hits 2,3,4)
+  });
+
+  it("attachment duration is refreshed on each same-element hit", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    // First hit at 0.5 (expiry would be 30.5). Second hit at 25 (expiry refreshed to 55).
+    // Without refresh, attachment would expire at 30.5.
+    // Probe attachment alive at t=40 via a link from an identical actor with cold element —
+    // easier approach: assert no attachment_change with stacks=0 before the second hit lands,
+    // and final sim duration carries no expiry if we stop before t=55.
+    const skill = coldSkillAt([0.5, 25]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // Collect all attachment_change events (including end-of-sim expiry at Infinity).
+    const attachChanges = result.events.filter(e => e.type === "attachment_change") as any[];
+    // Final attachment expiry happens at the original expiresAt of the refreshed stack:
+    //   second hit at t=25 → expiresAt = 55. advanceTime(Infinity) triggers expiry event.
+    // The expiry event carries stacks=0 and time=55 (the recorded expiresAt).
+    const expiry = attachChanges.find(c => c.stacks === 0);
+    expect(expiry).toBeTruthy();
+    expect(expiry.time).toBeCloseTo(55, 5); // proves refresh happened; without refresh it'd be 30.5
+  });
+
+  // Cross-element skill: first N cold hits to seed attachment, then 1 fire hit to trigger reaction.
+  function seedColdThenFire(coldStacks: number): Skill {
+    const hits: Hit[] = [];
+    for (let i = 0; i < coldStacks; i++) {
+      hits.push({
+        offset: 0.5 + i * 0.3,
+        checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+        effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }],
+        standardLogic: true,
+      });
+    }
+    hits.push({
+      offset: 0.5 + coldStacks * 0.3,
+      checkpointIndex: 0,
+      damage: { multiplier: 100, stagger: 0, element: "blaze" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+      effects: [{ type: "magic_attachment", params: { element: "blaze", stacks: 1 } }],
+      standardLogic: true,
+    });
+    return {
+      id: "reaction_test", type: "skill", name: "Reaction Test",
+      element: "cold", duration: hits[hits.length - 1].offset + 1, spCost: 0, cooldown: 0,
+      hits, checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, hits.length - 1] }],
+    };
+  }
+
+  it("reaction anomaly level = consumed attachment stacks", () => {
+    // 3 cold hits → attachment at 3 stacks, then fire hit → burning at level 3
+    const build = makeGenericBuild("ACTOR", "cold");
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: seedColdThenFire(3), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const anomalyApplies = result.events.filter(e => e.type === "anomaly_apply") as any[];
+    expect(anomalyApplies.length).toBe(1);
+    expect(anomalyApplies[0].anomalyType).toBe("burning");
+    expect(anomalyApplies[0].level).toBe(3);
+    // duration: burning = 10s (constant)
+    expect(anomalyApplies[0].duration).toBe(10);
+
+    // Attachment cleared after reaction — last attachment_change has stacks=0
+    const attachChanges = result.events.filter(e => e.type === "attachment_change") as any[];
+    const reactionClear = attachChanges.find(c => c.stacks === 0 && c.prevStacks === 3);
+    expect(reactionClear).toBeTruthy();
+  });
+
+  it("reaction anomaly level varies with consumed stacks (1/2/4 → level 1/2/4)", () => {
+    for (const coldStacks of [1, 2, 4]) {
+      const build = makeGenericBuild("ACTOR", "cold");
+      const result = simulate([build], [
+        { actionId: "a", actorId: "ACTOR", skill: seedColdThenFire(coldStacks), startTime: 0 },
+      ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+      const anomalyApply = result.events.find(e => e.type === "anomaly_apply") as any;
+      expect(anomalyApply, `coldStacks=${coldStacks}`).toBeTruthy();
+      expect(anomalyApply.level).toBe(coldStacks);
+    }
+  });
+
+  it("reaction conduction level → duration (level*6 + 6) and spell-vulnerability level-driven", () => {
+    // 2 cold then 1 electro → conduction at level 2
+    // We need cold→electro reaction: CROSS_ELEMENT_ANOMALY[electro] = conduction
+    const skill = ((): Skill => {
+      const hits: Hit[] = [
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }],
+          standardLogic: true,
+        },
+        {
+          offset: 0.8, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }],
+          standardLogic: true,
+        },
+        {
+          offset: 1.1, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "emag" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "magic_attachment", params: { element: "emag", stacks: 1 } }],
+          standardLogic: true,
+        },
+      ];
+      return {
+        id: "rxn_conduction", type: "skill", name: "Rxn Conduction",
+        element: "cold", duration: 2.5, spCost: 0, cooldown: 0,
+        hits, checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 2] }],
+      };
+    })();
+
+    const build = makeGenericBuild("ACTOR", "cold");
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const anomalyApply = result.events.find(e => e.type === "anomaly_apply") as any;
+    expect(anomalyApply).toBeTruthy();
+    expect(anomalyApply.anomalyType).toBe("conduction");
+    expect(anomalyApply.level).toBe(2);
+    // conduction duration: level*6 + 6 = 18
+    expect(anomalyApply.duration).toBe(18);
+  });
+
+  it("reaction emits a 法术异常触发 damage event with incoming element + magic school", () => {
+    // Spec (kernel-mechanics-audit §3.2): 法术异常触发 = 0.8 × (1+level) × spellLevelCoef × artsPowerDmg (瞬发)
+    const build = makeGenericBuild("ACTOR", "cold");
+    const skill = seedColdThenFire(3); // 3 cold → blaze reaction, level=3, anomaly=burning
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const reactionTime = 0.5 + 3 * 0.3; // fire hit offset
+    const damagesAtReaction = result.events.filter(e =>
+      e.type === "damage" && Math.abs((e as any).time - reactionTime) < 0.01) as any[];
+    // Skill hit damage + 法术异常触发 damage
+    expect(damagesAtReaction.length).toBeGreaterThanOrEqual(2);
+
+    // The extra damage (non-skill-hit) carries incoming element (blaze) and magic school.
+    const skillHitMult = 100; // our skill hit multiplier
+    const reactionDamage = damagesAtReaction.find(d => d.multiplier !== skillHitMult);
+    expect(reactionDamage).toBeTruthy();
+    expect(reactionDamage.element).toBe("blaze");
+    expect(reactionDamage.school).toBe("magic");
+  });
+
+  it("all four reactions emit a 法术异常触发 damage event (burning/frozen/conduction/corrosion)", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+
+    // Helper: build a 2-hit skill where hit1 seeds one element, hit2 reacts with another.
+    const rxnSkill = (seedEl: DamageElement, reactEl: DamageElement): Skill => ({
+      id: "r", type: "skill", name: "R", element: seedEl, duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: seedEl, canCrit: false, school: "magic", sourceType: "skill" },
+          effects: [{ type: "magic_attachment", params: { element: seedEl, stacks: 1 } }], standardLogic: true },
+        { offset: 0.8, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: reactEl, canCrit: false, school: "magic", sourceType: "skill" },
+          effects: [{ type: "magic_attachment", params: { element: reactEl, stacks: 1 } }], standardLogic: true },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    });
+
+    // Pairs: (seed, incoming) → expected anomaly
+    const cases: [DamageElement, DamageElement, AnomalyType][] = [
+      ["cold", "blaze", "burning"],
+      ["blaze", "cold", "frozen"],
+      ["cold", "emag", "conduction"],
+      ["cold", "nature", "corrosion"],
+    ];
+    for (const [seed, incoming, expected] of cases) {
+      const result = simulate([build], [
+        { actionId: "a", actorId: "ACTOR", skill: rxnSkill(seed, incoming), startTime: 0 },
+      ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+      const extraAtRxn = result.events.filter(e =>
+        e.type === "damage" && Math.abs((e as any).time - 0.8) < 0.01 && (e as any).multiplier !== 100);
+      expect(extraAtRxn.length, `${seed}→${incoming} should emit 法术异常触发`).toBe(1);
+      expect((extraAtRxn[0] as any).element, `${seed}→${incoming}`).toBe(incoming);
+      expect((extraAtRxn[0] as any).school).toBe("magic");
+      const anomalyApply = result.events.find(e => e.type === "anomaly_apply") as any;
+      expect(anomalyApply.anomalyType).toBe(expected);
+    }
+  });
+
+  it("conduction applies magic fragility (level+2)×4 to subsequent magic damage", () => {
+    // Run 1: seed cold then emag (→ conduction level 1). Probe magic damage afterwards.
+    // Run 2: same, no reaction (only seed emag, no conduction). Compare damage.
+    const build = makeGenericBuild("ACTOR", "cold");
+
+    const probeHit: Hit = {
+      offset: 1.5, checkpointIndex: 0,
+      damage: { multiplier: 200, stagger: 0, element: "blaze" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+      effects: [], standardLogic: true,
+    };
+    const withConduction: Skill = {
+      id: "wc", type: "skill", name: "WC", element: "cold", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }], standardLogic: true },
+        { offset: 0.8, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "emag" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [{ type: "magic_attachment", params: { element: "emag", stacks: 1 } }], standardLogic: true },
+        probeHit,
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 2] }],
+    };
+    const noConduction: Skill = {
+      ...withConduction, id: "nc",
+      hits: [probeHit], // only the probe hit, no reaction
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+
+    const run = (skill: Skill) => simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const dmgAtProbe = (evs: any[]) => {
+      // probe hit has multiplier 200, element blaze
+      const found = evs.find(e => e.type === "damage" && e.multiplier === 200 && Math.abs(e.time - 1.5) < 0.01);
+      return (found as any).damage as number;
+    };
+
+    const withDmg = dmgAtProbe(run(withConduction).events);
+    const withoutDmg = dmgAtProbe(run(noConduction).events);
+
+    // conductionVulnerability(1, 0) = (1+2)*4 * 1 = 12% → fragility zone factor 1.12.
+    const ratio = withDmg / withoutDmg;
+    expect(ratio).toBeCloseTo(1.12, 1);
+  });
+
+  it("corrosion applies time-accruing resist reduction", () => {
+    // 1 nature seed reaction: seed another element then hit with nature → corrosion level 1.
+    // corrosionParams(1, 0) = { immediate: 3.6, perSecond: 0.84, maxValue: 12, duration: 15 }
+    // At t=reaction: corroded = 3.6. Some seconds later: corroded grows.
+    const build = makeGenericBuild("ACTOR", "cold");
+
+    // Probe hit uses nature element so resist reduction (which reduces any base magic resist)
+    // is observable through damage output. Enemy has baseMagicResist = 0 so resistance zone
+    // = 1 + resistReduction/100. A corroded enemy → damage higher than uncorroded.
+    const makeSkill = (probeOffset: number, withRxn: boolean): Skill => ({
+      id: "c", type: "skill", name: "C", element: "cold", duration: probeOffset + 1, spCost: 0, cooldown: 0,
+      hits: [
+        // Seed cold + nature to create corrosion (if withRxn)
+        ...(withRxn ? [
+          { offset: 0.5, checkpointIndex: 0,
+            damage: { multiplier: 100, stagger: 0, element: "cold" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+            effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }], standardLogic: true } as Hit,
+          { offset: 0.8, checkpointIndex: 0,
+            damage: { multiplier: 100, stagger: 0, element: "nature" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+            effects: [{ type: "magic_attachment", params: { element: "nature", stacks: 1 } }], standardLogic: true } as Hit,
+        ] : []),
+        // Probe hit with blaze element at probeOffset
+        { offset: probeOffset, checkpointIndex: 0,
+          damage: { multiplier: 300, stagger: 0, element: "blaze" as DamageElement, canCrit: false, school: "magic" as const, sourceType: "skill" as const },
+          effects: [], standardLogic: true } as Hit,
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, withRxn ? 2 : 0] }],
+    });
+
+    const run = (skill: Skill) => simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const probeDmg = (evs: any[], probeOffset: number) => {
+      const found = evs.find(e => e.type === "damage" && e.multiplier === 300 && Math.abs(e.time - probeOffset) < 0.01);
+      return (found as any).damage as number;
+    };
+
+    // Probe at t=1.0 (reaction at 0.8 → elapsed=0.2s). Expected corroded ≈ 3.6 + 0.84*0.2 = 3.768
+    const earlyCorroded = probeDmg(run(makeSkill(1.0, true)).events, 1.0);
+    const earlyClean = probeDmg(run(makeSkill(1.0, false)).events, 1.0);
+    const earlyRatio = earlyCorroded / earlyClean;
+    expect(earlyRatio).toBeGreaterThan(1.03); // ~1.037
+    expect(earlyRatio).toBeLessThan(1.05);
+
+    // Probe at t=10.8 (elapsed=10s). Expected corroded = min(12, 3.6 + 0.84*10) = min(12, 12) = 12
+    const lateCorroded = probeDmg(run(makeSkill(10.8, true)).events, 10.8);
+    const lateClean = probeDmg(run(makeSkill(10.8, false)).events, 10.8);
+    const lateRatio = lateCorroded / lateClean;
+    expect(lateRatio).toBeCloseTo(1.12, 1); // 12% resist reduction
+  });
+
+  it("reaction damage skips sourceType (skill) bonus but still eats element bonus", () => {
+    // Build A: no bonuses. Build B: +50% skillDmgBonus AND +50% blazeDmg.
+    // The reaction damage should differ between A and B ONLY by the element (blaze) bonus,
+    // not by the skill bonus.
+    function makeBuild(withBonuses: boolean) {
+      const mods = withBonuses
+        ? [
+            { source: "test", stat: "skill_dmg_bonus", value: 50, type: "flat" as const },
+            { source: "test", stat: "blaze_dmg", value: 50, type: "flat" as const },
+          ]
+        : [];
+      const input: CharacterInput = {
+        id: "ACTOR", name: "ACTOR", element: "cold", rarity: 6,
+        promotion: 4, potentialLevel: 0, talentLevels: {},
+        baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+        baseAttack: 300, baseHp: 1000,
+        mainAttribute: "strength", subAttribute: "agility",
+        weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+        equipmentSetId: null, baseGaugeMax: 300,
+        statModifiers: mods,
+      };
+      return computeCharacterBuild(input);
+    }
+
+    const skill = seedColdThenFire(3);
+    const reactionTime = 0.5 + 3 * 0.3;
+    const runSim = (build: ReturnType<typeof makeBuild>) => simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const noneEvents = runSim(makeBuild(false)).events;
+    const bothEvents = runSim(makeBuild(true)).events;
+
+    const getRxnDmg = (evs: any[]) => {
+      const found = evs.find(e => e.type === "damage" && Math.abs(e.time - reactionTime) < 0.01 && e.multiplier !== 100);
+      return (found as any).damage as number;
+    };
+    const noneDmg = getRxnDmg(noneEvents);
+    const bothDmg = getRxnDmg(bothEvents);
+
+    // Expected ratio: both has only the +50% blaze_dmg applied (additive in dmgBonus zone).
+    // dmgBonus zone factor: none→1, both→1 + 0.50 (blaze only) = 1.5.
+    // If skill_dmg_bonus were included, factor would be 1 + 0.50 + 0.50 = 2.0 → damage doubled.
+    // Allow small floor() rounding tolerance; 1.5 vs 2.0 is far apart so this is unambiguous.
+    const ratio = bothDmg / noneDmg;
+    expect(ratio).toBeGreaterThan(1.45);
+    expect(ratio).toBeLessThan(1.60);
+  });
+
+  it("at 4-stack cap: stacks stay at 4 but duration still refreshes and burst still fires", () => {
+    const build = makeGenericBuild("ACTOR", "cold");
+    // 5 hits: 1,2,3,4,4(capped)
+    const skill = coldSkillAt([0.5, 1.0, 1.5, 2.0, 10.0]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const attachChanges = result.events.filter(e => e.type === "attachment_change") as any[];
+    // All 5 hits emit a stacked attachment_change (even the capped one).
+    // Plus one expiry at the end of the sim.
+    const stackedChanges = attachChanges.filter(c => c.stacks > 0);
+    expect(stackedChanges.map(c => c.stacks)).toEqual([1, 2, 3, 4, 4]);
+
+    // Duration refresh at t=10 → expiresAt = 40.
+    const expiry = attachChanges.find(c => c.stacks === 0);
+    expect(expiry.time).toBeCloseTo(40, 5);
+
+    // Burst damages: hits 2-5 fire burst = 4 bursts.
+    const allDamages = result.events.filter(e => e.type === "damage" && (e as any).actionId === "a") as any[];
+    expect(allDamages.length).toBe(5 + 4); // 5 skill hits + 4 bursts
+  });
+});

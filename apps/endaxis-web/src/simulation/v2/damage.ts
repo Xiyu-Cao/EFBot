@@ -72,6 +72,10 @@ export interface DamageContext {
   school: DamageSchool;
   sourceType: ActionType;   // for damage bonus routing
   canCrit: boolean;
+  /** When true, sourceType-based bonuses are skipped (attack/skill/link/ultimate
+   *  + allSkill). Used for magic anomaly trigger damage which is not considered
+   *  a skill. Element and school bonuses still apply. */
+  skipSourceTypeBonus?: boolean;
   // Crit
   critMode: "real" | "expected";
   rng: () => number;        // RNG for real mode
@@ -176,7 +180,7 @@ export function computeEffectiveATK(buildStats: BuildStats, buffs: BuffModifiers
 // ═══════════════════════════════════════════════════════════════════
 
 /** Get the base damage bonus for a given element and action type from build stats + buff modifiers. */
-function getBaseDamageBonus(buildStats: BuildStats, buffMods: BuffModifiers, element: DamageElement, school: DamageSchool, sourceType: ActionType): number {
+function getBaseDamageBonus(buildStats: BuildStats, buffMods: BuffModifiers, element: DamageElement, school: DamageSchool, sourceType: ActionType, skipSourceTypeBonus: boolean): number {
   let bonus = 0;
 
   // School-based bonus
@@ -190,6 +194,8 @@ function getBaseDamageBonus(buildStats: BuildStats, buffMods: BuffModifiers, ele
     case "emag": bonus += sumFlat(buildStats.emagDmg) + buffMods.emagDmg; break;
     case "nature": bonus += sumFlat(buildStats.natureDmg) + buffMods.natureDmg; break;
   }
+
+  if (skipSourceTypeBonus) return bonus;
 
   // Action type bonus
   switch (sourceType) {
@@ -297,7 +303,7 @@ export function resolveDamage(ctx: DamageContext): DamageResult {
   const crit = resolveCrit(ctx);
 
   // Zone 3: Damage Bonus (增伤区)
-  const baseDmgBonus = getBaseDamageBonus(source.buildStats, source.buffModifiers, element, school, sourceType);
+  const baseDmgBonus = getBaseDamageBonus(source.buildStats, source.buffModifiers, element, school, sourceType, ctx.skipSourceTypeBonus === true);
   // Add broken damage bonus if target is staggered
   const brokenBonus = target.isStaggered ? (sumFlat(source.buildStats.brokenDmgBonus) + source.buffModifiers.brokenDmgBonus) : 0;
   const damageBonusZone = 1 + (baseDmgBonus + brokenBonus + source.buffModifiers.damageBonus) / 100;
