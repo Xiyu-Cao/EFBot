@@ -1,6 +1,7 @@
 import { compileTimeline } from "./compileTimeline";
 import type {
   ActionNode,
+  ActorSnapshot,
   ActorStats,
   CompiledScenario,
   GameDatabase,
@@ -9,12 +10,14 @@ import type {
   SystemConstants,
 } from "./types";
 import { createDefaultStats } from "@/utils/coreStats";
-import type { ActorSnapshot } from "@/simulation/state/types.ts";
-import {
-  SP_REGEN_RATE,
-  SP_CAP,
-  DEFAULT_SKILL_SP_COST,
-} from "@/simulation/calculation/resourceFormulas";
+
+// SP constants previously lived in `calculation/resourceFormulas` (now
+// deleted with the rest of V1). The V2 kernel owns the authoritative
+// copies but they are trivial and only referenced here for default
+// system constants, so they are inlined rather than cross-imported.
+const SP_REGEN_RATE = 8.5;
+const SP_CAP = 300;
+const DEFAULT_SKILL_SP_COST = 100;
 
 function normalizeTracks(tracks: ScenarioTrack[]): ScenarioTrack[] {
   return tracks.map((track) => {
@@ -90,10 +93,8 @@ const DEFAULT_SYSTEM_CONSTANTS: SystemConstants = {
 
 export interface CompileOptions {
   systemConstants?: Partial<SystemConstants>;
-  /** Not read during compile; `runSimulation` forwards it to `simulate` for equipment/db lookup. */
+  /** Accepted for API symmetry with the old runSimulation path; not used by compile itself. */
   db?: GameDatabase;
-  /** Not read during compile; `runSimulation` forwards it to `simulate` for deterministic crit. */
-  rng?: import("../engine/rng").SimulationRngOptions;
 }
 
 export function compileScenario(

@@ -1,10 +1,64 @@
-import type {
-  ActorSnapshot,
-  EnemyConfig,
-  TeamConfig,
-} from "@/simulation/state/types.ts";
 import type { TimeContext } from "@/simulation/compiler/timeContext.ts";
-import type { Diagnostic } from "@/simulation/diagnostics.ts";
+
+// ── Types previously imported from V1 state/ and diagnostics.ts, inlined
+//    here so the compiler module stands alone after the V1 cleanup. The
+//    compile step is the only V1 module still wired into the live pipeline
+//    (timelineStore → compileScenario), so it needs no cross-module V1
+//    references. ──
+
+/** Per-type control immunity flags. */
+export interface ControlImmunities {
+  freeze?: boolean;
+  launch?: boolean;
+  knockdown?: boolean;
+}
+
+export interface EnemyConfig {
+  maxStagger: number;
+  staggerNodeCount: number;
+  staggerNodeDuration: number;
+  staggerBreakDuration: number;
+  executionRecovery: number;
+  defenseMultiplier?: number;
+  baseMagicResist?: number;
+  basePhysicalResist?: number;
+  controlImmunities?: ControlImmunities;
+}
+
+export interface TeamConfig {
+  maxSp: number;
+  initialSp: number;
+  spRegenRate: number;
+  skillSpCostDefault: number;
+  linkCdReduction: number;
+}
+
+/** Minimal per-actor snapshot emitted by `compileScenario`. `activeBuffs` is
+ *  constructed empty; its downstream consumers have all been removed along
+ *  with the V1 engine, so the value type is loosened to `unknown`. */
+export interface ActorSnapshot {
+  id: string;
+  stats: ActorStats;
+  resources: {
+    hp: number;
+    gauge: number;
+    maxGauge: number;
+  };
+  cooldowns: Map<string, number>;
+  activeBuffs: Map<string, unknown>;
+}
+
+export interface Diagnostic {
+  severity: "info" | "warning" | "error";
+  code: string;
+  message: string;
+  context?: {
+    actionId?: string;
+    effectType?: string;
+    actorId?: string;
+    [key: string]: unknown;
+  };
+}
 
 export interface ScenarioData {
   tracks: ScenarioTrack[];

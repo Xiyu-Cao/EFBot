@@ -13,10 +13,47 @@ import type {
   AnomalyBar,
   AttachmentBar,
 } from "./projections";
-import type { BuffStatus } from "../projection/projectWeaponBuffTimeline";
-import type { SelfBuffBar } from "../projection/projectSelfBuffTimeline";
 import { getBuffMeta, getBuffIcon, resolveBuffIcon } from "./buffMetadata";
 import { resolveSourceIcons } from "./sourceIconResolver";
+
+// UI row shape for weapon / team-buff / debuff statuses. Consumed by
+// TimelineGrid + PropertiesPanel. `preshifted: true` tells TimelineGrid
+// the times are already in real (freeze-shifted) coordinates.
+export interface BuffStatus {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  startTime: number;
+  logicalStartTime: number;
+  duration: number;
+  type: string;
+  trackId?: string;
+  sourceTrackId?: string;
+  sourceActionInstanceId?: string;
+  weaponId?: string;
+  stacks?: number;
+  maxStacks?: number;
+  preshifted?: boolean;
+  skillIcon?: string;
+  actorIcon?: string;
+  sourceLabel?: string;
+  stat?: string;
+  zone?: string;
+}
+
+// UI row shape for per-track self-buff bars (e.g. 熔火 stacks).
+export interface SelfBuffBar {
+  id: string;
+  type: string;
+  name: string;
+  icon: string;
+  stackIcon: string;
+  startTime: number;
+  endTime: number;
+  stacks: number;
+  color: string;
+}
 
 // ── Buff color resolution ──
 // Derive color from buffId keywords. Default = gray (physical/generic).
