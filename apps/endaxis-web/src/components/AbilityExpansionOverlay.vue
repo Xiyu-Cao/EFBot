@@ -169,7 +169,7 @@ const TALENT_ICON_PREFIX = {
   FLUORITE: 'bounda', GILBERTA: 'aglina', LAEVATAIN: 'laevat', LASTRITE: 'lastrite',
   LIFENG: 'lifeng', PERLICA: 'pelica', POGRANICHNK: 'pograni', ROSSI: 'wulfa',
   SNOWSHINE: 'aurora', TANGTANG: 'tangtang', WULFGARD: 'wolfgd', XAIHI: 'seraph',
-  YVONNE: 'yvonne',
+  YVONNE: 'yvonne', ZHUANGFANGYI: 'zhuangfy',
 }
 
 function getTalentIcon(charId, index) {

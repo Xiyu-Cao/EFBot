@@ -24,6 +24,7 @@ const CHAR_FILE_PREFIX: Record<string, string> = {
   LASTRITE:       "lastrite",
   POGRANICHNK:    "pograni",
   CHENQIANYU:     "chen",
+  ZHUANGFANGYI:   "zhuangfy",
 };
 
 /** Default display label per kind (falls back to generic text if actor unknown). */
