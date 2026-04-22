@@ -619,4 +619,38 @@ export const V2_WEAPON_REGISTRY: Record<string, WeaponDefinition> = {
       { id: "shushi_phys_emag", name: "术法升华(物电)", listenTo: "physical_anomaly", target: "team",
         stat: "emag_dmg", zone: "dmgBonus", values: t(22.4), duration: 15, maxStacks: 1, stackMode: "refresh", icd: 0 },
     ]),
+
+  // 雾中微光 — 6★, funnel (施术单元), 效益·微光层叠
+  //   Passive (always-on exclusive): 攻击力 +7~19.6% (max 19.6%)
+  //   Trigger: 获得电磁增幅 (wielder applied electro attachment) →
+  //            电磁伤害 +5.5~15.4% (max 15.4%),
+  //            30s, maxStacks 3 独立计时, ICD 0.1s
+  wpn_funnel_0016: w("wpn_funnel_0016", "雾中微光", "funnel", 6, 500, "will", "large", "emag_dmg", "large",
+    [{ stat: "attack_percent", values: t(19.6) }],
+    [
+      { id: "wuzhong_buff", name: "效益·微光层叠", listenTo: "attachment_applied",
+        condition: { type: "attachment_element", params: { element: "electro" } },
+        target: "self", stat: "emag_dmg", zone: "dmgBonus",
+        values: t(15.4), duration: 30, maxStacks: 3, stackMode: "independent", icd: 0.1 },
+    ]),
+
+  // 孤舟 — 6★, funnel (施术单元), 压制·流霆
+  //   Buff 1: 战技消耗法术异常 → 战技造成的电磁伤害 +20~56%,
+  //           20s, maxStacks 2 独立计时, ICD 0.1s
+  //   Buff 2: 施放终结技 → 战技造成的电磁伤害 +40~112%, 25s, maxStacks 1 刷新
+  //   NOTE: buffs should logically be "skill-sourced emag damage" but we have
+  //   no combined zone. Apply as `skill_dmg_bonus` (matches "战技造成的..."
+  //   part); element restriction is implicit since the wielder (ZHUANGFANGYI)
+  //   is all-emag. TODO: add an emag-scoped skill zone if needed.
+  wpn_funnel_0015: w("wpn_funnel_0015", "孤舟", "funnel", 6, 500, "will", "large", "attack", "large",
+    [{ stat: "emag_dmg", values: t(44.8) }],
+    [
+      { id: "guzhou_skill_consume", name: "压制·流霆(战技消耗)", listenTo: "anomaly_consumed",
+        condition: { type: "source_action_type", params: { actionType: "skill" } },
+        target: "self", stat: "skill_dmg_bonus", zone: "dmgBonus",
+        values: t(56), duration: 20, maxStacks: 2, stackMode: "independent", icd: 0.1 },
+      { id: "guzhou_ult_cast", name: "压制·流霆(终结技后)", listenTo: "ultimate_hit",
+        target: "self", stat: "skill_dmg_bonus", zone: "dmgBonus",
+        values: t(112), duration: 25, maxStacks: 1, stackMode: "refresh", icd: 0 },
+    ]),
 };

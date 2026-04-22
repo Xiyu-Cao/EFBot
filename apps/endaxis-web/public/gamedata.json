@@ -13532,6 +13532,103 @@
       "passiveStats": {},
       "triggeredBuffs": [],
       "baseAtk": 495
+    },
+    {
+      "id": "wpn_funnel_0015",
+      "name": "孤舟",
+      "buffName": "压制·流霆",
+      "type": "funnel",
+      "rarity": 6,
+      "duration": 25,
+      "icon": "/weapons/funnel/wpn_funnel_0015.webp",
+      "commonSlots": [
+        {
+          "modifierId": "will",
+          "size": "large"
+        },
+        {
+          "modifierId": "attack",
+          "size": "large"
+        }
+      ],
+      "buffBonuses": [],
+      "baseAtk": 500,
+      "passiveStats": {
+        "emag_dmg": 44.8
+      },
+      "triggeredBuffs": [
+        {
+          "trigger": "on_skill_consume_anomaly",
+          "name": "压制·流霆(战技消耗)",
+          "target": "self",
+          "effects": [
+            {
+              "stat": "skill_dmg_bonus",
+              "value": 56,
+              "zone": "增伤",
+              "unit": "percent"
+            }
+          ],
+          "duration": 20,
+          "maxStacks": 2
+        },
+        {
+          "trigger": "on_ultimate_cast",
+          "name": "压制·流霆(终结技后)",
+          "target": "self",
+          "effects": [
+            {
+              "stat": "skill_dmg_bonus",
+              "value": 112,
+              "zone": "增伤",
+              "unit": "percent"
+            }
+          ],
+          "duration": 25,
+          "maxStacks": 1
+        }
+      ]
+    },
+    {
+      "id": "wpn_funnel_0016",
+      "name": "雾中微光",
+      "buffName": "效益·微光层叠",
+      "type": "funnel",
+      "rarity": 6,
+      "duration": 30,
+      "icon": "/weapons/funnel/wpn_funnel_0016.webp",
+      "commonSlots": [
+        {
+          "modifierId": "will",
+          "size": "large"
+        },
+        {
+          "modifierId": "emag_dmg",
+          "size": "large"
+        }
+      ],
+      "buffBonuses": [],
+      "baseAtk": 500,
+      "passiveStats": {
+        "attack_percent": 19.6
+      },
+      "triggeredBuffs": [
+        {
+          "trigger": "on_emag_attachment_applied",
+          "name": "效益·微光层叠",
+          "target": "self",
+          "effects": [
+            {
+              "stat": "emag_dmg",
+              "value": 15.4,
+              "zone": "增伤",
+              "unit": "percent"
+            }
+          ],
+          "duration": 30,
+          "maxStacks": 3
+        }
+      ]
     }
   ],
   "equipmentDatabase": [
@@ -22248,15 +22345,15 @@
           34.7
         ],
         "large": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
+          5.6,
+          10,
+          14.4,
+          18.9,
+          23.3,
+          27.8,
+          32.2,
+          36.7,
+          43.3
         ]
       },
       "cold_dmg": {

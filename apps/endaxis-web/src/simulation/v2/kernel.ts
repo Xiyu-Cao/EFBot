@@ -2137,7 +2137,10 @@ export function simulate(
           });
           hitTriggerEvents?.push({
             type: "anomaly_consumed", time, sourceActorId: actorId,
-            data: { anomalyType: type, level: prev.level },
+            // `actionType` lets weapon triggers with
+            //   condition: { type: "source_action_type", params: { actionType: "skill" } }
+            // filter to "consumed via skill" vs "via link/ultimate/etc".
+            data: { anomalyType: type, level: prev.level, actionType: skillType },
           });
         }
         break;
