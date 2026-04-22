@@ -60,6 +60,7 @@ import {
   launchKnockdownMult, slamMult, armorBreakMult,
   armorBreakVulnerability, armorBreakVulnDuration,
   conductionVulnerability, corrosionParams,
+  LAUNCH_KNOCKDOWN_BONUS_STAGGER, artsPowerStaggerMult,
 } from "./anomaly";
 import { SpState, GaugeState, computeGaugeChargeFromSP, computeDirectGaugeGain } from "./resources";
 import { BuffManager, StackBuffTracker, selectVariant, applyVariant, type ConditionState, type BuffDef, type BuffModifierDef } from "./effects";
@@ -163,6 +164,13 @@ export interface PlacedSkill {
 
 /** Enemy configuration. */
 export interface EnemyConfig {
+  /**
+   * Pre-baked defense-zone multiplier. When the real defense formula is wired
+   * up, this should be derived from an enemy `defense` stat via
+   *   defenseMultiplier = 100 / (100 + defense)
+   * (100 defense → 0.5, 0 defense → 1.0, 200 defense → 0.333). Until enemy
+   * defense varies per encounter, we keep a fixed 0.5 baseline (= 100 DEF).
+   */
   defenseMultiplier: number;
   maxStagger: number;
   staggerNodes: number[];      // threshold values
@@ -196,7 +204,7 @@ export interface KernelConfig {
    * Resolve a `*Ref` label to a numeric value from skills.json.
    * Called with (actorId, label) → number.
    */
-  resolveRef?: (actorId: string, label: string) => number;
+  resolveRef?: (actorId: string, label: string, sectionHint?: string) => number;
   /** Enable condition checking (SP/Gauge/CD). Abort on first failure. */
   validateConditions?: boolean;
   /** Start with full gauge for all actors (debug). */
@@ -278,8 +286,8 @@ class EnemyState {
     return this.resistReduction + corroded;
   }
 
-  advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: boolean } {
-    const changes: { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: boolean } = {};
+  advanceTime(time: number): { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: { expiresAt: number } } {
+    const changes: { attachmentExpired?: { element: MagicElement; stacks: number; expiresAt: number }; breakExpired?: { prevStacks: number; expiredAt: number }; staggerExpired?: boolean; anomaliesExpired?: { type: AnomalyType; level: number; expiresAt: number }[]; armorBreakVulnExpired?: { expiresAt: number } } = {};
     // Expire attachment
     if (this.attachment.element && time >= this.attachment.expiresAt) {
       changes.attachmentExpired = { element: this.attachment.element, stacks: this.attachment.stacks, expiresAt: this.attachment.expiresAt };
@@ -293,7 +301,7 @@ class EnemyState {
     }
     // Expire armor-break physical vulnerability
     if (this.armorBreakVuln && time >= this.armorBreakVuln.expiresAt) {
-      changes.armorBreakVulnExpired = true;
+      changes.armorBreakVulnExpired = { expiresAt: this.armorBreakVuln.expiresAt };
       this.armorBreakVuln = null;
     }
     // Expire conduction magic fragility
@@ -415,12 +423,12 @@ export function simulate(
     if (damage.multiplier !== undefined) return damage.multiplier;
     if (!damage.multiplierRef) return 0;
     const ref = damage.multiplierRef;
-    const rawValue = resolveRef(actorId, ref.label);
+    const rawValue = resolveRef(actorId, ref.label, ref.section);
     let base: number;
     if (ref.share === "equal") base = rawValue / (ref.equalCount || 1);
     else base = rawValue * ref.share;
     if (ref.subtractLabel) {
-      const subValue = resolveRef(actorId, ref.subtractLabel);
+      const subValue = resolveRef(actorId, ref.subtractLabel, ref.section);
       base -= subValue * (ref.subtractShare ?? 1);
     }
     if (ref.scaleBy) {
@@ -555,8 +563,10 @@ export function simulate(
     for (const [actorId, tracker] of stackBuffs) {
       const changes = tracker.sweepExpired(time);
       for (const ch of changes) {
+        // Emit at the stack's own expiry time, not the sweep time — otherwise
+        // bars swept at t=Infinity (final sweep) render as Infinity duration.
         emit({
-          type: "stack_change", time, actorId,
+          type: "stack_change", time: ch.expiredAt, actorId,
           buffType: ch.buffType,
           stacks: ch.current, prevStacks: ch.prev,
           reason: "expired",
@@ -607,6 +617,14 @@ export function simulate(
       for (const a of expiryChanges.anomaliesExpired) {
         emit({ type: "anomaly_remove", time: a.expiresAt, anomalyType: a.type, level: a.level, sourceId: "" });
       }
+    }
+    if (expiryChanges.armorBreakVulnExpired) {
+      emit({
+        type: "buff_remove", time: expiryChanges.armorBreakVulnExpired.expiresAt,
+        actorId: "", targetId: "enemy",
+        buffId: "armorBreak", buffName: "碎甲", target: "enemy",
+        stacks: 0, duration: 0, reason: "expire",
+      });
     }
     // Advance SP regen to action start
     sp.advanceRegen(time);
@@ -964,7 +982,7 @@ export function simulate(
     }
 
     // ── Real hit processing (unchanged logic, destructured from entry) ──
-    const { hit, hitTime, hitIdx, actorId, actionId, build, skill } = entry;
+    const { hit, hitTime, hitIdx, actorId, actionId, build, skill, selectedVariant } = entry;
 
     // ── Activate pending weapon charges on first hit of a new action ──
     if (!seenActions.has(actionId)) {
@@ -1030,6 +1048,14 @@ export function simulate(
       for (const a of hitExpiryChanges.anomaliesExpired) {
         emit({ type: "anomaly_remove", time: hitTime, anomalyType: a.type, level: a.level, sourceId: "" });
       }
+    }
+    if (hitExpiryChanges.armorBreakVulnExpired) {
+      emit({
+        type: "buff_remove", time: hitExpiryChanges.armorBreakVulnExpired.expiresAt,
+        actorId: "", targetId: "enemy",
+        buffId: "armorBreak", buffName: "碎甲", target: "enemy",
+        stacks: 0, duration: 0, reason: "expire",
+      });
     }
 
       // ════════════════════════════════════════════════════════════════
@@ -1104,6 +1130,7 @@ export function simulate(
             stagger: eDmg.stagger, isCrit: result.isCrit,
             element: eDmg.element, school: eDmg.school,
             actionId: eDmg.actionId, hitIndex: hitIdx,
+            zones: result.zones,
           });
         }
       };
@@ -1167,7 +1194,15 @@ export function simulate(
       // ════════════ ③ Skill damage ════════════
       if (hit.damage) {
         const mult = resolveMultiplier(actorId, hit.damage);
-        const buffMods = getBuffModifiers(actorId, hitTime);
+        const baseBuffMods = getBuffModifiers(actorId, hitTime);
+        // Action-scoped combo-zone boost from the selected variant (e.g. 黎风
+        // 连击消耗 → 战技 +30 / 终结技 +20 独立增伤). Only this skill's own hits
+        // get the boost; Phase 2 effect damages (物理异常), delayed triggers
+        // (装备/天赋追加), and magic burst use the un-boosted modifiers.
+        const extraCombo = selectedVariant?.extraComboZone ?? 0;
+        const buffMods: BuffModifiers = extraCombo > 0
+          ? { ...baseBuffMods, combo: baseBuffMods.combo + extraCombo }
+          : baseBuffMods;
         const ctx: DamageContext = {
           source: { buildStats: build.buildStats, buffModifiers: buffMods },
           target: {
@@ -1200,6 +1235,7 @@ export function simulate(
           stagger: hit.damage.stagger, isCrit: result.isCrit,
           element: hit.damage.element, school: hit.damage.school,
           actionId, hitIndex: hitIdx,
+          zones: result.zones,
         });
         // Stagger from hit damage
         if (hit.damage.stagger > 0 && !enemy.isStaggered) {
@@ -1297,6 +1333,14 @@ export function simulate(
     for (const a of finalExpiry.anomaliesExpired) {
       emit({ type: "anomaly_remove", time: a.expiresAt, anomalyType: a.type, level: a.level, sourceId: "" });
     }
+  }
+  if (finalExpiry.armorBreakVulnExpired) {
+    emit({
+      type: "buff_remove", time: finalExpiry.armorBreakVulnExpired.expiresAt,
+      actorId: "", targetId: "enemy",
+      buffId: "armor_break_vuln", buffName: "物理脆弱", target: "enemy",
+      stacks: 0, duration: 0, reason: "expire",
+    });
   }
 
   // ── Build final state ──
@@ -1477,6 +1521,7 @@ export function simulate(
         stagger: eDmg.stagger, isCrit: result.isCrit,
         element: eDmg.element, school: eDmg.school,
         actionId, hitIndex: 0,
+        zones: result.zones,
       });
     }
     // Execute trigger deferred actions
@@ -1656,13 +1701,15 @@ export function simulate(
           const consumed = outcome.breakStacksConsumed;
           enemy.breakStacks = 0;
           emit({ type: "break_change", time, sourceId: actorId, stacks: 0, prevStacks: consumed, physicalType: "slam" });
-          // Queue slam damage for Phase 2
+          // Queue slam damage for Phase 2. sourceType follows the triggering
+          // skill's type so 猛击 damage inherits the right damage-bonus zone
+          // (skill/link/ultimate_dmg_bonus) from the skill that caused it.
           const artsPower = build.stats.originiumArtsPower;
           const mult = slamMult(consumed, 1, artsPower); // level=1 simplified
           effectDamages.push({
             sourceId: actorId, actionId,
             multiplier: mult, stagger: 0,
-            element: "physical", school: "physical", sourceType: "skill",
+            element: "physical", school: "physical", sourceType: skillType ?? "skill",
             canCrit: false,
           });
         } else if (outcome.type === "armorBreak") {
@@ -1674,13 +1721,36 @@ export function simulate(
           const vuln = armorBreakVulnerability(consumed, artsPower);
           const dur = armorBreakVulnDuration(consumed);
           // Refresh (not accumulate): a new 碎甲 replaces value + expiry.
+          // If a previous instance is still active, close its bar so the
+          // new segment picks up the refreshed value/duration cleanly.
+          if (enemy.armorBreakVuln) {
+            emit({
+              type: "buff_remove", time, actorId, targetId: "enemy",
+              buffId: "armorBreak", buffName: "碎甲", target: "enemy",
+              stacks: 0, duration: 0, reason: "refresh",
+            });
+          }
           enemy.armorBreakVuln = { value: vuln, expiresAt: time + dur };
-          // Queue armorBreak damage for Phase 2
+          // Cosmetic buff_apply so the enemy debuff row shows the vuln.
+          // The actual value lives on enemy.armorBreakVuln and is factored
+          // into damage via getPhysicalFragility(); this event is UI-only.
+          emit({
+            type: "buff_apply", time, actorId, targetId: "enemy",
+            buffId: "armorBreak", buffName: "碎甲", target: "enemy",
+            stacks: consumed, duration: dur, reason: "armor_break",
+            stat: "physical_dmg", zone: "vulnerability",
+            sourceRef: skillType === "skill" || skillType === "link" || skillType === "ultimate"
+              ? { kind: skillType, actorId }
+              : undefined,
+            fromTrigger: false,
+          });
+          // Queue armorBreak damage for Phase 2 — sourceType inherits from
+          // the triggering skill (see slam branch).
           const mult = armorBreakMult(consumed, 1, artsPower); // level=1 simplified
           effectDamages.push({
             sourceId: actorId, actionId,
             multiplier: mult, stagger: 0,
-            element: "physical", school: "physical", sourceType: "skill",
+            element: "physical", school: "physical", sourceType: skillType ?? "skill",
             canCrit: false,
           });
         } else if (outcome.type === "launch" || outcome.type === "knockdown") {
@@ -1689,13 +1759,16 @@ export function simulate(
           enemy.breakStacks = Math.min(BREAK_MAX_STACKS, enemy.breakStacks + 1);
           enemy.breakExpiresAt = time + BREAK_DURATION;
           emit({ type: "break_change", time, sourceId: actorId, stacks: enemy.breakStacks, prevStacks: prev, physicalType: outcome.type });
-          // Queue launch/knockdown damage for Phase 2
+          // Queue launch/knockdown damage for Phase 2. Launch/knockdown also
+          // carries a base 10 bonus stagger scaled by arts power
+          // (LAUNCH_KNOCKDOWN_BONUS_STAGGER × artsPowerStaggerMult).
           const artsPower = build.stats.originiumArtsPower;
           const mult = launchKnockdownMult(1, artsPower); // level=1 simplified
+          const bonusStagger = LAUNCH_KNOCKDOWN_BONUS_STAGGER * artsPowerStaggerMult(artsPower);
           effectDamages.push({
             sourceId: actorId, actionId,
-            multiplier: mult, stagger: 0,
-            element: "physical", school: "physical", sourceType: "skill",
+            multiplier: mult, stagger: bonusStagger,
+            element: "physical", school: "physical", sourceType: skillType ?? "skill",
             canCrit: false,
           });
         }
@@ -2126,6 +2199,17 @@ export function simulate(
 
         if (mult > 0) {
           const buffMods = getBuffModifiers(actorId, time);
+          // sourceType tracks the semantic skill source of the triggered
+          // follow-up — e.g. 骏卫 铁誓追击 (sourceRef.kind="ultimate") picks up
+          // ultimate_dmg_bonus; 别礼 幻影追击 (sourceRef.kind="skill") picks up
+          // skill_dmg_bonus. Falls back to the currently-processed hit's
+          // skill type, then to "skill".
+          const derivedSourceType: ActionType =
+            triggerSourceRef?.kind === "skill" ||
+            triggerSourceRef?.kind === "link" ||
+            triggerSourceRef?.kind === "ultimate"
+              ? triggerSourceRef.kind
+              : (skillType ?? "skill");
           const ctx: DamageContext = {
             source: { buildStats: build.buildStats, buffModifiers: buffMods },
             target: {
@@ -2145,7 +2229,7 @@ export function simulate(
             multiplier: mult,
             element: p.element || build.element,
             school: p.school || "physical",
-            sourceType: "skill",
+            sourceType: derivedSourceType,
             canCrit: true,
             critMode: config.critMode,
             rng,
@@ -2161,6 +2245,7 @@ export function simulate(
             actionId, hitIndex,
             fromTrigger: true,
             triggerName: (effect.params as any).triggerName || "追加攻击",
+            zones: result.zones,
           });
         }
         break;

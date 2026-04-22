@@ -253,11 +253,11 @@ export function buildV2Inputs(
   const enemyConfig: EnemyConfig = enemyPanel.config;
 
   // Per-panel label resolver, dispatched by actor id.
-  const resolverByActor = new Map<string, (label: string) => number>();
+  const resolverByActor = new Map<string, (label: string, sectionHint?: string) => number>();
   for (const panel of panels) resolverByActor.set(panel.actorId, makeLabelResolver(panel));
-  const resolveRef = (actorId: string, label: string): number => {
+  const resolveRef = (actorId: string, label: string, sectionHint?: string): number => {
     const fn = resolverByActor.get(actorId);
-    return fn ? fn(label) : 0;
+    return fn ? fn(label, sectionHint) : 0;
   };
 
   const config: KernelConfig = {

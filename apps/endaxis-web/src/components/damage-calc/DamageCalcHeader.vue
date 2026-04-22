@@ -50,6 +50,25 @@ function fmtDmg(n) {
 
     <div class="header-right">
       <button
+        class="settlement-btn"
+        :class="{
+          active: state.settlementOverlayVisible.value,
+          disabled: !state.selectedHitKey.value,
+        }"
+        :disabled="!state.selectedHitKey.value"
+        @click="state.toggleSettlementOverlay()"
+        :title="state.selectedHitKey.value
+          ? (state.settlementOverlayVisible.value ? '关闭结算视图' : '查看选中 hit 的完整结算')
+          : '请先在右侧命中表中选择一个 hit'"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        结算视图
+      </button>
+      <button
         class="crit-mode-btn"
         :class="{ active: state.critMode.value === 'expected' }"
         @click="state.toggleCritMode()"
@@ -154,6 +173,37 @@ function fmtDmg(n) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.settlement-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #333;
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.settlement-btn:hover:not(.disabled) {
+  background: #444;
+  color: #e0e0e0;
+}
+
+.settlement-btn.active {
+  background: #20333e;
+  border-color: #1890ff;
+  color: #40a9ff;
+}
+
+.settlement-btn.disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  color: #888;
 }
 
 .crit-mode-btn {

@@ -922,6 +922,9 @@ function getDebuffStackLabel(status) {
   const cap = Number(status.maxStacks) || store.DEBUFF_STACK_CAP
   const clamped = Math.min(cap, Math.max(1, s || 1))
   if (status.isAnomalyDebuff) return `${clamped}/${cap}`
+  // forceShowStacks: physical-anomaly derived debuffs (e.g. 碎甲) whose level
+  // is meaningful even at Lv.1.
+  if (status.forceShowStacks && clamped >= 1) return `${clamped}`
   if (clamped > 1) return `${clamped}`
   return ''
 }
@@ -1385,23 +1388,11 @@ function applyPrepDurationDraft() {
   closePrepDurationEditor()
 }
 
-const fakeScrollbarRef = ref(null)
-
+// Horizontal scrolling is handled entirely by `handleTrackWheel` on the
+// tracks viewport (trackpad swipe / shift+wheel / ctrl+wheel for zoom),
+// so no fake scrollbar is needed. `ticking` is retained for wheel-handler
+// rAF throttling.
 let ticking = false
-function onFakeScroll(e) {
-  if (ticking) return
-  ticking = true
-  store.setTimelineShift(e.target.scrollLeft)
-  requestAnimationFrame(() => {
-    ticking = false
-  })
-}
-
-watch(() => store.timelineShift, (val) => {
-  if (fakeScrollbarRef.value) {
-    fakeScrollbarRef.value.scrollLeft = val
-  }
-})
 
 watch(() => store.timelineScrollTop, (val) => {
   if (tracksHeaderRef.value) {
@@ -3034,10 +3025,6 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="timeline-horizontal-scrollbar" ref="fakeScrollbarRef" @scroll="onFakeScroll">
-        <div class="scrollbar-spacer" :style="{ width: `${totalWidthComputed}px` }"></div>
-      </div>
-
     </div>
 
     <el-dialog v-model="isSelectorVisible" :title="t('timelineGrid.operatorDialog.title')" width="600px" align-center class="char-selector-dialog" :append-to-body="true">
@@ -4021,23 +4008,6 @@ body.capture-mode .davinci-range {
 .tracks-content-scroller {
   height: 100%;
 }
-
-.timeline-horizontal-scrollbar {
-  grid-column: 2 / 3;
-  grid-row: 2 / 3;
-  width: 100%;
-  height: 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  z-index: 100;
-  opacity: 0.7;
-  transition: opacity 0.2s;
-}
-.timeline-horizontal-scrollbar:hover { opacity: 1; }
-.scrollbar-spacer { height: 1px; }
 
 .tracks-content {
   position: relative;
@@ -5350,7 +5320,9 @@ body.capture-mode .davinci-range {
 
 .weapon-status-bar .duration-text {
   position: absolute;
-  left: 4px;
+  /* 24px = icon-box width (20) + 4px gap — keeps the label clear of the
+     overlapping icon that sits at the left of the bar. */
+  left: 24px;
   font-size: 11px;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);

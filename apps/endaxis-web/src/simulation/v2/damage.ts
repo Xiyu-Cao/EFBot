@@ -297,6 +297,10 @@ export function resolveDamage(ctx: DamageContext): DamageResult {
   const skillMult = multiplier / 100; // 140% → 1.4
 
   // Zone 1: Defense
+  // Endfield 防御乘区 = 100 / (100 + DEF). 100 防御 → 0.5, 0 → 1.0, 200 → 0.333.
+  // Currently `defenseMultiplier` is the pre-computed result (all enemies are
+  // modelled as 100 DEF → 0.5); switch to deriving from an enemy.defense stat
+  // once per-encounter defense values exist.
   const defense = target.defenseMultiplier;
 
   // Zone 2: Crit

@@ -196,7 +196,8 @@ const link: Skill = {
       offset: f(40), checkpointIndex: 0,
       damage: { multiplierRef: { label: "第一段伤害倍率", share: 1 }, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "link" },
       effects: [
-        { type: "stack_buff_apply", params: { buffType: "lifeng_combo", stacks: 1, duration: 20 } },
+        // duration sourced from skills.json ("连击持续时间（秒）") — currently 20s at all levels
+        { type: "stack_buff_apply", params: { buffType: "lifeng_combo", stacks: 1, durationRef: "连击持续时间（秒）" } },
       ],
       standardLogic: true,
     },
@@ -241,6 +242,22 @@ const ultimate: Skill = {
 
 export const ultimateAnimation = f(111);
 
+// ── Skill variant: consume combo for +30% independent damage ──
+// 战技消耗连击 → 本体所有 hit 吃 +30% 独立增伤（连击区, 非 dmgBonus 区），
+// 不影响技能触发的效果（物理异常、装备效果等）。skills.json 里没有"追加段"
+// 字段，所以 hits 本身不变，只靠 extraComboZone 加伤。
+
+const skillVariants: SkillVariant[] = [
+  {
+    id: "lifeng_skill_combo",
+    priority: 1,
+    conditions: [{ type: "stackBuff", buffType: "lifeng_combo", op: ">=", value: 1 }],
+    overrides: {},
+    consumeBuffs: [{ buffType: "lifeng_combo", stacks: "all" }],
+    extraComboZone: 30,
+  },
+];
+
 // ── Ultimate variant: consume combo for hit3 ──
 
 const ultimateVariants: SkillVariant[] = [
@@ -271,6 +288,8 @@ const ultimateVariants: SkillVariant[] = [
       ],
     },
     consumeBuffs: [{ buffType: "lifeng_combo", stacks: "all" }],
+    // 终结技消耗连击 → 本体 3 段 hit 吃 +20% 独立增伤（连击区）。
+    extraComboZone: 20,
   },
 ];
 
@@ -306,6 +325,7 @@ export const skills = {
 };
 
 export const variants = {
+  skill: skillVariants,
   ultimate: ultimateVariants,
 };
 

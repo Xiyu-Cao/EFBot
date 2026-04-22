@@ -2144,3 +2144,184 @@ describe("V2 Kernel — per-skill cooldown gating + link_cd_reduction %", () => 
     expect((result.validationError ? 1 : 0)).toBe(1);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// MultiplierRef.section — disambiguate labels shared across sections
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — MultiplierRef.section disambiguation", () => {
+  // Stub resolver that returns a section-specific value when sectionHint is
+  // provided, or a collision-prone default when it is not. This lets us
+  // detect whether the kernel propagated `ref.section` into resolveRef.
+  function makeSectionResolver(byLabel: Record<string, number>, bySection: Record<string, Record<string, number>>) {
+    return (_actorId: string, label: string, sectionHint?: string): number => {
+      if (sectionHint && bySection[sectionHint] && bySection[sectionHint][label] !== undefined) {
+        return bySection[sectionHint][label];
+      }
+      return byLabel[label] ?? 0;
+    };
+  }
+
+  function makeHitWithRef(offset: number, ref: { label: string; section?: "skill" | "link" | "ultimate" | "attack"; share: number }, sourceType: "skill" | "link" | "ultimate"): Hit {
+    return {
+      offset, checkpointIndex: 0,
+      damage: { multiplierRef: ref, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType },
+      effects: [],
+      standardLogic: true,
+    };
+  }
+
+  it("section=\"link\" reads link row even when skill section has the same label first", () => {
+    const build = makeGenericBuild("ACTOR", "physical");
+    const skillHit: Skill = {
+      id: "s_skill", type: "skill", name: "S", element: "physical",
+      duration: 0.5, spCost: 0, cooldown: 0,
+      hits: [makeHitWithRef(0.1, { label: "伤害倍率", section: "skill", share: 1 }, "skill")],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const linkHit: Skill = {
+      id: "s_link", type: "link", name: "L", element: "physical",
+      duration: 0.5, spCost: 0, cooldown: 0,
+      hits: [makeHitWithRef(0.1, { label: "伤害倍率", section: "link", share: 1 }, "link")],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+
+    // byLabel default is the skill's value — used if sectionHint is NOT propagated
+    // (would incorrectly give the link hit the skill multiplier).
+    const resolveRef = makeSectionResolver(
+      { "伤害倍率": 300 },
+      { skill: { "伤害倍率": 300 }, link: { "伤害倍率": 100 } },
+    );
+
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: skillHit, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: linkHit,  startTime: 1 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", resolveRef });
+
+    const damages = result.events.filter(e => e.type === "damage" && (e as any).damage > 0);
+    const skillDmg = damages.find(d => (d as any).actionId === "a1");
+    const linkDmg  = damages.find(d => (d as any).actionId === "a2");
+    expect(skillDmg).toBeTruthy();
+    expect(linkDmg).toBeTruthy();
+    // skill multiplier = 300, link multiplier = 100 → link damage should be exactly 1/3 of skill damage
+    // (both share the same ATK/defense/bonus path since sourceType mods aren't configured).
+    expect((linkDmg as any).damage / (skillDmg as any).damage).toBeCloseTo(100 / 300, 3);
+  });
+
+  it("without section hint, label falls back to first-match (legacy behaviour preserved)", () => {
+    // Critically: dropping `section` must keep the old "first-match-wins" behaviour so
+    // existing characters without the field continue to work.
+    const build = makeGenericBuild("ACTOR", "physical");
+    const linkHit: Skill = {
+      id: "l_legacy", type: "link", name: "L", element: "physical",
+      duration: 0.5, spCost: 0, cooldown: 0,
+      // No section — should fall back to byLabel (=300, the "wrong" value from the link's POV).
+      hits: [makeHitWithRef(0.1, { label: "伤害倍率", share: 1 }, "link")],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const resolveRef = makeSectionResolver(
+      { "伤害倍率": 300 },
+      { link: { "伤害倍率": 100 } },
+    );
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: linkHit, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", resolveRef });
+    const dmg = result.events.find(e => e.type === "damage" && (e as any).damage > 0) as any;
+    expect(dmg).toBeTruthy();
+    // Call 1: legacy behaviour gives byLabel=300. To prove the hook is actually
+    // wired, compare against a second run where section IS passed (expect /3).
+    const linkHitSectioned: Skill = {
+      ...linkHit, id: "l_sectioned",
+      hits: [makeHitWithRef(0.1, { label: "伤害倍率", section: "link", share: 1 }, "link")],
+    };
+    const result2 = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: linkHitSectioned, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", resolveRef });
+    const dmg2 = result2.events.find(e => e.type === "damage" && (e as any).damage > 0) as any;
+    expect(dmg2.damage / dmg.damage).toBeCloseTo(100 / 300, 3);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Launch / knockdown bonus stagger (10 × artsPowerStaggerMult)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — launch/knockdown bonus stagger", () => {
+  // physical_anomaly on an unbroken enemy applies 1 break stack instead
+  // (resolvePhysicalAnomaly, anomaly.ts). To exercise the launch/knockdown
+  // branch, the skill needs to first put the enemy into break state.
+  function makeAnomalySkill(physicalType: "launch" | "knockdown"): Skill {
+    return {
+      id: "anom", type: "skill", name: "A", element: "physical",
+      duration: 1, spCost: 0, cooldown: 0,
+      hits: [
+        {
+          offset: 0.05, checkpointIndex: 0,
+          damage: { multiplier: 0, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+          effects: [{ type: "break_apply", params: { stacks: 1 } }],
+          standardLogic: true,
+        },
+        {
+          offset: 0.1, checkpointIndex: 0,
+          damage: { multiplier: 0, stagger: 0, element: "physical" as DamageElement, canCrit: false, school: "physical" as const, sourceType: "skill" as const },
+          effects: [{ type: "physical_anomaly", params: { physicalType } }],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+  }
+
+  // Extract the extra damage event produced by the anomaly (not the hit's own
+  // zero-multiplier damage event). launch/knockdown pushes into effectDamages
+  // which resolves as element=physical, school=physical, sourceType=skill,
+  // and — after the fix — carries stagger=10×artsPowerStaggerMult.
+  function anomalyDamageEvent(events: any[]): any {
+    // The hit itself is multiplier=0 → damage=0. The anomaly bonus hit carries
+    // non-zero stagger. Filter by stagger>0.
+    return events.find(e => e.type === "damage" && e.stagger > 0);
+  }
+
+  it("launch carries base stagger=10 when arts power is 0", () => {
+    const build = makeGenericBuild("ACTOR", "physical");
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeAnomalySkill("launch"), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const ev = anomalyDamageEvent(result.events);
+    expect(ev).toBeTruthy();
+    expect(ev.stagger).toBeCloseTo(10, 5);
+  });
+
+  it("knockdown carries base stagger=10 when arts power is 0", () => {
+    const build = makeGenericBuild("ACTOR", "physical");
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeAnomalySkill("knockdown"), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const ev = anomalyDamageEvent(result.events);
+    expect(ev).toBeTruthy();
+    expect(ev.stagger).toBeCloseTo(10, 5);
+  });
+
+  it("arts power scales bonus stagger: 200 AP → 10 × (1 + 200×0.005) = 20", () => {
+    // Build with 200 arts power via statModifier.
+    const input: CharacterInput = {
+      id: "ACTOR", name: "ACTOR", element: "physical", rarity: 6,
+      promotion: 4, potentialLevel: 0, talentLevels: {},
+      baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+      baseAttack: 300, baseHp: 1000,
+      mainAttribute: "strength", subAttribute: "agility",
+      weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [
+        { source: "test", stat: "originium_arts_power", value: 200, type: "flat" as const },
+      ],
+    };
+    const build = computeCharacterBuild(input);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeAnomalySkill("launch"), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const ev = anomalyDamageEvent(result.events);
+    expect(ev).toBeTruthy();
+    expect(ev.stagger).toBeCloseTo(20, 5);
+  });
+});

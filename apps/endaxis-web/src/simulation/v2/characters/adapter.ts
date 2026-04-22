@@ -23,6 +23,7 @@ const V2_MODULES: Record<string, () => Promise<any>> = {
   LASTRITE: () => import("./lastrite"),
   LIFENG: () => import("./lifeng"),
   ARCLIGHT: () => import("./arclight"),
+  CHENQIANYU: () => import("./chenqianyu"),
 };
 
 export const V2_READY_IDS = new Set(Object.keys(V2_MODULES));

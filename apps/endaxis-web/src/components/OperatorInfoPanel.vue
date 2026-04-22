@@ -179,7 +179,7 @@ function onSkillClick(skillKey) {
 const TALENT_ICON_PREFIX = {
   AKEKURI: 'karin', ALESH: 'deepfin', ANTAL: 'antal', ARCLIGHT: 'ikut',
   ARDELIA: 'ardelia', AVYWENNA: 'avywen', CATCHER: 'meurs', CHENQIANYU: 'chen',
-  DAPAN: 'dapan', EMBER: 'azrila', ENDMINISTRATOR: 'endminm', ESTELLA: 'whiten',
+  DAPAN: 'dapan', EMBER: 'azrila', ENDMINISTRATOR: 'endmin', ESTELLA: 'whiten',
   FLUORITE: 'bounda', GILBERTA: 'aglina', LAEVATAIN: 'laevat', LASTRITE: 'lastrite',
   LIFENG: 'lifeng', PERLICA: 'pelica', POGRANICHNK: 'pograni', ROSSI: 'wulfa',
   SNOWSHINE: 'aurora', TANGTANG: 'tangtang', WULFGARD: 'wolfgd', XAIHI: 'seraph',

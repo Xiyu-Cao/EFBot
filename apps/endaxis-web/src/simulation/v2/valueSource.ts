@@ -85,8 +85,10 @@ export interface EnemyStateView {
 }
 
 export interface ResolveContext {
-  /** Resolve a skills.json label (or talent_X) for the actor to a number. */
-  resolveRef: (actorId: string, label: string) => number;
+  /** Resolve a skills.json label (or talent_X) for the actor to a number.
+   *  Optional `sectionHint` restricts the skills.json section searched — used by
+   *  MultiplierRef.section to disambiguate labels shared across sections. */
+  resolveRef: (actorId: string, label: string, sectionHint?: string) => number;
   enemy: EnemyStateView;
   /** Present when resolving a trigger action param. Absent for hit.effects. */
   event?: EventContext;

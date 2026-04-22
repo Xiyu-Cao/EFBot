@@ -4,6 +4,7 @@ import { useDamageCalcState } from '@/composables/useDamageCalcState'
 import DamageCalcHeader from '@/components/damage-calc/DamageCalcHeader.vue'
 import VerticalTimeline from '@/components/damage-calc/VerticalTimeline.vue'
 import DetailPanel from '@/components/damage-calc/DetailPanel.vue'
+import HitSettlementOverlay from '@/components/damage-calc/HitSettlementOverlay.vue'
 
 const state = useDamageCalcState()
 provide('damageCalcState', state)
@@ -22,6 +23,7 @@ provide('damageCalcState', state)
     <div v-else class="damage-calc-body">
       <div class="timeline-panel">
         <VerticalTimeline />
+        <HitSettlementOverlay v-if="state.settlementOverlayVisible.value" />
       </div>
       <div class="detail-panel">
         <DetailPanel />
@@ -90,6 +92,7 @@ provide('damageCalcState', state)
 .timeline-panel {
   overflow: hidden;
   border-right: 1px solid #444;
+  position: relative;
 }
 
 .detail-panel {

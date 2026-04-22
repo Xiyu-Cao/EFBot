@@ -236,7 +236,34 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 
 ### 伤害计算页面
 
-路由 `/damage`，竖向时间线 + 右侧详情面板。详见 `reports/damage-calc-page-2026-04-16.md`。
+路由 `/damage`，入口：排轴页 header "伤害计算" 按钮 (`TimelineEditor.vue`)。纯客户端，独立 composable 管模拟状态，不侵入 timelineStore。
+
+**入口 + 布局**：
+- 顶部 `DamageCalcHeader`: 总伤害/DPS/命中·暴击统计、结算视图切换、期望/真实暴击切换、重跑
+- 左侧 `VerticalTimeline`: 竖向时间线，每列一角色，技能块按 startTime 定位；选中技能块 → 右侧出技能详情
+- 右侧 `DetailPanel`: 路由式 hub → `DamageOverview`（默认总览）/`CharacterDetailPanel`/`SkillDetailPanel`/`BuffDetailPanel`
+- 覆盖层 `HitSettlementOverlay`: 选中某个 hit 后从 header 按钮唤起，浮在左侧排轴面板上，展示跨角色的结算事件流
+
+**核心文件** (所有在 `apps/endaxis-web/src/`)：
+| 文件 | 角色 |
+|------|------|
+| `views/DamageCalcView.vue` | 页面壳 |
+| `composables/useDamageCalcState.ts` | 状态 composable，**2-pass 模拟** (对齐 validateTimeline) |
+| `simulation/v2/damageCalcProjections.ts` | HitDamageDetail / HitGroup / 按 hit 聚合 + 按 break_change 配对识别来源 |
+| `components/damage-calc/HitBreakdownTable.vue` | 两级展开命中表：hit 级 → damage 级 → 11 乘区 |
+| `components/damage-calc/HitZoneBreakdown.vue` | 11 乘区逐项累乘展开 |
+| `components/damage-calc/HitSettlementOverlay.vue` | 跨角色 hit 结算流 (按 time 窗 ±0.5ms 过滤事件) |
+
+**关键决策**：
+- **damage calc 必须 2-pass**：pass1 拿 `extractInterruptedHeavies` + `extractStaggerWindows`，pass2 带 `executionSkillByActor` + `staggerWindows`。单 pass 会让依赖失衡/重击状态的 trigger 时序偏离 自由排轴 validator（例：骏卫 铁誓→袭扰/决胜 的触发 hit 位置）
+- **damage 来源识别在投影层，非 kernel**：`projectHitDamageDetails` 通过配对 `break_change(prevStacks > 0)` → 后续非-fromTrigger damage，识别 main / effect(猛击·碎甲·击飞·倒地) / trigger；kernel 当前未给 DamageEvent 打 kind 标签，这种配对是 lossy 但工程上够用
+- **hit 选中态独立于 action 选中态**：切 action 自动清空 hit 选中和 overlay
+
+**已知限制**（等 kernel 支持后再升级）：
+- 结算视图按时间窗口过滤事件，无法精确区分 Phase ①/②/③/⑤ — 靠事件类型推断 phase
+- delayed_damage 有 delay 的追加（如骏卫袭扰/决胜 f(38)/f(72)）落在主 hit 时间之外，结算视图 v1 不涵盖
+
+详见 `reports/damage-calc-page-2026-04-16.md`（初版设计，V0.1）。
 
 ## 游戏机制速查
 
@@ -281,6 +308,6 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
 | **P0** | V2 角色数据 | 5/25 完成 | 需手动测算 hit timing/duration 等数据后提供，当前：ENDMINISTRATOR、POGRANICHNK、LASTRITE、LIFENG、ARCLIGHT |
-| **P1** | 伤害计算系统 | 骨架已搭建 | 路由 `/damage`，等排轴系统完整后再完善（11 乘区展开、buff 叠加等） |
+| **P1** | 伤害计算系统 | 正式功能，2026-04-22 | 11 乘区展开 + 按 hit 聚合 + damage 来源识别 + 跨角色结算流已就绪；遗留：TimeColumn 追加 hit marker、overlay 覆盖 delay 追加 |
 | **P2** | 武器 & 装备词条 | 待核对 | 武器/装备套装数据核对 + 部分特殊词条需单独处理逻辑 |
 | **P3** | 重击 duration 重测 | 待测 | ENDMINISTRATOR/POGRANICHNK/LASTRITE 的重击 duration 需用接普攻方式重测（当前为移动取消，偏大）。这三个角色不常作为主控，优先级低 |

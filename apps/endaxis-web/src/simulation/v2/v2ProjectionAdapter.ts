@@ -13,7 +13,7 @@ import type {
   AnomalyBar,
   AttachmentBar,
 } from "./projections";
-import { getBuffMeta, getBuffIcon, resolveBuffIcon } from "./buffMetadata";
+import { getBuffMeta, getBuffIcon, resolveBuffIcon, isGenericBuff } from "./buffMetadata";
 import { resolveSourceIcons } from "./sourceIconResolver";
 
 // UI row shape for weapon / team-buff / debuff statuses. Consumed by
@@ -40,6 +40,10 @@ export interface BuffStatus {
   sourceLabel?: string;
   stat?: string;
   zone?: string;
+  /** When true, the UI renders a stack/level badge even for stacks === 1
+   *  (e.g. 碎甲 Lv.1 still carries vulnerability — its level should be
+   *  visible to the player). */
+  forceShowStacks?: boolean;
 }
 
 // UI row shape for per-track self-buff bars (e.g. 熔火 stacks).
@@ -97,8 +101,18 @@ export function adaptBuffBars(
   for (const bar of bars) {
     const meta = getBuffMeta(bar.buffId);
     const duration = bar.endTime - bar.startTime;
-    // Source icons for "按技能/天赋" / "按角色" timeline modes.
-    const sourceIcons = resolveSourceIcons(bar.sourceRef, bar.actorId, equipmentIconResolver);
+    // Icon sourcing:
+    //  - Universal game-mechanic buffs (物理/法术异常, 连击, 脆弱, 附着增幅, …)
+    //    always render their canonical icon regardless of display mode —
+    //    these are not character-specific, so who caused them is irrelevant
+    //    to the icon. For those we override skill/actor icons with meta.icon
+    //    so the Vue UI's per-mode selector still lands on the generic icon.
+    //  - Other buffs use sourceRef-derived icons (talent/skill/weapon) so
+    //    "按技能" and "按角色" modes render meaningful distinctions.
+    const metaIcon = meta?.icon || resolveBuffIcon(bar.buffId, bar.stat, bar.zone);
+    const sourceIcons = isGenericBuff(bar.buffId)
+      ? { skillIcon: metaIcon, actorIcon: metaIcon, label: meta?.name || bar.buffId }
+      : resolveSourceIcons(bar.sourceRef, bar.actorId, equipmentIconResolver);
 
     const base: BuffStatus = {
       id: bar.id,
@@ -106,7 +120,7 @@ export function adaptBuffBars(
       // Prefer explicit metadata icon; otherwise fall back to a generic icon
       // chosen from the buff's stat+zone (covers converter-generated weapon /
       // equipment buffs that have no per-id metadata entry).
-      icon: meta?.icon || resolveBuffIcon(bar.buffId, bar.stat, bar.zone),
+      icon: metaIcon,
       startTime: bar.startTime,
       logicalStartTime: bar.startTime,
       duration,
@@ -140,11 +154,16 @@ export function adaptBuffBars(
         type: "team_buff",
       });
     } else if (bar.target === "enemy") {
+      // Physical-anomaly-style debuffs (碎甲 / 未来的其他物理异常派生脆弱)
+      // need their level badge visible even at Lv.1, since the level controls
+      // vuln magnitude and duration.
+      const forceShowStacks = bar.buffId === "armorBreak";
       debuffStatuses.push({
         ...base,
         sourceTrackId: bar.actorId,
         color: buffColor,
         type: "debuff",
+        forceShowStacks,
       });
     }
   }
@@ -156,19 +175,53 @@ export function adaptBuffBars(
 // StackBuffBar → SelfBuffBar (per-track self-buff row)
 // ═══════════════════════════════════════════════════════════════════
 
+/** Result of adapting stack-buff bars — split into per-track and team rows. */
+export interface AdaptedStackBuffs {
+  /** Per-track self-buff bars (keyed by actorId). */
+  selfBuffs: Map<string, SelfBuffBar[]>;
+  /** Team-scoped stack buffs (e.g. 连击), promoted to BuffStatus so the
+   *  existing team-buff row can render them alongside regular team buffs. */
+  teamStackBuffs: BuffStatus[];
+}
+
 /**
  * Convert V2 StackBuffBar[] into per-track SelfBuffBar maps
  * matching computedSelfBuffsByTrack format.
+ *
+ * Stack buffs whose metadata carries `teamBuff: true` are routed to the
+ * separate `teamStackBuffs` list (merged into team row by adaptAllProjections)
+ * instead of the per-track selfBuffs map.
  */
 export function adaptStackBuffBars(
   bars: StackBuffBar[],
-): Map<string, SelfBuffBar[]> {
-  const result = new Map<string, SelfBuffBar[]>();
+): AdaptedStackBuffs {
+  const selfBuffs = new Map<string, SelfBuffBar[]>();
+  const teamStackBuffs: BuffStatus[] = [];
 
   for (const bar of bars) {
     const meta = getBuffMeta(bar.buffType);
     const icon = meta?.icon || "";
     const stackIcon = getBuffIcon(bar.buffType, bar.stacks) || icon;
+    const duration = Math.max(0, bar.endTime - bar.startTime);
+    const color = resolveBuffColor(bar.buffType);
+
+    if (meta?.teamBuff) {
+      teamStackBuffs.push({
+        id: bar.id,
+        name: meta.name || bar.buffType,
+        icon,
+        color,
+        startTime: bar.startTime,
+        logicalStartTime: bar.startTime,
+        duration,
+        type: "team_buff",
+        sourceTrackId: bar.actorId,
+        stacks: bar.stacks,
+        maxStacks: meta.maxLayers || bar.stacks,
+        preshifted: true,
+      });
+      continue;
+    }
 
     const selfBar: SelfBuffBar & { maxStacks?: number } = {
       id: bar.id,
@@ -179,17 +232,17 @@ export function adaptStackBuffBars(
       startTime: bar.startTime,
       endTime: bar.endTime,
       stacks: bar.stacks,
-      color: resolveBuffColor(bar.buffType),
+      color,
       maxStacks: meta?.maxLayers || 0,
     };
 
-    if (!result.has(bar.actorId)) {
-      result.set(bar.actorId, []);
+    if (!selfBuffs.has(bar.actorId)) {
+      selfBuffs.set(bar.actorId, []);
     }
-    result.get(bar.actorId)!.push(selfBar);
+    selfBuffs.get(bar.actorId)!.push(selfBar);
   }
 
-  return result;
+  return { selfBuffs, teamStackBuffs };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -343,13 +396,14 @@ export function adaptAllProjections(
   equipmentIconResolver?: (setId: string) => string,
 ): V2ProjectedData {
   const buffs = adaptBuffBars(buffBars, equipmentIconResolver);
-  const selfBuffs = adaptStackBuffBars(stackBuffBars);
+  const { selfBuffs, teamStackBuffs } = adaptStackBuffBars(stackBuffBars);
   const anomalies = adaptAnomalyBars(anomalyBars);
   const attachments = adaptAttachmentBars(attachmentBars);
   const breaks = adaptBreakBars(breakBars);
 
   return {
     ...buffs,
+    teamBuffStatuses: [...buffs.teamBuffStatuses, ...teamStackBuffs],
     selfBuffsByTrack: selfBuffs,
     anomalyDebuffs: anomalies,
     attachmentDebuffs: attachments,

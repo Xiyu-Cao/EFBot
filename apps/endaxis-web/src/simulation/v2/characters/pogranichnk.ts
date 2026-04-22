@@ -328,7 +328,10 @@ const tacticalGuidance: PassiveTrigger = {
   sourceMustBeOwner: false,
   condition: { type: "consumed_buff", params: { buffId: "pograni_buff" } },
   actions: [
-    { type: "buff_apply", params: { buffId: "pograni_tactical_morale", target: "trigger_source", stat: "attack_percent", zone: "attackPercent", valueRef: "talent_0", durationRef: "talent_1" } },
+    // talent_0 士气激昂: ATK+X%, 20s, 独立计时最多3层 (P3 升至 5 层, 未实装)。
+    // talent_1 战术教导: 别的干员消耗铁誓时, 触发者 (trigger_source) 也获得此 buff,
+    // 但持续时间走 talent_1 的 5s/10s 而非 20s — 同 buffId 共用 BuffManager 计数, 到期独立。
+    { type: "buff_apply", params: { buffId: "pograni_tactical_morale", target: "trigger_source", stat: "attack_percent", zone: "attackPercent", valueRef: "talent_0", durationRef: "talent_1", maxStacks: 3, stackBehavior: "independent" } },
   ],
   sourceRef: { kind: "talent_1", actorId: "POGRANICHNK" },
 };

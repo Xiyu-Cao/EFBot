@@ -162,7 +162,7 @@ const skill: Skill = {
   hits: [
     {
       offset: f(25), checkpointIndex: 0,
-      damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 10, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
+      damage: { multiplierRef: { label: "伤害倍率", section: "skill", share: 1 }, stagger: 10, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
       effects: [{ type: "physical_anomaly", params: { physicalType: "slam" } }],
       standardLogic: true,
     },
@@ -178,7 +178,7 @@ const link: Skill = {
   hits: [
     {
       offset: f(50), checkpointIndex: 0,
-      damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 10, element: "physical", canCrit: true, school: "physical", sourceType: "link" },
+      damage: { multiplierRef: { label: "伤害倍率", section: "link", share: 1 }, stagger: 10, element: "physical", canCrit: true, school: "physical", sourceType: "link" },
       effects: [
         { type: "buff_apply", params: { buffId: "endmin_debuff", target: "enemy", durationRef: "封印时间（秒）" } },
         { type: "gauge_gain", params: { amount: 10 } },
@@ -197,7 +197,7 @@ const ultimate: Skill = {
   hits: [
     {
       offset: f(102), checkpointIndex: 0,
-      damage: { multiplierRef: { label: "伤害倍率", share: 1 }, stagger: 25, element: "physical", canCrit: true, school: "physical", sourceType: "ultimate" },
+      damage: { multiplierRef: { label: "伤害倍率", section: "ultimate", share: 1 }, stagger: 25, element: "physical", canCrit: true, school: "physical", sourceType: "ultimate" },
       effects: [],
       standardLogic: true,
     },

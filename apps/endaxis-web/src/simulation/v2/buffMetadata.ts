@@ -28,6 +28,10 @@ export interface BuffMeta {
   layerIcons?: Record<number, string>;
   /** Maximum layers (for display capping). */
   maxLayers?: number;
+  /** When true, the buff is team-scoped for display purposes: the adapter
+   *  routes it to the shared team-buff row instead of the per-track self-buff
+   *  row. Kernel state still tracks it on whoever applied it. */
+  teamBuff?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +56,7 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
   affix_slow:    { name: "缓速", icon: "/icons/icon_battle_affix_slow.webp" },
   fluorite_bomb: { name: "粘性炸弹", icon: "" },
   weak:          { name: "虚弱", icon: "/icons/icon_battle_affix_weak.webp" },
-  combo:      { name: "连击", icon: "/icons/icon_battle_affix_combo.webp" },
+  combo:      { name: "连击", icon: "/icons/icon_battle_affix_combo.webp", teamBuff: true },
 
   // ── ANTAL ──
   antal_buff: { name: "聚焦", icon: "/avatars/ANTAL/icon_battle_antal_buff.webp" },
@@ -64,6 +68,14 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
   pograni_buff: {
     name: "铁誓",
     icon: "/avatars/POGRANICHNK/icon_battle_pograni_buff.webp",
+    layerDisplay: "number",
+    maxLayers: 5,
+  },
+
+  // ── CHENQIANYU ──
+  chenqianyu_zhanfeng: {
+    name: "斩锋",
+    icon: "/avatars/CHENQIANYU/icon_talent_chen_01.webp",
     layerDisplay: "number",
     maxLayers: 5,
   },
@@ -80,6 +92,10 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
   armorBreak: { name: "碎甲", icon: "/icons/icon_battle_physical_fracture.webp" },
   launch: { name: "击飞", icon: "/icons/icon_battle_physical_airborne.webp" },
   knockdown: { name: "倒地", icon: "/icons/icon_battle_physical_knockdown.webp" },
+  // Armor-break → physical vulnerability (debuff used for icon display only;
+  // actual value lives in enemy.armorBreakVuln and is factored via
+  // getPhysicalFragility, so this event is purely cosmetic).
+  armor_break_vuln: { name: "物理脆弱", icon: "/icons/icon_battle_affix_physical_vulnerable.webp" },
 
   // ── XAIHI ──
   skill_seraph: { name: "支援晶体", icon: "/avatars/XAIHI/icon_skill_seraph_01.webp" },
@@ -122,19 +138,65 @@ export const BUFF_METADATA: Record<string, BuffMeta> = {
 };
 
 // ---------------------------------------------------------------------------
+// Generic buff fallback
+// ---------------------------------------------------------------------------
+// When a character-specific buff id (e.g. `lifeng_combo`, `xiaohui_burning`)
+// has no explicit entry in BUFF_METADATA, try to match the tail token against
+// a known generic buff id and reuse that icon/name. This covers universal
+// effects like 连击 / 法术·物理异常 / 脆弱 without per-character duplication.
+// Add new generic tokens here as they appear in character data.
+const GENERIC_BUFF_IDS: readonly string[] = [
+  // Generic tags
+  "combo", "weak", "affix_slow",
+  // Magic anomalies
+  "burning", "frozen", "conduction", "corrosion",
+  // Magic attachments
+  "fire_enhance", "pulse_enhance", "cryst_enhance", "natural_enhance", "spell_enhance",
+  // Vulnerability
+  "physical_vulnerable", "spell_vulnerable",
+  // Physical anomalies (rarely emitted as buffs, but keep as future-proofing)
+  "slam", "armorBreak", "launch", "knockdown",
+  "break", "break_apply", "break_consume",
+];
+
+/** Find a generic buff id whose token matches the tail of `effectType`. */
+function findGenericKey(effectType: string): string | undefined {
+  for (const gid of GENERIC_BUFF_IDS) {
+    if (effectType === gid || effectType.endsWith("_" + gid)) return gid;
+  }
+  return undefined;
+}
+
+/**
+ * Whether a buff id is a universal game-mechanic buff (物理异常, 法术异常,
+ * 连击, 附着/增幅, 脆弱, …) — UI should render the canonical icon from
+ * BUFF_METADATA regardless of buff-icon mode (按技能/按角色). Source-based
+ * icons (talent/skill/weapon) are intended for character-specific buffs
+ * where the "who caused it" distinction matters.
+ */
+export function isGenericBuff(effectType: string): boolean {
+  return findGenericKey(effectType) !== undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 export function getBuffMeta(effectType: string): BuffMeta | undefined {
-  return BUFF_METADATA[effectType];
+  const direct = BUFF_METADATA[effectType];
+  if (direct) return direct;
+  const generic = findGenericKey(effectType);
+  return generic ? BUFF_METADATA[generic] : undefined;
 }
 
 /**
  * Get the correct icon for a layered buff given its current layer count.
  * Falls back to the base icon if no per-layer mapping exists.
+ * Goes through `getBuffMeta` so character-specific ids (e.g. `lifeng_combo`)
+ * inherit the generic icon.
  */
 export function getBuffIcon(effectType: string, layerCount?: number): string {
-  const meta = BUFF_METADATA[effectType];
+  const meta = getBuffMeta(effectType);
   if (!meta) return "";
   if (meta.layerDisplay === "per-layer-icon" && meta.layerIcons && layerCount !== undefined) {
     const clamped = Math.max(0, Math.min(layerCount, meta.maxLayers ?? layerCount));

@@ -129,6 +129,16 @@ export interface BuffBar {
 
 /**
  * Project buff bars from buff_apply/buff_remove events.
+ *
+ * Re-application semantics: `refresh` / stack-bump buffs emit a `buff_apply`
+ * per hit. Instead of opening a fresh segment each time (which makes the
+ * intermediate bars look tiny), we KEEP the original startTime and just push
+ * the endTime forward + update stacks. The result is a single bar spanning
+ * from first application to last application + duration, reflecting the
+ * final stack count — matches how these buffs read in-game.
+ *
+ * Keyed by (target, buffId) so that a self-buff of the same `buffId` applied
+ * to different actors doesn't collide.
  */
 export function projectBuffBars(
   events: SimEvent[],
@@ -138,31 +148,51 @@ export function projectBuffBars(
   const completed: BuffBar[] = [];
   let counter = 0;
 
+  const keyOf = (be: BuffEvent) =>
+    be.target === "enemy" || be.target === "team" || be.target === "others"
+      ? `${be.target}::${be.buffId}`
+      : `${be.targetId || be.actorId}::${be.buffId}`;
+
   for (const e of events) {
     if (e.type === "buff_apply") {
       const be = e as BuffEvent;
-      counter++;
-      active.set(be.buffId, {
-        id: `buff_${counter}`,
-        buffId: be.buffId,
-        name: be.buffName,
-        target: be.target,
-        actorId: be.actorId,
-        startTime: be.time,
-        endTime: be.time + be.duration,
-        stacks: be.stacks,
-        color: be.target === "enemy" ? "#ff4d4f" : be.target === "team" ? "#faad14" : "#b37feb",
-        stat: be.stat,
-        zone: be.zone,
-        sourceRef: be.sourceRef,
-      });
+      const key = keyOf(be);
+      const prev = active.get(key);
+      if (prev) {
+        // Refresh / stack bump — extend bar to new (time + duration), update
+        // stacks + latest metadata. Do not split into a new segment.
+        const newEnd = be.time + be.duration;
+        if (newEnd > prev.endTime) prev.endTime = newEnd;
+        prev.stacks = be.stacks;
+        prev.name = be.buffName;
+        prev.stat = be.stat;
+        prev.zone = be.zone;
+        prev.sourceRef = be.sourceRef;
+      } else {
+        counter++;
+        active.set(key, {
+          id: `buff_${counter}`,
+          buffId: be.buffId,
+          name: be.buffName,
+          target: be.target,
+          actorId: be.actorId,
+          startTime: be.time,
+          endTime: be.time + be.duration,
+          stacks: be.stacks,
+          color: be.target === "enemy" ? "#ff4d4f" : be.target === "team" ? "#faad14" : "#b37feb",
+          stat: be.stat,
+          zone: be.zone,
+          sourceRef: be.sourceRef,
+        });
+      }
     } else if (e.type === "buff_remove") {
       const be = e as BuffEvent;
-      const bar = active.get(be.buffId);
+      const key = keyOf(be);
+      const bar = active.get(key);
       if (bar) {
         bar.endTime = be.time;
         completed.push(bar);
-        active.delete(be.buffId);
+        active.delete(key);
       }
     }
   }

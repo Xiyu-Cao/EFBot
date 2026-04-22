@@ -2,6 +2,7 @@
 import { inject, computed } from 'vue'
 import { useTimelineStore } from '@/stores/timelineStore.js'
 import HitBreakdownTable from './HitBreakdownTable.vue'
+import { groupHitDamagesByHit } from '@/simulation/v2/damageCalcProjections'
 
 const props = defineProps({
   actionId: { type: String, required: true },
@@ -26,11 +27,14 @@ const charName = computed(() => {
   return charInfo?.name || props.actorId
 })
 
-// Hit details for this action
+// Hit details for this action (flat — every damage event)
 const hits = computed(() => {
   const details = state.hitDetails.value
   return details.get(props.actionId) || []
 })
+
+// Grouped by hitIndex (one HitGroup per skill hit)
+const groups = computed(() => groupHitDamagesByHit(hits.value))
 
 // Total damage for this action
 const totalDamage = computed(() => {
@@ -108,7 +112,7 @@ function fmtDmg(n) {
 
     <!-- Hit breakdown table -->
     <div class="section-title">命中明细</div>
-    <HitBreakdownTable :hits="hits" />
+    <HitBreakdownTable :groups="groups" />
 
     <div v-if="hits.length === 0" class="empty-hits">
       <span>此技能无伤害数据</span>

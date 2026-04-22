@@ -470,7 +470,9 @@ export function buildEnemyPanel(sys: EnemySystemConstants): EnemyPanel {
   const staggerNodes = buildStaggerNodes(sys.maxStagger, sys.staggerNodeCount);
   return {
     config: {
-      defenseMultiplier: 1.0,
+      // All enemies are modelled as 100 defense until per-encounter values
+      // exist — 100 / (100 + 100) = 0.5. See EnemyConfig for the formula.
+      defenseMultiplier: 0.5,
       maxStagger: sys.maxStagger,
       staggerNodes,
       staggerBreakDuration: sys.staggerBreakDuration,
@@ -487,15 +489,19 @@ export function buildEnemyPanel(sys: EnemySystemConstants): EnemyPanel {
 /** Build a per-panel label resolver. The resolver looks up:
  *    1. `talent_X` → panel.talentValues
  *    2. Skill-data label → section.levelData at that section's actor level
+ *       When `sectionHint` is provided, the search is restricted to that
+ *       section — use this to disambiguate labels shared across sections
+ *       (e.g. "伤害倍率" appearing in both skill and link).
  *  Returns 0 when no match is found. */
-export function makeLabelResolver(panel: CharacterPanel): (label: string) => number {
-  return (label: string): number => {
+export function makeLabelResolver(panel: CharacterPanel): (label: string, sectionHint?: string) => number {
+  return (label: string, sectionHint?: string): number => {
     const tv = panel.talentValues.get(label);
     if (tv !== undefined) return tv;
 
     const sd = panel.skillData;
     if (!sd) return 0;
-    for (const key of Object.keys(sd)) {
+    const keys = sectionHint && sd[sectionHint] ? [sectionHint] : Object.keys(sd);
+    for (const key of keys) {
       const section = sd[key];
       if (!section?.levelData) continue;
       for (const row of section.levelData) {

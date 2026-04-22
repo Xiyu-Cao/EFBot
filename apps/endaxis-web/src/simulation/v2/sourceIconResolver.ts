@@ -19,10 +19,11 @@ import { V2_WEAPON_REGISTRY } from "./weapons/definitions";
 
 /** Mapping from uppercase actor id → lowercase file-prefix used in asset names. */
 const CHAR_FILE_PREFIX: Record<string, string> = {
-  ENDMINISTRATOR: "endminm",   // files use "endminm" per current convention
+  ENDMINISTRATOR: "endmin",
   LIFENG:         "lifeng",
   LASTRITE:       "lastrite",
   POGRANICHNK:    "pograni",
+  CHENQIANYU:     "chen",
 };
 
 /** Default display label per kind (falls back to generic text if actor unknown). */

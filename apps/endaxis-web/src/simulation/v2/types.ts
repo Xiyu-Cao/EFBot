@@ -154,6 +154,14 @@ export interface MultiplierRef {
    */
   subtractLabel?: string;
   subtractShare?: number;
+  /**
+   * Restrict the skills.json section that `label`/`subtractLabel` are looked up in.
+   * Without this, `makeLabelResolver` walks sections in insertion order
+   * (attack → skill → link → ultimate) and returns the first match, which
+   * silently picks the wrong row when two sections share a label (e.g. both
+   * 战技 and 连携 use "伤害倍率"). Set this when a ref is section-specific.
+   */
+  section?: "attack" | "skill" | "link" | "ultimate";
 }
 
 /** An effect applied by a hit. */
@@ -251,6 +259,14 @@ export interface SkillVariant {
   overrides: Partial<Skill>;
   /** Buffs to consume when this variant is selected. */
   consumeBuffs?: { buffType: string; stacks: number | "all" }[];
+  /** Percentage points added to the 连击区 (combo zone) for THIS action's
+   *  own skill-hit damage only. Does NOT apply to triggered side effects
+   *  (physical/magic anomaly damage, passive-trigger delayed damage,
+   *  weapon/equipment effect damage). Use for effects like 黎风 连击消耗
+   *  (战技 +30, 终结技 +20).
+   *  Stored on the variant because the boost is tied to the action instance
+   *  that consumed the enabling buff — not to the actor's long-lived state. */
+  extraComboZone?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -404,6 +420,23 @@ export interface BaseEvent {
   type: string;
 }
 
+/** 11-zone damage breakdown (mirror of DamageResult.zones, kept local to avoid circular import). */
+export interface DamageZones {
+  atk: number;
+  skillMult: number;
+  defense: number;
+  crit: number;
+  damageBonus: number;
+  amplify: number;
+  combo: number;
+  vulnerability: number;
+  fragility: number;
+  resistance: number;
+  stagger: number;
+  reduction: number;
+  special: number;
+}
+
 /** Damage dealt by a hit. */
 export interface DamageEvent extends BaseEvent {
   type: "damage";
@@ -421,6 +454,8 @@ export interface DamageEvent extends BaseEvent {
   fromTrigger?: boolean;
   /** Display name for trigger-produced damage (e.g., "幻影追击") */
   triggerName?: string;
+  /** Per-zone multiplier breakdown for damage-calc page (optional; set by kernel). */
+  zones?: DamageZones;
 }
 
 /** Gauge change (charge or consume). */

@@ -279,27 +279,39 @@ export class StackBuffTracker {
 
   /**
    * Sweep expired stacks at the given time.
-   * Returns list of { buffType, prev, current } for changed types.
+   *
+   * Returns one change entry per expired stack (not per buffType), ordered by
+   * the stack's own expiry time so the caller can emit `stack_change` events at
+   * the actual expiry moments instead of at the sweep time. This matters for
+   * bars that expire naturally long before the next action/hit triggers the
+   * sweep — e.g. 黎风 连击 (20s, team buff) expiring after the last action.
    */
-  sweepExpired(time: number): { buffType: string; prev: number; current: number }[] {
-    const changes: { buffType: string; prev: number; current: number }[] = [];
+  sweepExpired(time: number): { buffType: string; prev: number; current: number; expiredAt: number }[] {
+    const changes: { buffType: string; prev: number; current: number; expiredAt: number }[] = [];
     for (const [buffType, state] of this.states) {
-      const prev = state.stacks;
-      // Remove expired stacks
+      // Partition into kept / expired and remember each expired stack's time.
       const kept: (number | null)[] = [];
-      let removedCount = 0;
+      const expiredTimes: number[] = [];
       for (const exp of state.expiryTimes) {
         if (exp !== null && exp <= time) {
-          removedCount++;
+          expiredTimes.push(exp);
         } else {
           kept.push(exp);
         }
       }
-      if (removedCount > 0) {
-        state.expiryTimes = kept;
-        state.stacks -= removedCount;
-        changes.push({ buffType, prev, current: state.stacks });
+      if (expiredTimes.length === 0) continue;
+
+      // Emit one event per stack in expiry order so the projection can close
+      // the bar at the real time.
+      expiredTimes.sort((a, b) => a - b);
+      let current = state.stacks;
+      for (const et of expiredTimes) {
+        const prev = current;
+        current -= 1;
+        changes.push({ buffType, prev, current, expiredAt: et });
       }
+      state.expiryTimes = kept;
+      state.stacks = current;
     }
     return changes;
   }

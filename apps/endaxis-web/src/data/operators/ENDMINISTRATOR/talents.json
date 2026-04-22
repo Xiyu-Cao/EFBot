@@ -14,7 +14,7 @@
     {
       "id": "talent_0",
       "name": "本质瓦解",
-      "icon": "/avatars/ENDMINISTRATOR/icon_talent_endminm_01.webp",
+      "icon": "/avatars/ENDMINISTRATOR/icon_talent_endmin_01.webp",
       "unlockStage": 1,
       "upgradeStage": 2,
       "stages": [
@@ -58,7 +58,7 @@
     {
       "id": "talent_1",
       "name": "现实静滞",
-      "icon": "/avatars/ENDMINISTRATOR/icon_talent_endminm_02.webp",
+      "icon": "/avatars/ENDMINISTRATOR/icon_talent_endmin_02.webp",
       "unlockStage": 2,
       "upgradeStage": 3,
       "stages": [

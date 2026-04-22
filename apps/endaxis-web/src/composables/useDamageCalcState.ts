@@ -14,7 +14,7 @@ import { ref, computed, shallowRef, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useTimelineStore } from "@/stores/timelineStore.js";
 import { buildV2Inputs } from "@/simulation/v2/storeAdapter";
-import { simulate } from "@/simulation/v2/kernel";
+import { simulate, extractInterruptedHeavies, extractStaggerWindows } from "@/simulation/v2/kernel";
 import type { SimulationResult, SimEvent } from "@/simulation/v2/types";
 import {
   projectBuffBars,
@@ -60,6 +60,11 @@ export function useDamageCalcState() {
   // ── Selection state ──
   const selectedItem = ref<SelectedItem>(null);
 
+  // ── Per-hit selection (for the settlement detail view) ──
+  const selectedHitKey = ref<{ actionId: string; hitIndex: number } | null>(null);
+  // ── Whether the hit-settlement overlay is visible over the left panel ──
+  const settlementOverlayVisible = ref(false);
+
   // ── Crit mode (can be toggled independently from store) ──
   const critMode = ref<"real" | "expected">("expected");
 
@@ -73,15 +78,23 @@ export function useDamageCalcState() {
 
   /**
    * Run V2 kernel simulation from current store state.
-   * Called on mount and whenever equipment/tracks change.
+   *
+   * Mirrors the 2-pass pipeline used by `timelineStore.validateTimeline`:
+   *   Pass 1 — discovers stagger windows + heavy-attacks interrupted before
+   *            their first hit (combo resolution input for Pass 2).
+   *   Pass 2 — re-simulated with `executionSkillByActor` + precomputed
+   *            `staggerWindows` so that auto-execution on staggered enemies
+   *            and trigger timing match the 自由排轴 validator exactly.
+   *
+   * Single-pass was previously used here for performance but diverged on
+   * triggers that depend on stagger state (e.g. 骏卫 铁誓 consumption fires
+   * 袭扰/决胜 only on the second hit's 碎甲 — pass 1's state diverges).
    */
   function runSimulation() {
     simError.value = null;
     try {
-      // Read the store's cached panels (auto-invalidated when any track's
-      // level / equipment / weapon / potential / talent changes).
       const cachedPanels = store.v2Panels || undefined;
-      const inputs = buildV2Inputs(
+      let inputs = buildV2Inputs(
         store.tracks,
         store.characterRoster,
         store.weaponDatabase,
@@ -97,12 +110,45 @@ export function useDamageCalcState() {
         simResult.value = null;
         return;
       }
+
+      // Pass 1: discover stagger windows + interrupted heavies.
+      const pass1 = simulate(
+        inputs.builds,
+        inputs.skills,
+        inputs.enemyConfig,
+        { ...inputs.config, critMode: critMode.value, validateConditions: false },
+        inputs.triggersByActor,
+      );
+      const pendingHeavyInfo = extractInterruptedHeavies(pass1.events, inputs.skills);
+      if (pendingHeavyInfo.size > 0) {
+        const rebuilt = buildV2Inputs(
+          store.tracks,
+          store.characterRoster,
+          store.weaponDatabase,
+          store.systemConstants,
+          store.resolveTrackConfiguredStats,
+          store.getTrackGaugeMax,
+          store.getActiveSetBonusCategories,
+          pendingHeavyInfo,
+          cachedPanels,
+        );
+        if (rebuilt) inputs = rebuilt;
+      }
+      const staggerWindows = extractStaggerWindows(
+        pass1.events,
+        inputs.enemyConfig.staggerBreakDuration,
+      );
+
+      // Pass 2: authoritative run — includes execution replacement and
+      // primed stagger windows so trigger firing matches the validator.
       const result = simulate(
         inputs.builds,
         inputs.skills,
         inputs.enemyConfig,
         { ...inputs.config, critMode: critMode.value, validateConditions: false },
         inputs.triggersByActor,
+        inputs.executionSkillByActor,
+        staggerWindows,
       );
       simResult.value = result;
     } catch (e: any) {
@@ -216,18 +262,48 @@ export function useDamageCalcState() {
   // ── Selection helpers ──
   function selectCharacter(trackId: string) {
     selectedItem.value = { type: "character", trackId };
+    selectedHitKey.value = null;
+    settlementOverlayVisible.value = false;
   }
 
   function selectAction(actionId: string, actorId: string) {
+    // Switching to a different action drops any hit selection tied to the
+    // previous action; re-selecting the same action keeps the hit selection.
+    if (selectedItem.value?.type !== "action" || selectedItem.value.actionId !== actionId) {
+      selectedHitKey.value = null;
+      settlementOverlayVisible.value = false;
+    }
     selectedItem.value = { type: "action", actionId, actorId };
   }
 
   function selectBuff(buffId: string, startTime: number) {
     selectedItem.value = { type: "buff", buffId, startTime };
+    selectedHitKey.value = null;
+    settlementOverlayVisible.value = false;
   }
 
   function clearSelection() {
     selectedItem.value = null;
+    selectedHitKey.value = null;
+    settlementOverlayVisible.value = false;
+  }
+
+  function selectHit(actionId: string, hitIndex: number) {
+    selectedHitKey.value = { actionId, hitIndex };
+  }
+
+  function clearHitSelection() {
+    selectedHitKey.value = null;
+    settlementOverlayVisible.value = false;
+  }
+
+  function toggleSettlementOverlay() {
+    if (!selectedHitKey.value) return;
+    settlementOverlayVisible.value = !settlementOverlayVisible.value;
+  }
+
+  function closeSettlementOverlay() {
+    settlementOverlayVisible.value = false;
   }
 
   // ── Crit mode toggle ──
@@ -276,6 +352,8 @@ export function useDamageCalcState() {
   return {
     // State
     selectedItem,
+    selectedHitKey,
+    settlementOverlayVisible,
     critMode,
     simResult,
     simError,
@@ -301,6 +379,10 @@ export function useDamageCalcState() {
     selectAction,
     selectBuff,
     clearSelection,
+    selectHit,
+    clearHitSelection,
+    toggleSettlementOverlay,
+    closeSettlementOverlay,
     toggleCritMode,
     getBuffDetail,
     goBack,
