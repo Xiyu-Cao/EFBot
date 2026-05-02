@@ -185,12 +185,22 @@ export class BuffManager {
 // Stack Buff Tracker (special layers: magma, vortex, etc.)
 // ═══════════════════════════════════════════════════════════════════
 
-/** A tracked stack buff type. */
+/**
+ * A tracked stack buff type — refresh-group semantics.
+ *
+ * The tracked entity is "one buff with N stacks and one shared expiry":
+ *   - 加 stack 时刷新整组到新过期时间，stacks ≤ maxStacks
+ *   - 满层再叠仍刷新过期时间（stacks 不变）
+ *   - 到期时整组消失（一次 stack_change 从 N → 0）
+ *
+ * 跟 break / 法术附着 同设计。游戏内每层独立计时的 buff 走 BuffManager 的
+ * stackBehavior:"independent"，不应进 StackBuffTracker。
+ */
 interface StackBuffState {
   stacks: number;
   maxStacks: number;
-  /** Per-stack expiry times (for time-limited stacks). null = no expiry. */
-  expiryTimes: (number | null)[];
+  /** Group expiry time (null = permanent / no timer). */
+  expiresAt: number | null;
 }
 
 /**
@@ -206,31 +216,41 @@ export class StackBuffTracker {
    */
   register(buffType: string, maxStacks: number): void {
     if (!this.states.has(buffType)) {
-      this.states.set(buffType, { stacks: 0, maxStacks, expiryTimes: [] });
+      this.states.set(buffType, { stacks: 0, maxStacks, expiresAt: null });
     }
   }
 
   /**
-   * Add stacks. Returns prev and current count.
+   * Add stacks. Refreshes the group expiry to the new value (or keeps the existing
+   * one when expiresAt is null).
+   *
+   * Returns prev/current counts AND whether the group expiry was refreshed
+   * (so the caller can decide whether to emit a stack_change for "satellite"
+   * cases like satlayer-at-max where stacks don't change but timer did).
    */
   addStacks(
     buffType: string,
     amount: number,
     expiresAt: number | null = null,
-  ): { prev: number; current: number } {
+  ): { prev: number; current: number; refreshed: boolean } {
     let state = this.states.get(buffType);
     if (!state) {
-      state = { stacks: 0, maxStacks: 4, expiryTimes: [] };
+      state = { stacks: 0, maxStacks: 4, expiresAt: null };
       this.states.set(buffType, state);
     }
 
     const prev = state.stacks;
+    const prevExpiry = state.expiresAt;
     const toAdd = Math.min(amount, state.maxStacks - state.stacks);
     state.stacks += toAdd;
-    for (let i = 0; i < toAdd; i++) {
-      state.expiryTimes.push(expiresAt);
+    // Refresh the group expiry. When caller passes null (permanent), leave
+    // existing timer in place — re-applying a "permanent" stack should not
+    // wipe the existing timer (no current callsite does this; defensive).
+    if (expiresAt !== null) {
+      state.expiresAt = expiresAt;
     }
-    return { prev, current: state.stacks };
+    const refreshed = state.expiresAt !== prevExpiry;
+    return { prev, current: state.stacks, refreshed };
   }
 
   /**
@@ -241,12 +261,12 @@ export class StackBuffTracker {
     if (!state) return { prev: 0, current: 0 };
     const prev = state.stacks;
     state.stacks = 0;
-    state.expiryTimes = [];
+    state.expiresAt = null;
     return { prev, current: 0 };
   }
 
   /**
-   * Consume specific number of stacks.
+   * Consume specific number of stacks. Group expiry preserved unless count → 0.
    */
   consumeStacks(buffType: string, amount: number): { prev: number; current: number } {
     const state = this.states.get(buffType);
@@ -254,8 +274,7 @@ export class StackBuffTracker {
     const prev = state.stacks;
     const toRemove = Math.min(amount, state.stacks);
     state.stacks -= toRemove;
-    // Remove oldest stacks
-    state.expiryTimes.splice(0, toRemove);
+    if (state.stacks === 0) state.expiresAt = null;
     return { prev, current: state.stacks };
   }
 
@@ -278,40 +297,24 @@ export class StackBuffTracker {
   }
 
   /**
-   * Sweep expired stacks at the given time.
-   *
-   * Returns one change entry per expired stack (not per buffType), ordered by
-   * the stack's own expiry time so the caller can emit `stack_change` events at
-   * the actual expiry moments instead of at the sweep time. This matters for
-   * bars that expire naturally long before the next action/hit triggers the
-   * sweep — e.g. 黎风 连击 (20s, team buff) expiring after the last action.
+   * Sweep expired groups at the given time. Each expired group emits ONE event
+   * with prev=N → current=0 at the group's own expiry time (so bars close at
+   * the real time, not at the next action that triggers the sweep).
    */
   sweepExpired(time: number): { buffType: string; prev: number; current: number; expiredAt: number }[] {
     const changes: { buffType: string; prev: number; current: number; expiredAt: number }[] = [];
     for (const [buffType, state] of this.states) {
-      // Partition into kept / expired and remember each expired stack's time.
-      const kept: (number | null)[] = [];
-      const expiredTimes: number[] = [];
-      for (const exp of state.expiryTimes) {
-        if (exp !== null && exp <= time) {
-          expiredTimes.push(exp);
-        } else {
-          kept.push(exp);
-        }
-      }
-      if (expiredTimes.length === 0) continue;
-
-      // Emit one event per stack in expiry order so the projection can close
-      // the bar at the real time.
-      expiredTimes.sort((a, b) => a - b);
-      let current = state.stacks;
-      for (const et of expiredTimes) {
-        const prev = current;
-        current -= 1;
-        changes.push({ buffType, prev, current, expiredAt: et });
-      }
-      state.expiryTimes = kept;
-      state.stacks = current;
+      if (state.stacks === 0) continue;
+      if (state.expiresAt === null) continue;
+      if (state.expiresAt > time) continue;
+      changes.push({
+        buffType,
+        prev: state.stacks,
+        current: 0,
+        expiredAt: state.expiresAt,
+      });
+      state.stacks = 0;
+      state.expiresAt = null;
     }
     return changes;
   }

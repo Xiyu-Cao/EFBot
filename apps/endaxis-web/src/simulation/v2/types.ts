@@ -217,8 +217,6 @@ export interface Skill {
   checkpoints: Checkpoint[];
   /** Gauge cost, consumed on cast (ultimate only). */
   gaugeCost?: number;
-  /** Gauge gain for all team members, triggered on cast (SP consumption → charge). */
-  teamGaugeGain?: number;
   /** Detach time (seconds from skill start). Hits at or after this offset are not affected by interrupts. */
   detach?: number;
   /** Override default interrupt rules (character exceptions). Lists action types that can interrupt this skill. */
@@ -348,9 +346,8 @@ export type TriggerSourceRef =
  * These are produced by the kernel during hit processing.
  */
 export type TriggerEventType =
-  // Skill cast (action_start)
+  // Skill cast (action_start) — kernel only emits "action_start"; use that.
   | "action_start"           // any skill cast started
-  | "skill_cast"             // 战技 cast (aliases dispatched per-actionType if needed)
   // Hit events
   | "hit_damage"             // any damage dealt
   | "hit_effect"             // any effect applied

@@ -234,7 +234,6 @@ const ultimate: Skill = {
   ],
   checkpoints: [],
   gaugeCost: 300,
-  teamGaugeGain: 0,
 };
 
 export const ultimateAnimation = f(171);

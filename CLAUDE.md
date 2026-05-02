@@ -268,7 +268,7 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 ## 游戏机制速查
 
 - **SP 系统**: trueSP/refundSP 分离，消耗优先 refundSP，仅 trueSP 消耗产生终结技充能
-- **法术爆发**: 同元素附着达 4 层 → burst damage，附着不清空；仅物理/法术异常清空附着
+- **法术爆发**: 同元素附着每次叠加（第 2 层起每层）触发 burst damage，附着不清空；仅物理/法术异常清空附着。爆发伤害走 11 乘区、可暴击、`skipSourceTypeBonus`（吃元素+学派增伤，不吃战技/普攻/终结增伤），事件标 `fromTrigger triggerName="法术爆发"` 用于 UI 分组
 - **暴击双模式**: `"real"` 独立 roll / `"expected"` 概率加权期望值
 - **攻击力**: `ATK = floor(((base+weapon) × (1+pct%) + flat) × (1 + primary×0.5% + secondary×0.2%))`
 
@@ -295,6 +295,7 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 | `reports/buff-timing-audit.md` | 效果结算规则 |
 | `reports/kernel-mechanics-audit-2026-04-09.md` | V2 内核力学规格说明书 |
 | `reports/trigger-timing-refactor-2026-04-17.md` | 触发器时机重构记录 |
+| `reports/kernel-bug-audit-2026-05-01.md` | 内核 bug 排查 + P0/P1/P2/P3 修复记录 |
 
 ## 其他
 
@@ -307,7 +308,7 @@ Self-buff 显示两种模式（全局开关，工具栏 chevron 切换）:
 
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
-| **P0** | V2 角色数据 | 5/25 完成 | 需手动测算 hit timing/duration 等数据后提供，当前：ENDMINISTRATOR、POGRANICHNK、LASTRITE、LIFENG、ARCLIGHT |
+| **P0** | V2 角色数据 | 6/25 完成 | 需手动测算 hit timing/duration 等数据后提供，当前：ENDMINISTRATOR、POGRANICHNK、LASTRITE、LIFENG、ARCLIGHT、CHENQIANYU |
 | **P1** | 伤害计算系统 | 正式功能，2026-04-22 | 11 乘区展开 + 按 hit 聚合 + damage 来源识别 + 跨角色结算流已就绪；遗留：TimeColumn 追加 hit marker、overlay 覆盖 delay 追加 |
 | **P2** | 武器 & 装备词条 | 待核对 | 武器/装备套装数据核对 + 部分特殊词条需单独处理逻辑 |
 | **P3** | 重击 duration 重测 | 待测 | ENDMINISTRATOR/POGRANICHNK/LASTRITE 的重击 duration 需用接普攻方式重测（当前为移动取消，偏大）。这三个角色不常作为主控，优先级低 |

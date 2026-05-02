@@ -51,7 +51,7 @@ import type {
   TriggerEventType,
   StaggerEvent,
 } from "./types";
-import { resolveDamage, computeEffectiveATK, emptyBuffModifiers, type BuffModifiers, type DamageContext } from "./damage";
+import { resolveDamage, emptyBuffModifiers, type BuffModifiers, type DamageContext } from "./damage";
 import {
   resolveMagicAttachment, resolvePhysicalAnomaly, resolveStagger,
   ATTACHMENT_DURATION, BREAK_MAX_STACKS, BREAK_DURATION,
@@ -136,6 +136,11 @@ interface EffectDamage {
    *  (attack/skill/link/ultimate/allSkill). Used for magic anomaly trigger
    *  damage — anomalies are not classified as skills. */
   skipSourceTypeBonus?: boolean;
+  /** When true, mark the emitted DamageEvent as trigger-produced. Used by the
+   *  damage-calc page to group these damages under their own source name
+   *  (e.g. "法术爆发") rather than mixing with the triggering hit's main damage. */
+  fromTrigger?: boolean;
+  triggerName?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -183,16 +188,25 @@ export interface EnemyConfig {
 
 /**
  * Evaluate a string-form condition against the current enemy state.
- * Unknown conditions treat as met so misspelled conditions don't silently skip.
+ * Unknown conditions return false + warn — misspelled names should NOT silently
+ * pass through (was the old behavior, footgun: every typo became "always apply").
+ * Aligned with `triggers.ts:evalCondition` which also defaults to false.
  * Used by Phase 1 effect gating and the `hit_mark` projection.
  */
+const _warnedEffectConditions = new Set<string>();
 function evaluateEffectCondition(cond: string, enemy: EnemyState): boolean {
   switch (cond) {
     case "enemy_has_break":          return enemy.breakStacks > 0;
     case "enemy_not_has_break":      return enemy.breakStacks <= 0;
     case "enemy_has_attachment":     return enemy.attachment.element !== null;
     case "enemy_not_has_attachment": return enemy.attachment.element === null;
-    default: return true;
+    default:
+      if (!_warnedEffectConditions.has(cond)) {
+        _warnedEffectConditions.add(cond);
+        // eslint-disable-next-line no-console
+        console.warn(`[V2 effect condition] unknown condition "${cond}" — treated as false (effect skipped). Check spelling.`);
+      }
+      return false;
   }
 }
 
@@ -545,18 +559,39 @@ export function simulate(
   }
 
   // ── Collect all hits globally ──
-  // Entries are either real hits (kind omitted / "hit") or variant-selection markers.
-  // Markers exist for placed skills with variants; Phase B evaluates the variant at
-  // marker time (skill startTime) against live enemy state (reflecting all earlier hits'
-  // state changes), then hot-patches the remaining hits of the action if a variant wins.
+  // Entries are real hits (kind omitted / "hit"), variant-selection markers, or
+  // action-start markers. Markers exist for placed skills; Phase B evaluates them
+  // at marker time (= placed.startTime) against live enemy/SP state which by that
+  // point already reflects all earlier-time hits' state changes (the entire reason
+  // for the two-phase model — see CLAUDE.md "Hit Execution Model").
+  //
+  // Sort order at the same timestamp: variantMarker → actionStart → real hits.
+  // Variant marker fires first to potentially swap in enhanced hits + revise the
+  // effective skill. actionStart marker then sees the correct (variant-applied)
+  // skill and runs SP/gauge/CD validation + cost consumption + window registration.
+  // Real hits land last.
+  //
+  // SP / gauge / CD / execution validation + their consumption / state writes all
+  // live on the actionStart marker handler (B6 fix) — so they observe the SP state
+  // as it actually evolves on the timeline, including hit-level sp_restore from
+  // earlier-time hits. Phase A only does interrupt + main-control bookkeeping
+  // (which is placement-time logic, independent of hit-level state).
   interface GlobalHit {
-    kind?: "hit" | "variantMarker";
+    kind?: "hit" | "variantMarker" | "actionStart";
     hit: Hit; hitTime: number; hitIdx: number;
     actorId: string; actionId: string; build: CharacterBuild; skill: Skill;
     selectedVariant: SkillVariant | null;
     placed?: PlacedSkill;
+    /** For actionStart markers: was this an attack auto-converted to execution? */
+    autoConvertedToExecution?: boolean;
   }
   const globalHits: GlobalHit[] = [];
+
+  // Effective Skill per action, populated by variant marker (when a variant wins).
+  // actionStart marker handler reads from here to validate / consume / register
+  // windows against the *post-variant* skill. Falls back to the marker's own skill
+  // (Phase A's auto-converted or base) when no variant won.
+  const effectiveSkillByAction = new Map<string, Skill>();
 
   // ── Helper: sweep expired stack buffs for all actors and emit events ──
   function sweepStackBuffExpiry(time: number) {
@@ -676,84 +711,14 @@ export function simulate(
       activeAct.endTime = time;
     }
 
-    // ── 0b. Condition check (validation mode) ──
-    if (validate) {
-      // SP check
-      if (skill.spCost > 0) {
-        const currentTotal = sp.getTrueSP() + sp.getRefundSP();
-        if (currentTotal < skill.spCost - 0.01) {
-          validationError = {
-            actorId, actionId, time,
-            code: "ISSUE_SP_INSUFFICIENT",
-            message: `SP不足: 需要${skill.spCost}, 当前${currentTotal.toFixed(1)}`,
-          };
-          break;
-        }
-      }
-      // Gauge check (ultimate)
-      if (skill.gaugeCost && skill.gaugeCost > 0) {
-        const gauge = gauges.get(actorId);
-        const current = gauge?.getGauge() || 0;
-        const max = gauge?.getMax() || 0;
-        if (current < max - 0.01) {
-          validationError = {
-            actorId, actionId, time,
-            code: "ISSUE_GAUGE_INSUFFICIENT",
-            message: `终结技能量不足: 需要${max}, 当前${current.toFixed(0)}`,
-          };
-          break;
-        }
-      }
-      // Execution validation (only for manually placed executions, not auto-converted attacks)
-      if (skill.type === "execution" && !autoConvertedToExecution) {
-        const scan = isInStaggerWindow(time);
-        if (!scan.isStaggered) {
-          validationError = {
-            actorId, actionId, time,
-            code: "ISSUE_NOT_STAGGERED",
-            message: `处决失败: 敌人未处于失衡状态`,
-          };
-          break;
-        }
-        if (executionUsedInWindow.has(scan.windowStart)) {
-          validationError = {
-            actorId, actionId, time,
-            code: "ISSUE_EXECUTION_USED",
-            message: `处决失败: 本次失衡已触发过处决`,
-          };
-          break;
-        }
-        executionUsedInWindow.add(scan.windowStart);
-      }
-      // Per-skill CD check (link / skill / ultimate — any skill with cooldown > 0).
-      if (skill.cooldown > 0) {
-        const cdExpiry = cooldowns.get(cdKey(actorId, skill.id)) || 0;
-        if (time < cdExpiry - 0.001) {
-          const typeLabel = skill.type === "link" ? "连携技" : skill.type === "ultimate" ? "终结技" : skill.type === "skill" ? "战技" : "技能";
-          validationError = {
-            actorId, actionId, time,
-            code: "ISSUE_COOLDOWN_ACTIVE",
-            message: `${typeLabel}冷却中: ${(cdExpiry - time).toFixed(1)}s后可用`,
-          };
-          break;
-        }
-      }
-    }
-
-    // Track this action as active (for interrupt checks on subsequent actions)
+    // Track this action as active (for interrupt checks on subsequent actions).
+    // endTime uses base.duration here — variant-extended duration is not reflected
+    // in activeActions (B4 sub-issue: subsequent placed inside variant tail won't
+    // be treated as interrupts). Acceptable trade-off; revisit if it bites.
     activeActions.set(actorId, { placed, skill, startTime: time, endTime: time + skill.duration });
 
-    // ── 1. Variant selection (deferred to Phase B when placed has variants) ──
-    // Rationale: variant conditions (stackBuff / enemyAnomaly / triggerData) depend on
-    // state that only gets modified by hit effects in Phase B. Evaluating here would see
-    // the initial state, missing updates from earlier-scheduled skills' hits.
-    // We just drop a marker at startTime; Phase B will do the real selection, buff consume,
-    // applyVariant, and hot-patch the subsequent hits for this action.
-    let selectedVariant: SkillVariant | null = null;
+    // ── 1. Variant selection marker (Phase B evaluates variant against live state) ──
     if (placed.variants?.length) {
-      // Push marker; marker's skill.hits stays empty so Phase A hit collection below
-      // skips it naturally (loop iterates skill.hits of base skill, but marker uses a
-      // synthetic zero-offset carrier).
       globalHits.push({
         kind: "variantMarker",
         hit: { offset: 0, checkpointIndex: 0, damage: null, effects: [], standardLogic: false },
@@ -765,103 +730,34 @@ export function simulate(
       });
     }
 
-    // ── 2. Action start ──
-    emit({
-      type: "action_start", time, actorId, actionId,
-      skillType: skill.type,
-      variantId: selectedVariant?.id,
+    // ── 2. actionStart marker — Phase B handles emit action_start, validation,
+    //       SP/gauge consumption, ult window + cooldowns set. SP/gauge state at
+    //       marker time reflects all earlier-time hits' sp_restore (B6 fix).
+    globalHits.push({
+      kind: "actionStart",
+      hit: { offset: 0, checkpointIndex: 0, damage: null, effects: [], standardLogic: false },
+      hitTime: time,
+      hitIdx: -1,
+      actorId, actionId, build, skill,
+      selectedVariant: null,
+      placed,
+      autoConvertedToExecution,
     });
-    // Fire skill_cast triggers at action start, out-of-hit. Trigger actions
-    // resolve inline (legacy fireTriggers path) — they don't participate in
-    // the hit's effectDamages/slot pipeline.
-    {
-      const castState = buildTriggerState(actorId, time);
-      fireTriggers(
-        { type: "action_start", time, sourceActorId: actorId, data: { actionType: skill.type, actionId } },
-        castState, actorId, actionId, time, build,
-      );
-    }
-
-    // SP cost
-    if (skill.spCost > 0) {
-      const consumed = sp.consume(skill.spCost);
-      const snap = sp.snapshot();
-      emit({
-        type: "sp_change", time, actorId, change: -skill.spCost,
-        spType: consumed.refundSPConsumed > 0 ? "refund" : "true",
-        currentTrueSP: snap.trueSP, currentRefundSP: snap.refundSP, currentTotal: snap.total,
-        reason: "skill_cost", sourceId: actionId,
-      });
-
-      // Gauge charge from trueSP consumed → all actors (unless gaugeFromSelfOnly)
-      if (consumed.trueSPConsumed > 0) {
-        for (const [aid, gauge] of gauges) {
-          const actorBuild = buildMap.get(aid);
-          if (!actorBuild) continue;
-          // gaugeFromSelfOnly: skip gauge from other actors' SP consumption
-          if (actorBuild.gaugeFromSelfOnly && aid !== actorId) continue;
-          const charge = computeGaugeChargeFromSP(consumed.trueSPConsumed, actorBuild.stats.ultChargeEff);
-          const actual = gauge.modify(charge, time);
-          if (actual !== 0) {
-            emit({
-              type: "gauge_change", time, actorId: aid,
-              change: actual, gauge: gauge.getGauge(),
-              reason: "sp_consumption",
-            });
-          }
-        }
-      }
-
-      // Regen pause
-      sp.pauseRegenUntil(time + 0.5);
-    }
-
-    // Gauge cost (ultimate)
-    if (skill.gaugeCost && skill.gaugeCost > 0) {
-      const gauge = gauges.get(actorId);
-      if (gauge) {
-        const consumed = gauge.consumeForUltimate(skill.gaugeCost);
-        emit({
-          type: "gauge_change", time, actorId,
-          change: -consumed, gauge: gauge.getGauge(),
-          reason: "ultimate_cast",
-        });
-      }
-    }
-
-    // Register ultimate enhancement window
-    if (skill.type === "ultimate") {
-      // Enhancement window starts after skill duration
-      // (simplified: start = startTime, end = startTime + duration)
-      // The actual enhancement period is handled by the UI's enhancement time
-      // For now, mark the entire skill duration as ultimate active
-      const enhEnd = startTime + skill.duration;
-      ultWindows.push({ actorId, start: startTime, end: enhEnd });
-      // Block gauge during ultimate
-      const gauge = gauges.get(actorId);
-      gauge?.addBlockWindow(startTime, enhEnd);
-    }
-
-
 
     // ── 3. Collect all hits (interrupt filtering deferred to Phase B) ──
     for (let hitIdx = 0; hitIdx < skill.hits.length; hitIdx++) {
       const hit = skill.hits[hitIdx];
       const hitTime = startTime + hit.offset;
-      globalHits.push({ hit, hitTime, hitIdx, actorId, actionId, build, skill, selectedVariant });
+      globalHits.push({ hit, hitTime, hitIdx, actorId, actionId, build, skill, selectedVariant: null });
     }
 
-    // ── 4. Track action end + per-skill cooldown (action_end emitted after Phase A) ──
+    // ── 4. Track action end (cooldowns.set moved to actionStart marker so it
+    //       reflects variant.cooldown / variant.duration when applicable.
+    //       actionEndRecords default to base; variant marker revises if variant won.)
     const endTime = startTime + skill.duration;
-
-    if (skill.cooldown > 0) {
-      const effCd = effectiveCooldown(skill, build);
-      cooldowns.set(cdKey(actorId, skill.id), endTime + effCd);
-    }
-
     actionEndRecords.set(actionId, {
       actionId, actorId, naturalEnd: endTime,
-      skillType: skill.type, variantId: selectedVariant?.id,
+      skillType: skill.type, variantId: undefined,
       displayDuration: skill.displayDuration,
       hitOffsets: skill.hits.map(h => h.offset),
     });
@@ -871,12 +767,16 @@ export function simulate(
   // Phase B: Process all hits globally sorted by absolute time
   // ═════════════════════════════════════════════════════════════════
 
-  // Sort: time ascending, variant markers before real hits at the same timestamp.
+  // Sort: time ascending. At the same timestamp, ordering is:
+  //   variantMarker (0) → actionStart (1) → real hits (2)
+  // Variant marker fires first so it can splice-in enhanced hits and publish the
+  // effective skill to effectiveSkillByAction. actionStart marker reads the
+  // (possibly variant-enhanced) skill, validates SP/gauge/CD/execution, consumes,
+  // registers ult window + cooldowns. Real hits land last.
+  const sortKey = (g: GlobalHit) => g.kind === "variantMarker" ? 0 : g.kind === "actionStart" ? 1 : 2;
   globalHits.sort((a, b) => {
     if (a.hitTime !== b.hitTime) return a.hitTime - b.hitTime;
-    if (a.kind === "variantMarker" && b.kind !== "variantMarker") return -1;
-    if (a.kind !== "variantMarker" && b.kind === "variantMarker") return 1;
-    return 0;
+    return sortKey(a) - sortKey(b);
   });
 
   // Track which actions have been seen (for consumeOnAction first-hit detection)
@@ -926,12 +826,17 @@ export function simulate(
         }
 
         const enhanced = applyVariant(baseSkill, selected);
+        // Publish enhanced skill so the upcoming actionStart marker can use
+        // variant-enhanced cooldown/duration/spCost when validating + setting CDs.
+        effectiveSkillByAction.set(markerActionId, enhanced);
 
         // Splice out base hits of this action that haven't been processed yet
         // (i.e. sit at indices > gIdx), then insert variant hits sorted by time.
+        // KEEP variantMarker / actionStart entries — they're not "hits" to swap.
         const removed: number[] = [];
         for (let j = gIdx + 1; j < globalHits.length; j++) {
-          if (globalHits[j].kind !== "variantMarker" && globalHits[j].actionId === markerActionId) {
+          const e = globalHits[j];
+          if (e.kind !== "variantMarker" && e.kind !== "actionStart" && e.actionId === markerActionId) {
             removed.push(j);
           }
         }
@@ -977,6 +882,173 @@ export function simulate(
           stacks: typeof c.stacks === "number" ? c.stacks : 0,
         })),
       });
+
+      continue;
+    }
+
+    // ── actionStart marker handling (B6 fix) ────────────────────────────
+    // SP/gauge/CD/execution validation + cost consumption + ult window registration
+    // all live here. By the time this marker fires, every earlier-time hit's
+    // sp_restore / gauge_gain has already been processed (Phase B is strictly
+    // time-sorted), so SP / gauge state observed here matches the player's
+    // intuition: "at this skill's startTime, can I afford this skill?"
+    if (entry.kind === "actionStart") {
+      const { actorId: aActorId, actionId: aActionId, build: aBuild, autoConvertedToExecution: aAuto } = entry;
+      const time = entry.hitTime;
+      // Resolve effective skill: variant-enhanced if a variant won at the
+      // same-timestamp variant marker, otherwise the marker's own skill (Phase A's
+      // auto-converted execution skill or the base placed.skill).
+      const effSkill = effectiveSkillByAction.get(aActionId) ?? entry.skill;
+
+      // Advance SP regen + sweep stack buff expiry to this exact moment.
+      sp.advanceRegen(time);
+      sweepStackBuffExpiry(time);
+
+      // ── Validation (validateConditions=true mode) ──
+      if (validate) {
+        // SP check
+        if (effSkill.spCost > 0) {
+          const currentTotal = sp.getTrueSP() + sp.getRefundSP();
+          if (currentTotal < effSkill.spCost - 0.01) {
+            validationError = {
+              actorId: aActorId, actionId: aActionId, time,
+              code: "ISSUE_SP_INSUFFICIENT",
+              message: `SP不足: 需要${effSkill.spCost}, 当前${currentTotal.toFixed(1)}`,
+            };
+            break;
+          }
+        }
+        // Gauge check (ultimate)
+        if (effSkill.gaugeCost && effSkill.gaugeCost > 0) {
+          const gauge = gauges.get(aActorId);
+          const current = gauge?.getGauge() || 0;
+          const max = gauge?.getMax() || 0;
+          if (current < max - 0.01) {
+            validationError = {
+              actorId: aActorId, actionId: aActionId, time,
+              code: "ISSUE_GAUGE_INSUFFICIENT",
+              message: `终结技能量不足: 需要${max}, 当前${current.toFixed(0)}`,
+            };
+            break;
+          }
+        }
+        // Execution validation (only manually placed executions, not auto-converted)
+        if (effSkill.type === "execution" && !aAuto) {
+          const scan = isInStaggerWindow(time);
+          if (!scan.isStaggered) {
+            validationError = {
+              actorId: aActorId, actionId: aActionId, time,
+              code: "ISSUE_NOT_STAGGERED",
+              message: `处决失败: 敌人未处于失衡状态`,
+            };
+            break;
+          }
+          if (executionUsedInWindow.has(scan.windowStart)) {
+            validationError = {
+              actorId: aActorId, actionId: aActionId, time,
+              code: "ISSUE_EXECUTION_USED",
+              message: `处决失败: 本次失衡已触发过处决`,
+            };
+            break;
+          }
+          executionUsedInWindow.add(scan.windowStart);
+        }
+        // Per-skill CD check
+        if (effSkill.cooldown > 0) {
+          const cdExpiry = cooldowns.get(cdKey(aActorId, effSkill.id)) || 0;
+          if (time < cdExpiry - 0.001) {
+            const typeLabel = effSkill.type === "link" ? "连携技" : effSkill.type === "ultimate" ? "终结技" : effSkill.type === "skill" ? "战技" : "技能";
+            validationError = {
+              actorId: aActorId, actionId: aActionId, time,
+              code: "ISSUE_COOLDOWN_ACTIVE",
+              message: `${typeLabel}冷却中: ${(cdExpiry - time).toFixed(1)}s后可用`,
+            };
+            break;
+          }
+        }
+      }
+
+      // ── Emit action_start (with variantId if a variant won) ──
+      const variantIdForStart = effectiveSkillByAction.has(aActionId)
+        ? actionEndRecords.get(aActionId)?.variantId
+        : undefined;
+      emit({
+        type: "action_start", time, actorId: aActorId, actionId: aActionId,
+        skillType: effSkill.type,
+        variantId: variantIdForStart,
+      });
+
+      // Fire skill_cast triggers at action start, out-of-hit. Trigger actions
+      // resolve inline (legacy fireTriggers path) — they don't participate in
+      // the hit's effectDamages/slot pipeline.
+      {
+        const castState = buildTriggerState(aActorId, time);
+        fireTriggers(
+          { type: "action_start", time, sourceActorId: aActorId, data: { actionType: effSkill.type, actionId: aActionId } },
+          castState, aActorId, aActionId, time, aBuild,
+        );
+      }
+
+      // ── SP cost ──
+      if (effSkill.spCost > 0) {
+        const consumed = sp.consume(effSkill.spCost);
+        const snap = sp.snapshot();
+        emit({
+          type: "sp_change", time, actorId: aActorId, change: -effSkill.spCost,
+          spType: consumed.refundSPConsumed > 0 ? "refund" : "true",
+          currentTrueSP: snap.trueSP, currentRefundSP: snap.refundSP, currentTotal: snap.total,
+          reason: "skill_cost", sourceId: aActionId,
+        });
+
+        // Gauge charge from trueSP consumed → all actors (unless gaugeFromSelfOnly)
+        if (consumed.trueSPConsumed > 0) {
+          for (const [aid, gauge] of gauges) {
+            const actorBuild = buildMap.get(aid);
+            if (!actorBuild) continue;
+            if (actorBuild.gaugeFromSelfOnly && aid !== aActorId) continue;
+            const charge = computeGaugeChargeFromSP(consumed.trueSPConsumed, actorBuild.stats.ultChargeEff);
+            const actual = gauge.modify(charge, time);
+            if (actual !== 0) {
+              emit({
+                type: "gauge_change", time, actorId: aid,
+                change: actual, gauge: gauge.getGauge(),
+                reason: "sp_consumption",
+              });
+            }
+          }
+        }
+
+        sp.pauseRegenUntil(time + 0.5);
+      }
+
+      // ── Gauge cost (ultimate) ──
+      if (effSkill.gaugeCost && effSkill.gaugeCost > 0) {
+        const gauge = gauges.get(aActorId);
+        if (gauge) {
+          const consumed = gauge.consumeForUltimate(effSkill.gaugeCost);
+          emit({
+            type: "gauge_change", time, actorId: aActorId,
+            change: -consumed, gauge: gauge.getGauge(),
+            reason: "ultimate_cast",
+          });
+        }
+      }
+
+      // ── Register ultimate enhancement window + gauge block window ──
+      // (uses variant-enhanced duration when a variant won — B4 fix for ult)
+      if (effSkill.type === "ultimate") {
+        const enhEnd = time + effSkill.duration;
+        ultWindows.push({ actorId: aActorId, start: time, end: enhEnd });
+        const gauge = gauges.get(aActorId);
+        gauge?.addBlockWindow(time, enhEnd);
+      }
+
+      // ── Set per-skill cooldown (uses variant.cooldown + variant.duration — B4 fix) ──
+      if (effSkill.cooldown > 0) {
+        const endTime = time + effSkill.duration;
+        const effCd = effectiveCooldown(effSkill, aBuild);
+        cooldowns.set(cdKey(aActorId, effSkill.id), endTime + effCd);
+      }
 
       continue;
     }
@@ -1079,6 +1151,19 @@ export function simulate(
         afterSkillDamage:  [] as SlotItem[],
       };
 
+      // ── Hit-start enemy snapshot (B3 fix) ──
+      // Freeze the enemy state values that effect `scaleBy` reads care about:
+      // breakStacks, attachment.{element,stacks}. All hit.effects (including
+      // those drained from afterEffectDamage / afterSkillDamage slots) read
+      // this snapshot for scaleBy resolution, so effect ordering inside a hit
+      // does not change scale values. (Hit damage's own MultiplierRef.scaleBy
+      // continues to read live `enemy` to preserve patterns like 别礼 link
+      // hit2 that depend on post-effect / pre-consume attachment counts.)
+      const enemySnapshot = {
+        attachment: { element: enemy.attachment.element, stacks: enemy.attachment.stacks, expiresAt: enemy.attachment.expiresAt },
+        breakStacks: enemy.breakStacks,
+      };
+
       // ── Helper: route an effect to its slot or call processEffect now.
       //           allowDefer=false prevents re-queuing when draining a slot.
       const dispatchEffect = (effect: HitEffect, allowDefer: boolean, eventContext?: EventContext, sourceRef?: TriggerSourceRef) => {
@@ -1087,7 +1172,7 @@ export function simulate(
           if (deferTo === "afterEffectDamage") { slotQueues.afterEffectDamage.push({ effect, eventContext, sourceRef }); return; }
           if (deferTo === "afterSkillDamage")  { slotQueues.afterSkillDamage.push({ effect, eventContext, sourceRef });  return; }
         }
-        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type, eventContext, sourceRef);
+        processEffect(effect, actorId, actionId, hitTime, hitIdx, build, emit, effectDamages, deferredActions, hitTriggerEvents, skill.type, eventContext, sourceRef, enemySnapshot);
       };
 
       // ── Helper: resolve everything currently queued in effectDamages. ──
@@ -1131,6 +1216,8 @@ export function simulate(
             element: eDmg.element, school: eDmg.school,
             actionId: eDmg.actionId, hitIndex: hitIdx,
             zones: result.zones,
+            ...(eDmg.fromTrigger ? { fromTrigger: true } : {}),
+            ...(eDmg.triggerName ? { triggerName: eDmg.triggerName } : {}),
           });
         }
       };
@@ -1554,8 +1641,17 @@ export function simulate(
     /** When this effect is a trigger action, the owning trigger's source ref —
      *  propagated onto BuffEvent so the UI can render per-source icons. */
     triggerSourceRef?: TriggerSourceRef,
+    /** Read-only snapshot of enemy state captured at hit pipeline start.
+     *  When provided, scaleBy resolvers ("breakStacks" / "attachmentStacks")
+     *  read this instead of the live enemy. Lets effect ordering inside a
+     *  single hit not affect what scaleBy values are read — e.g. a slam that
+     *  consumes break does not zero out a sibling gauge_gain { scaleBy:
+     *  "breakStacks" } regardless of effect order. Trigger actions (called
+     *  from fireTriggers) pass undefined and read live state. */
+    enemySnapshot?: { attachment: { element: MagicElement | null; stacks: number; expiresAt: number }; breakStacks: number },
   ): void {
-    const resolveCtx: ResolveContext = { resolveRef, enemy, event: eventContext };
+    const enemyView = enemySnapshot ?? enemy;
+    const resolveCtx: ResolveContext = { resolveRef, enemy: enemyView, event: eventContext };
     // Local shorthand for migrating old "p.foo ?? resolveRef(p.fooRef)" patterns.
     const rv = (source: ValueSource | undefined, fallback: number = 0): number =>
       resolveValue(source, actorId, resolveCtx, fallback);
@@ -1563,10 +1659,11 @@ export function simulate(
     void rv;
     switch (effect.type) {
       case "magic_attachment": {
-        const p = effect.params as { element: DamageElement; stacks?: number; delay?: number };
+        // hit.offset 已经是命中时间（脱手→飞行→命中 全部折算到 hit.offset）。
+        // 远程附着角色把 hit.offset 设成命中点即可，不应额外用 delay。
+        const p = effect.params as { element: DamageElement; stacks?: number };
         const magicEl = DAMAGE_ELEMENT_TO_MAGIC[p.element];
         if (!magicEl) break;
-        const attachTime = time + (p.delay || 0);
         const stacks = p.stacks || 1;
         for (let i = 0; i < stacks; i++) {
           const outcomes = resolveMagicAttachment(
@@ -1577,30 +1674,36 @@ export function simulate(
               const prev = enemy.attachment.stacks;
               enemy.attachment.element = outcome.element;
               enemy.attachment.stacks = outcome.newStacks;
-              enemy.attachment.expiresAt = attachTime + ATTACHMENT_DURATION;
+              enemy.attachment.expiresAt = time + ATTACHMENT_DURATION;
               emit({
-                type: "attachment_change", time: attachTime, sourceId: actorId,
+                type: "attachment_change", time, sourceId: actorId,
                 element: outcome.element, stacks: outcome.newStacks,
                 prevElement: prev > 0 ? enemy.attachment.element : null, prevStacks: prev,
               });
               hitTriggerEvents?.push({
-                type: "attachment_applied", time: attachTime, sourceActorId: actorId,
+                type: "attachment_applied", time, sourceActorId: actorId,
                 data: { element: p.element, stacks: outcome.newStacks, actionType: skillType },
               });
             } else if (outcome.type === "burst") {
-              // Burst damage (magic burst)
+              // 法术爆发 — same conceptual category as 反应触发法术伤害: an
+              // attachment-system-derived damage, not classified as the
+              // triggering hit's own damage. Goes through the 11-zone pipeline
+              // with skipSourceTypeBonus (元素+学派增伤吃, 战技/普攻/终结增伤不吃).
+              // Tagged fromTrigger so the damage-calc page groups it under
+              // "法术爆发" (UI shows independent number, matching in-game).
               const artsPower = build.stats.originiumArtsPower;
               const burstMult = magicBurstMult(outcome.stacks, artsPower);
-              emit({
-                type: "damage", time: attachTime,
-                sourceId: actorId, targetId: "boss",
-                damage: Math.floor(computeEffectiveATK(build.buildStats, getBuffModifiers(actorId, time)) * burstMult),
-                multiplier: burstMult * 100, stagger: 0,
-                isCrit: false, element: p.element, school: "magic",
-                actionId, hitIndex,
+              effectDamages.push({
+                sourceId: actorId, actionId,
+                multiplier: burstMult, stagger: 0,
+                element: p.element, school: "magic", sourceType: skillType ?? "skill",
+                canCrit: true,
+                skipSourceTypeBonus: true,
+                fromTrigger: true,
+                triggerName: "法术爆发",
               });
               hitTriggerEvents?.push({
-                type: "magic_burst", time: attachTime, sourceActorId: actorId,
+                type: "magic_burst", time, sourceActorId: actorId,
                 data: { element: p.element, stacks: outcome.stacks, actionType: skillType },
               });
             } else if (outcome.type === "reaction") {
@@ -1609,7 +1712,7 @@ export function simulate(
               const prevStacks = enemy.attachment.stacks;
               enemy.attachment = { element: null, stacks: 0, expiresAt: 0 };
               emit({
-                type: "attachment_change", time: attachTime, sourceId: actorId,
+                type: "attachment_change", time, sourceId: actorId,
                 element: null, stacks: 0,
                 prevElement: prevEl, prevStacks,
               });
@@ -1618,10 +1721,10 @@ export function simulate(
               const level = outcome.anomalyLevel;
               const duration = getAnomalyDuration(anomalyType, level);
               enemy.anomalies[anomalyType] = {
-                active: true, level, expiresAt: attachTime + duration, sourceId: actorId,
+                active: true, level, expiresAt: time + duration, sourceId: actorId,
               };
               emit({
-                type: "anomaly_apply", time: attachTime,
+                type: "anomaly_apply", time,
                 anomalyType, level, sourceId: actorId, duration,
               });
               // 法术异常触发 instant damage — all four anomaly reactions fire this
@@ -1641,7 +1744,7 @@ export function simulate(
               // Conduction: apply magic fragility (spell vulnerability) debuff on the enemy.
               if (anomalyType === "conduction") {
                 const vuln = conductionVulnerability(level, artsPowerRxn);
-                enemy.conductionFragility = { value: vuln, expiresAt: attachTime + duration };
+                enemy.conductionFragility = { value: vuln, expiresAt: time + duration };
               }
               // Corrosion: apply time-accruing resist reduction.
               if (anomalyType === "corrosion") {
@@ -1650,12 +1753,12 @@ export function simulate(
                   immediate: cp.immediate,
                   perSecond: cp.perSecond,
                   maxValue: cp.maxValue,
-                  appliedAt: attachTime,
-                  expiresAt: attachTime + cp.duration,
+                  appliedAt: time,
+                  expiresAt: time + cp.duration,
                 };
               }
               hitTriggerEvents?.push({
-                type: "anomaly_applied", time: attachTime, sourceActorId: actorId,
+                type: "anomaly_applied", time, sourceActorId: actorId,
                 data: { anomalyType, level, actionType: skillType },
               });
               // Specific anomaly type trigger events
@@ -1666,7 +1769,7 @@ export function simulate(
               const specificAnomalyEvent = anomalyTypeMap[anomalyType];
               if (specificAnomalyEvent) {
                 hitTriggerEvents?.push({
-                  type: specificAnomalyEvent, time: attachTime, sourceActorId: actorId,
+                  type: specificAnomalyEvent, time, sourceActorId: actorId,
                   data: { anomalyType, level, actionType: skillType },
                 });
               }
@@ -1810,46 +1913,47 @@ export function simulate(
             if (dur > 0) expiresAt = time + dur;
           }
           const result = tracker.addStacks(p.buffType, p.stacks || 1, expiresAt);
-          emit({
-            type: "stack_change", time, actorId,
-            buffType: p.buffType,
-            stacks: result.current, prevStacks: result.prev,
-            reason: "effect_applied",
-          });
-          hitTriggerEvents?.push({
-            type: "stack_buff_gained", time, sourceActorId: actorId,
-            data: { buffType: p.buffType, stacks: result.current },
-          });
+          // Emit only when something actually changed: stacks moved OR group
+          // expiry got refreshed (refresh-on-already-max counts as a real
+          // state change and subsequent triggers should fire). Suppresses the
+          // old "phantom event when prev=current and no expiry change" case
+          // (B16(a) fix).
+          const stacksChanged = result.prev !== result.current;
+          if (stacksChanged || result.refreshed) {
+            emit({
+              type: "stack_change", time, actorId,
+              buffType: p.buffType,
+              stacks: result.current, prevStacks: result.prev,
+              reason: "effect_applied",
+            });
+            hitTriggerEvents?.push({
+              type: "stack_buff_gained", time, sourceActorId: actorId,
+              data: { buffType: p.buffType, stacks: result.current },
+            });
+          }
         }
         break;
       }
 
       case "stack_buff_consume": {
         const p = effect.params as { buffType: string; stacks: number | "all" };
-        // Find the actor who actually has this stack buff (may differ from current actorId)
-        let consumeActorId = actorId;
-        let consumeTracker = stackBuffs.get(actorId);
-        if (!consumeTracker || consumeTracker.getStacks(p.buffType) === 0) {
-          for (const [aid, t] of stackBuffs) {
-            if (t.getStacks(p.buffType) > 0) {
-              consumeActorId = aid;
-              consumeTracker = t;
-              break;
-            }
-          }
-        }
-        if (consumeTracker && consumeTracker.getStacks(p.buffType) > 0) {
+        // Per-actor: only consume from the source actor's own tracker. Cross-actor
+        // fallback was removed — multiple actors may legitimately hold the same
+        // stack buff type (e.g. two characters with the same anima); falling
+        // through to a sibling tracker stole their stacks (B13 fix).
+        const tracker = stackBuffs.get(actorId);
+        if (tracker && tracker.getStacks(p.buffType) > 0) {
           const result = p.stacks === "all"
-            ? consumeTracker.consumeAll(p.buffType)
-            : consumeTracker.consumeStacks(p.buffType, p.stacks);
+            ? tracker.consumeAll(p.buffType)
+            : tracker.consumeStacks(p.buffType, p.stacks);
           emit({
-            type: "stack_change", time, actorId: consumeActorId,
+            type: "stack_change", time, actorId,
             buffType: p.buffType,
             stacks: result.current, prevStacks: result.prev,
             reason: "effect_consumed",
           });
           hitTriggerEvents?.push({
-            type: "stack_buff_consumed", time, sourceActorId: consumeActorId,
+            type: "stack_buff_consumed", time, sourceActorId: actorId,
             data: { buffType: p.buffType, consumed: result.prev - result.current },
           });
         }
@@ -1886,10 +1990,12 @@ export function simulate(
         const gauge = gauges.get(actorId);
         if (gauge) {
           let baseAmount: number;
+          // Read from enemyView (hit-start snapshot when present) so a sibling
+          // slam/armorBreak earlier in the same hit doesn't zero the scale.
           if (p.scaleBy === "attachmentStacks") {
-            baseAmount = (p.amountPerLayer ?? 0) * enemy.attachment.stacks;
+            baseAmount = (p.amountPerLayer ?? 0) * enemyView.attachment.stacks;
           } else if (p.scaleBy === "breakStacks") {
-            baseAmount = (p.amountPerLayer ?? 0) * enemy.breakStacks;
+            baseAmount = (p.amountPerLayer ?? 0) * enemyView.breakStacks;
           } else {
             baseAmount = p.amount ?? 0;
           }
@@ -1971,7 +2077,11 @@ export function simulate(
         // Condition gating is handled in the Phase 1 caller via
         // `evaluateEffectCondition` so effect dispatchers stay uniform.
 
-        const duration = rv(p.duration ?? p.durationRef, 0) || 15;
+        // Distinguish "user omitted duration" (→ default 15s) from "user explicitly
+        // wrote 0" (→ permanent per BuffManager spec). Old `|| 15` short-circuited
+        // 0 to 15. (B17 fix.)
+        const durationSrc = p.duration ?? p.durationRef;
+        const duration = durationSrc !== undefined ? rv(durationSrc, 0) : 15;
 
         // If this is a consumeOnAction charge buff, register it
         if (p.consumeOnAction?.length && p.activateStat && p.activateZone) {
@@ -2047,19 +2157,24 @@ export function simulate(
             });
           }
         } else if (targetStr === "team" || targetStr === "others") {
+          // Emit one buff_apply per receiving actor so per-actor projections
+          // see exactly the same number of buffs they actually have. (B19 fix:
+          // previously a single "team"-targeted event covered N actors, asymmetric
+          // with self/enemy paths.)
           for (const [aid, mgr] of actorBuffs) {
             if (targetStr === "others" && aid === actorId) continue;
             const cloneDef = { ...buffDef, target: "self" as BuffTarget };
             mgr.apply(cloneDef, actorId, time);
+            emit({
+              type: "buff_apply", time, actorId, targetId: aid,
+              buffId: p.buffId, buffName: p.buffId, target: targetStr as any,
+              stacks: mgr.getStacks(p.buffId, time),
+              duration, reason: "effect",
+              stat: p.stat, zone: p.zone,
+              sourceRef: inferredSourceRef,
+              fromTrigger,
+            });
           }
-          emit({
-            type: "buff_apply", time, actorId, targetId: targetStr,
-            buffId: p.buffId, buffName: p.buffId, target: targetStr as any,
-            stacks: 1, duration, reason: "effect",
-            stat: p.stat, zone: p.zone,
-            sourceRef: inferredSourceRef,
-            fromTrigger,
-          });
         } else {
           // "self" / "mainControl" / "trigger_source" → apply to source actor
           const mgr = actorBuffs.get(actorId);

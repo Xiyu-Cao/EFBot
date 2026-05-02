@@ -80,40 +80,44 @@ export function artsPowerStaggerMult(artsPower: number): number {
 }
 
 // ── Specific anomaly damage multipliers ──
+// All return the multiplier in PERCENT form (matching Skill.damage.multiplier
+// convention: 140 means 140% = ATK × 1.4). damage.ts:resolveDamage divides by 100
+// to get the raw multiplier. Returning percent here keeps every effectDamages.push
+// callsite in the kernel using a single, consistent unit.
 
-/** Magic burst (法术爆发) damage multiplier. */
+/** Magic burst (法术爆发) damage multiplier (%). */
 export function magicBurstMult(level: number, artsPower: number): number {
-  return 1.6 * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 160 * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
-/** Spell anomaly trigger (法术异常触发) damage multiplier. */
+/** Spell anomaly trigger (法术异常触发) damage multiplier (%). */
 export function spellAnomalyTriggerMult(level: number, artsPower: number): number {
-  return 0.8 * (1 + level) * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 80 * (1 + level) * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
-/** Burning DoT per tick (every 1s for 10s). */
+/** Burning DoT per tick (%). */
 export function burningTickMult(level: number, artsPower: number): number {
-  return 0.12 * (1 + level) * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 12 * (1 + level) * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
-/** Ice shatter (碎冰) damage multiplier. */
+/** Ice shatter (碎冰) damage multiplier (%). */
 export function iceShatterMult(level: number, artsPower: number): number {
-  return 1.2 * (1 + level) * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 120 * (1 + level) * spellLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
-/** Launch/knockdown (击飞/倒地) damage multiplier. */
+/** Launch/knockdown (击飞/倒地) damage multiplier (%). */
 export function launchKnockdownMult(level: number, artsPower: number): number {
-  return 1.2 * physLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 120 * physLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
-/** Slam (猛击) damage multiplier. stacks = break stacks consumed. */
+/** Slam (猛击) damage multiplier (%). stacks = break stacks consumed. */
 export function slamMult(stacks: number, level: number, artsPower: number): number {
-  return 1.5 * (1 + stacks) * physLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 150 * (1 + stacks) * physLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
-/** Armor break (碎甲) damage multiplier. stacks = break stacks consumed. */
+/** Armor break (碎甲) damage multiplier (%). stacks = break stacks consumed. */
 export function armorBreakMult(stacks: number, level: number, artsPower: number): number {
-  return 0.5 * (1 + stacks) * physLevelCoef(level) * artsPowerDamageMult(artsPower);
+  return 50 * (1 + stacks) * physLevelCoef(level) * artsPowerDamageMult(artsPower);
 }
 
 // ── Debuff value formulas ──

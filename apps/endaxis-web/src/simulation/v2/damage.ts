@@ -326,8 +326,10 @@ export function resolveDamage(ctx: DamageContext): DamageResult {
   const fragilityZone = 1 + fragilityTotal / 100;
 
   // Zone 8: Resistance (抗性区)
+  // baseResist (敌人抗性) ≤ 100. resistReduction (削抗) 无上限。
+  // 下限 0.1 = 90% 减伤上限（游戏机制）。上限不夹（莱万汀对 0 抗目标削抗也算正向加成）。
   const baseResist = getBaseResist(target, element, school);
-  const resistanceZone = 1 + target.resistReduction * 0.01 - baseResist * 0.01;
+  const resistanceZone = Math.max(0.1, 1 + target.resistReduction * 0.01 - baseResist * 0.01);
 
   // Zone 9: Stagger (失衡区)
   const staggerZone = target.isStaggered ? 1.3 : 1;

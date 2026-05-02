@@ -77,8 +77,16 @@ export class TriggerProcessor {
 
   /**
    * Register a passive trigger for an actor.
+   * Validates that cooldownDuration is paired with cooldownId — without an id
+   * the ICD silently fails (every event re-fires). Warn loudly when misconfigured.
    */
   register(ownerId: string, trigger: PassiveTrigger): void {
+    if (trigger.cooldownDuration && !trigger.cooldownId) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[V2 trigger ${trigger.id}] cooldownDuration=${trigger.cooldownDuration} but cooldownId missing — ICD will not function. Add a cooldownId.`,
+      );
+    }
     this.triggers.push({ ownerId, trigger });
   }
 
