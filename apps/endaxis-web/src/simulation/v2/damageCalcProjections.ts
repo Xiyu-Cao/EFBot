@@ -82,6 +82,8 @@ export interface HitDamageDetail {
   source: HitSource;
   /** Optional 11-zone breakdown — present when kernel supplied it. */
   zones?: DamageZones;
+  /** Stable prob-event key for crit lock binding (undefined if damage can't crit). */
+  critEventKey?: string;
 }
 
 const PHYSICAL_TYPE_CN: Record<string, string> = {
@@ -212,6 +214,7 @@ export function projectHitDamageDetails(events: SimEvent[]): Map<string, HitDama
       triggerName: de.triggerName,
       source,
       zones: de.zones,
+      critEventKey: de.critEventKey,
     });
     byAction.set(de.actionId, list);
   }

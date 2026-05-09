@@ -21,6 +21,8 @@ import { resolveSourceIcons } from "./sourceIconResolver";
 // the times are already in real (freeze-shifted) coordinates.
 export interface BuffStatus {
   id: string;
+  /** Semantic buff id (from BuffBar.buffId) — used for detail lookup. */
+  buffId?: string;
   name: string;
   icon: string;
   color: string;
@@ -116,6 +118,7 @@ export function adaptBuffBars(
 
     const base: BuffStatus = {
       id: bar.id,
+      buffId: bar.buffId,
       name: meta?.name || bar.name,
       // Prefer explicit metadata icon; otherwise fall back to a generic icon
       // chosen from the buff's stat+zone (covers converter-generated weapon /
@@ -208,6 +211,7 @@ export function adaptStackBuffBars(
     if (meta?.teamBuff) {
       teamStackBuffs.push({
         id: bar.id,
+        buffId: bar.buffType,
         name: meta.name || bar.buffType,
         icon,
         color,

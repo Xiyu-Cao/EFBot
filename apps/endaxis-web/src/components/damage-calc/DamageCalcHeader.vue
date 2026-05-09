@@ -69,10 +69,22 @@ function fmtDmg(n) {
         结算视图
       </button>
       <button
+        v-if="state.probLockCount.value > 0"
+        class="lock-indicator"
+        @click="state.clearAllProbLocks()"
+        title="点击清空所有锁定"
+      >
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="11" width="16" height="9" rx="1.5"/>
+          <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+        </svg>
+        锁定 {{ state.probLockCount.value }} <span class="lock-clear-hint">×</span>
+      </button>
+      <button
         class="crit-mode-btn"
         :class="{ active: state.critMode.value === 'expected' }"
         @click="state.toggleCritMode()"
-        :title="state.critMode.value === 'expected' ? '期望暴击 — 概率加权' : '真实暴击 — 随机判定'"
+        :title="state.critMode.value === 'expected' ? '期望暴击 — 概率加权（被锁定的 hit 仍按锁定结算）' : '真实暴击 — 随机判定（被锁定的 hit 仍按锁定结算）'"
       >
         {{ state.critMode.value === 'expected' ? '期望暴击' : '真实暴击' }}
       </button>
@@ -205,6 +217,30 @@ function fmtDmg(n) {
   cursor: not-allowed;
   color: #888;
 }
+
+.lock-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(255, 215, 0, 0.08);
+  color: #ffd700;
+  border: 1px solid #c4a200;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.lock-indicator:hover {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: #ffd700;
+}
+.lock-clear-hint {
+  margin-left: 2px;
+  color: #999;
+  font-weight: 600;
+}
+.lock-indicator:hover .lock-clear-hint { color: #fff; }
 
 .crit-mode-btn {
   padding: 4px 12px;

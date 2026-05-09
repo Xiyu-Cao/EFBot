@@ -67,6 +67,29 @@ function fmtDmg(n) {
   if (n >= 1e4) return (n / 1e4).toFixed(1) + '万'
   return n.toLocaleString('zh-CN')
 }
+
+// ── Crit lock helpers ──
+// Per-damage lock UI:
+//  - Damage instances without critEventKey (canCrit=false) get no button.
+//  - Single-damage hit → show the button on the hit row.
+//  - Multi-damage hit → show on each damage sub-row; the hit-row column is empty
+//    (sub-row controls override).
+
+function lockState(key) {
+  return state.getProbLock(key) // null | "yes" | "no"
+}
+
+function lockTitle(s) {
+  if (s === 'yes') return '已锁定：必暴击 (点击切换为不暴击)'
+  if (s === 'no') return '已锁定：不暴击 (点击恢复默认)'
+  return '点击锁定为必暴击'
+}
+
+function onLockClick(key, ev) {
+  if (!key) return
+  ev.stopPropagation()
+  state.cycleProbLock(key)
+}
 </script>
 
 <template>
@@ -90,6 +113,7 @@ function fmtDmg(n) {
           <th class="col-element">元素</th>
           <th class="col-crit">暴击</th>
           <th class="col-stagger">失衡</th>
+          <th class="col-lock" title="锁定此 hit 的暴击结果">锁</th>
         </tr>
       </thead>
       <tbody>
@@ -123,13 +147,26 @@ function fmtDmg(n) {
               <span v-else class="crit-no">-</span>
             </td>
             <td class="col-stagger">{{ g.staggerTotal || '-' }}</td>
+            <td class="col-lock">
+              <button
+                v-if="g.damages.length === 1 && g.damages[0].critEventKey"
+                class="lock-btn"
+                :class="['state-' + (lockState(g.damages[0].critEventKey) || 'none')]"
+                :title="lockTitle(lockState(g.damages[0].critEventKey))"
+                @click="onLockClick(g.damages[0].critEventKey, $event)"
+              >
+                <template v-if="lockState(g.damages[0].critEventKey) === 'yes'">&#x2713;</template>
+                <template v-else-if="lockState(g.damages[0].critEventKey) === 'no'">&#x2715;</template>
+                <template v-else>&#9675;</template>
+              </button>
+            </td>
           </tr>
 
           <!-- ── Level-2 (when expanded) ── -->
           <template v-if="expandedGroups.has(g.key)">
             <!-- Single damage → skip sub-row and show zones directly -->
             <tr v-if="g.damages.length === 1" class="zone-row-wrapper">
-              <td colspan="6" class="zone-cell">
+              <td colspan="7" class="zone-cell">
                 <HitZoneBreakdown :hit="g.damages[0]" />
               </td>
             </tr>
@@ -157,9 +194,22 @@ function fmtDmg(n) {
                     {{ fmtDmg(d.damage) }}
                     <span v-if="d.isCrit" class="inline-crit">&#x2713;</span>
                   </td>
+                  <td class="col-lock">
+                    <button
+                      v-if="d.critEventKey"
+                      class="lock-btn"
+                      :class="['state-' + (lockState(d.critEventKey) || 'none')]"
+                      :title="lockTitle(lockState(d.critEventKey))"
+                      @click="onLockClick(d.critEventKey, $event)"
+                    >
+                      <template v-if="lockState(d.critEventKey) === 'yes'">&#x2713;</template>
+                      <template v-else-if="lockState(d.critEventKey) === 'no'">&#x2715;</template>
+                      <template v-else>&#9675;</template>
+                    </button>
+                  </td>
                 </tr>
                 <tr v-if="expandedDamages.has(g.key + ':' + di)" class="zone-row-wrapper">
-                  <td colspan="6" class="zone-cell sub">
+                  <td colspan="7" class="zone-cell sub">
                     <HitZoneBreakdown :hit="d" />
                   </td>
                 </tr>
@@ -317,6 +367,40 @@ function fmtDmg(n) {
   color: #999;
   width: 42px;
 }
+
+.col-lock {
+  text-align: center;
+  width: 28px;
+  padding: 2px 4px;
+}
+.lock-btn {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #444;
+  background: transparent;
+  border-radius: 3px;
+  color: #555;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0;
+}
+.lock-btn:hover { background: #333; border-color: #666; color: #aaa; }
+.lock-btn.state-yes {
+  color: #ffd700;
+  border-color: #ffd700;
+  background: rgba(255, 215, 0, 0.08);
+}
+.lock-btn.state-no {
+  color: #d65b5b;
+  border-color: #c44;
+  background: rgba(212, 91, 91, 0.08);
+}
+.lock-btn.state-none { /* default — already styled */ }
 
 .col-damage {
   font-family: 'JetBrains Mono', 'Consolas', monospace;

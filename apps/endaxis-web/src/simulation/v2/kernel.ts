@@ -223,6 +223,10 @@ export interface KernelConfig {
   validateConditions?: boolean;
   /** Start with full gauge for all actors (debug). */
   initialGaugeFull?: boolean;
+  /** Per-prob-event user locks. Key format: `crit:<actionId>:<hitIndex>:<damageIdx>`.
+   *  Locked entries override critMode for that single damage instance. Used by
+   *  the damage-calc page; left undefined elsewhere. */
+  probLocks?: Map<string, "yes" | "no">;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -424,6 +428,18 @@ export function simulate(
   const emit = (e: SimEvent) => events.push(e);
   const rng = config.rng || Math.random;
   const resolveRef = config.resolveRef || (() => 0);
+
+  // ── Crit prob-event key allocation ──
+  // Each damage instance within a (actionId, hitIndex) gets a sequential index
+  // so users can lock a specific damage's crit outcome from the UI.
+  const _damageIdxByHit = new Map<string, number>();
+  const nextCritEventKey = (actionId: string, hitIndex: number): string => {
+    const k = `${actionId}::${hitIndex}`;
+    const idx = _damageIdxByHit.get(k) ?? 0;
+    _damageIdxByHit.set(k, idx + 1);
+    return `crit:${actionId}:${hitIndex}:${idx}`;
+  };
+  const probLocks = config.probLocks;
 
   /** Queued slot item — an effect plus the event / trigger that produced it (for trigger actions). */
   interface SlotItem { effect: HitEffect; eventContext?: EventContext; sourceRef?: TriggerSourceRef }
@@ -1182,6 +1198,7 @@ export function simulate(
         for (const eDmg of toResolve) {
           const buffMods = getBuffModifiers(eDmg.sourceId, hitTime);
           const eBuild = buildMap.get(eDmg.sourceId) || build;
+          const critEventKey = eDmg.canCrit ? nextCritEventKey(eDmg.actionId, hitIdx) : undefined;
           const ctx: DamageContext = {
             source: { buildStats: eBuild.buildStats, buffModifiers: buffMods },
             target: {
@@ -1206,6 +1223,8 @@ export function simulate(
             skipSourceTypeBonus: eDmg.skipSourceTypeBonus,
             critMode: config.critMode,
             rng,
+            critEventKey,
+            probLocks,
           };
           const result = resolveDamage(ctx);
           emit({
@@ -1216,6 +1235,7 @@ export function simulate(
             element: eDmg.element, school: eDmg.school,
             actionId: eDmg.actionId, hitIndex: hitIdx,
             zones: result.zones,
+            ...(critEventKey ? { critEventKey } : {}),
             ...(eDmg.fromTrigger ? { fromTrigger: true } : {}),
             ...(eDmg.triggerName ? { triggerName: eDmg.triggerName } : {}),
           });
@@ -1290,6 +1310,7 @@ export function simulate(
         const buffMods: BuffModifiers = extraCombo > 0
           ? { ...baseBuffMods, combo: baseBuffMods.combo + extraCombo }
           : baseBuffMods;
+        const critEventKey = hit.damage.canCrit ? nextCritEventKey(actionId, hitIdx) : undefined;
         const ctx: DamageContext = {
           source: { buildStats: build.buildStats, buffModifiers: buffMods },
           target: {
@@ -1313,6 +1334,8 @@ export function simulate(
           canCrit: hit.damage.canCrit,
           critMode: config.critMode,
           rng,
+          critEventKey,
+          probLocks,
         };
         const result = resolveDamage(ctx);
         emit({
@@ -1323,6 +1346,7 @@ export function simulate(
           element: hit.damage.element, school: hit.damage.school,
           actionId, hitIndex: hitIdx,
           zones: result.zones,
+          ...(critEventKey ? { critEventKey } : {}),
         });
         // Stagger from hit damage
         if (hit.damage.stagger > 0 && !enemy.isStaggered) {
@@ -1575,6 +1599,7 @@ export function simulate(
     for (const eDmg of localDamages) {
       const buffMods = getBuffModifiers(eDmg.sourceId, time);
       const eBuild = buildMap.get(eDmg.sourceId) || build;
+      const critEventKey = eDmg.canCrit ? nextCritEventKey(actionId, 0) : undefined;
       const ctx: DamageContext = {
         source: { buildStats: eBuild.buildStats, buffModifiers: buffMods },
         target: {
@@ -1599,6 +1624,8 @@ export function simulate(
         skipSourceTypeBonus: eDmg.skipSourceTypeBonus,
         critMode: config.critMode,
         rng,
+        critEventKey,
+        probLocks,
       };
       const result = resolveDamage(ctx);
       emit({
@@ -1609,6 +1636,7 @@ export function simulate(
         element: eDmg.element, school: eDmg.school,
         actionId, hitIndex: 0,
         zones: result.zones,
+        ...(critEventKey ? { critEventKey } : {}),
       });
     }
     // Execute trigger deferred actions
@@ -2328,6 +2356,7 @@ export function simulate(
             triggerSourceRef?.kind === "ultimate"
               ? triggerSourceRef.kind
               : (skillType ?? "skill");
+          const critEventKey = nextCritEventKey(actionId, hitIndex);
           const ctx: DamageContext = {
             source: { buildStats: build.buildStats, buffModifiers: buffMods },
             target: {
@@ -2351,6 +2380,8 @@ export function simulate(
             canCrit: true,
             critMode: config.critMode,
             rng,
+            critEventKey,
+            probLocks,
           };
           const result = resolveDamage(ctx);
           emit({
@@ -2364,6 +2395,7 @@ export function simulate(
             fromTrigger: true,
             triggerName: (effect.params as any).triggerName || "追加攻击",
             zones: result.zones,
+            critEventKey,
           });
         }
         break;

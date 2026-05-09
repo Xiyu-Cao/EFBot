@@ -561,22 +561,46 @@ const setStatusesByTrack = computed(() => {
   return map
 })
 
+// Lane assignment with per-group stickiness.
+//  - Bars sharing a group key (buffId / type / name) all get the SAME lane,
+//    so the same buff type doesn't hop between lanes across time segments.
+//  - Groups are ordered by the first bar each group sees in the input
+//    (stable wrt caller ordering), then packed greedily into the first lane
+//    that is free when the group's earliest segment begins.
+//  - Within a group, non-overlapping segments share the lane as expected
+//    (same-buff segments are contiguous by construction in projectBuffBars,
+//    so they won't cross the 1ms fit tolerance).
 function _assignLanes(statuses) {
-  const sorted = [...statuses].sort((a, b) => a.startTime - b.startTime)
-  const laneEnds = []
-  return sorted.map(s => {
+  const groupOf = s => s.buffId || s.type || s.name || s.id
+  // Collect groups in input-order; record first-start + max-end for packing.
+  const groups = new Map()
+  for (const s of statuses) {
+    const key = groupOf(s)
     const start = Number(s.startTime) || 0
-    const dur = Number(s.duration) || 0
-    const end = start + dur
-    let lane = laneEnds.findIndex(e => start >= e - 0.001)
+    const end = start + (Number(s.duration) || 0)
+    const g = groups.get(key)
+    if (g) {
+      if (start < g.firstStart) g.firstStart = start
+      if (end > g.lastEnd) g.lastEnd = end
+    } else {
+      groups.set(key, { firstStart: start, lastEnd: end })
+    }
+  }
+  // Pack each group into the first lane where its earliest segment fits.
+  const laneEnds = []
+  const laneByGroup = new Map()
+  for (const [key, g] of groups) {
+    let lane = laneEnds.findIndex(e => g.firstStart >= e - 0.001)
     if (lane === -1) {
       lane = laneEnds.length
-      laneEnds.push(end)
+      laneEnds.push(g.lastEnd)
     } else {
-      laneEnds[lane] = end
+      laneEnds[lane] = Math.max(laneEnds[lane], g.lastEnd)
     }
-    return { ...s, _lane: lane }
-  })
+    laneByGroup.set(key, lane)
+  }
+  // Preserve caller's bar order (other consumers rely on original sequence).
+  return statuses.map(s => ({ ...s, _lane: laneByGroup.get(groupOf(s)) || 0 }))
 }
 
 const LANE_HEIGHT = 24
@@ -2677,7 +2701,7 @@ onUnmounted(() => {
            :style="{ height: teamBuffCollapsed ? COLLAPSED_ROW_HEIGHT + 'px' : teamBuffRowHeight + 'px' }"
            @click="toggleTeamBuffCollapse">
         <span class="buff-collapse-arrow">{{ teamBuffCollapsed ? '▸' : '▾' }}</span>
-        <span class="summary-track-label">队���增益</span>
+        <span class="summary-track-label">队伍增益</span>
         <span class="summary-track-count" v-if="sortedTeamBuffStatuses.length">{{ sortedTeamBuffStatuses.length }}</span>
       </div>
 
@@ -2926,7 +2950,7 @@ onUnmounted(() => {
                 >
                   <div class="self-buff-icon-box" :style="{ borderColor: bar.color || '#999' }">
                     <img v-if="bar.stackIcon || bar.icon" :src="bar.stackIcon || bar.icon" @error="e=>e.target.style.display='none'" />
-                    <div v-if="bar.stacks > 1 && bar.maxStacks > 1" class="buff-stack-badge">{{ bar.stacks }}/{{ bar.maxStacks }}</div>
+                    <div v-if="bar.maxStacks > 1" class="buff-stack-badge">{{ bar.stacks }}/{{ bar.maxStacks }}</div>
                     <div v-else-if="bar.stacks > 1" class="buff-stack-badge">{{ bar.stacks }}</div>
                   </div>
                   <div class="self-buff-bar" :style="{ backgroundColor: bar.color || '#999', width: getSelfBuffBarWidth(bar) + 'px' }"></div>

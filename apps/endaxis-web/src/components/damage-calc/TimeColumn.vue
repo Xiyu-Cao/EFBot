@@ -1,6 +1,7 @@
 <script setup>
 import { inject, computed } from 'vue'
 import { useTimelineStore } from '@/stores/timelineStore.js'
+import BuffIconColumn from './BuffIconColumn.vue'
 
 const props = defineProps({
   track: { type: Object, required: true },
@@ -41,6 +42,50 @@ const actionDamageMap = computed(() => {
   return map
 })
 
+// ── Buff entries for this track's self-buff lane ──
+const buffExpanded = computed(() => state.isBuffExpanded(props.track.id))
+
+const buffEntries = computed(() => {
+  const data = state.adaptedProjections.value
+  if (!data) return []
+  const out = []
+
+  // Per-instance buffs (stat buffs, vulnerabilities, etc) — target=self on this track
+  for (const bs of data.weaponStatuses || []) {
+    if (bs.trackId !== props.track.id) continue
+    const buffId = bs.buffId || bs.id
+    out.push({
+      id: `w_${bs.id}`,
+      icon: bs.icon,
+      name: bs.name,
+      startTime: bs.startTime,
+      stacks: bs.stacks || 1,
+      color: bs.color,
+      buffId,
+      _selectionKey: `${buffId}@${bs.startTime}`,
+    })
+  }
+
+  // Stack buffs (magma/pograni 铁誓 etc.) — one bar per stack-change segment.
+  // For v1: emit one icon per segment so the stack-up sequence is visible.
+  const selfStacks = data.selfBuffsByTrack?.get(props.track.id) || []
+  for (const sb of selfStacks) {
+    const buffId = sb.type || sb.id
+    out.push({
+      id: `s_${sb.id}`,
+      icon: sb.stackIcon || sb.icon,
+      name: sb.name,
+      startTime: sb.startTime,
+      stacks: sb.stacks,
+      color: sb.color,
+      buffId,
+      _selectionKey: `${buffId}@${sb.startTime}`,
+    })
+  }
+
+  return out
+})
+
 function getActionTop(action) {
   return action.startTime * props.pxPerSecond
 }
@@ -50,7 +95,6 @@ function getActionHeight(action) {
 }
 
 function getActionColor(action) {
-  // Use element or action type for coloring
   const element = action.element || props.track.element
   return store.getColor(element || action.type || 'default')
 }
@@ -80,43 +124,61 @@ function isSelected(action) {
 function handleClick(action) {
   state.selectAction(action.instanceId, props.track.id)
 }
+
+// Build key of the currently selected buff for outline
+const selectedBuffKey = computed(() => {
+  const sel = state.selectedItem.value
+  if (sel?.type !== 'buff') return ''
+  return `${sel.buffId}@${sel.startTime}`
+})
+
+function handleBuffClick(entry) {
+  state.selectBuff(entry.buffId, entry.startTime)
+}
 </script>
 
 <template>
   <div class="time-column" :style="{ height: endTime * pxPerSecond + 'px' }">
-    <!-- Action blocks -->
-    <div
-      v-for="action in actions"
-      :key="action.instanceId"
-      class="action-block"
-      :class="{ selected: isSelected(action) }"
-      :style="{
-        top: getActionTop(action) + 'px',
-        height: getActionHeight(action) + 'px',
-        borderLeftColor: getActionColor(action),
-      }"
-      @click.stop="handleClick(action)"
-      :title="`${getDisplayName(action)} [${getTypeLabel(action)}] ${action.startTime.toFixed(2)}s`"
-    >
-      <!-- Type badge -->
-      <span
-        class="type-badge"
-        :style="{ background: getActionColor(action) }"
-      >{{ getTypeLabel(action) }}</span>
-
-      <!-- Skill name (only if block is tall enough) -->
-      <span v-if="getActionHeight(action) >= 18" class="action-name">
-        {{ getDisplayName(action) }}
-      </span>
-
-      <!-- Damage number (only if block is tall enough) -->
-      <span
-        v-if="getActionHeight(action) >= 32 && actionDamageMap.get(action.instanceId)"
-        class="action-damage"
+    <!-- Action lane -->
+    <div class="action-lane">
+      <div
+        v-for="action in actions"
+        :key="action.instanceId"
+        class="action-block"
+        :class="{ selected: isSelected(action) }"
+        :style="{
+          top: getActionTop(action) + 'px',
+          height: getActionHeight(action) + 'px',
+          borderLeftColor: getActionColor(action),
+        }"
+        @click.stop="handleClick(action)"
+        :title="`${getDisplayName(action)} [${getTypeLabel(action)}] ${action.startTime.toFixed(2)}s`"
       >
-        {{ fmtDmg(actionDamageMap.get(action.instanceId)) }}
-      </span>
+        <span
+          class="type-badge"
+          :style="{ background: getActionColor(action) }"
+        >{{ getTypeLabel(action) }}</span>
+        <span v-if="getActionHeight(action) >= 18" class="action-name">
+          {{ getDisplayName(action) }}
+        </span>
+        <span
+          v-if="getActionHeight(action) >= 32 && actionDamageMap.get(action.instanceId)"
+          class="action-damage"
+        >
+          {{ fmtDmg(actionDamageMap.get(action.instanceId)) }}
+        </span>
+      </div>
     </div>
+
+    <!-- Self-buff lane (toggleable per track) -->
+    <BuffIconColumn
+      v-if="buffExpanded"
+      :entries="buffEntries"
+      :end-time="endTime"
+      :px-per-second="pxPerSecond"
+      :selected-key="selectedBuffKey"
+      @select="handleBuffClick"
+    />
   </div>
 </template>
 
@@ -126,21 +188,14 @@ function handleClick(action) {
   position: relative;
   border-right: 1px solid #2a2c34;
   min-width: 0;
+  display: flex;
+  flex-direction: row;
 }
 
-/* Subtle alternating background every 5 seconds */
-.time-column::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent calc(v-bind('pxPerSecond * 5') * 1px),
-    rgba(255, 255, 255, 0.015) calc(v-bind('pxPerSecond * 5') * 1px),
-    rgba(255, 255, 255, 0.015) calc(v-bind('pxPerSecond * 10') * 1px)
-  );
-  pointer-events: none;
+.action-lane {
+  flex: 1;
+  position: relative;
+  min-width: 60px;
 }
 
 .action-block {

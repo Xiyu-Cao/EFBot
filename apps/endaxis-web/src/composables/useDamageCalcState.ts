@@ -68,6 +68,62 @@ export function useDamageCalcState() {
   // ── Crit mode (can be toggled independently from store) ──
   const critMode = ref<"real" | "expected">("expected");
 
+  // ── Per-damage prob-event locks (page-scoped, not persisted) ──
+  // Key format: `crit:<actionId>:<hitIndex>:<damageIdx>` (assigned by kernel).
+  // "yes" = force crit, "no" = force no-crit. Missing entries fall back to mode.
+  const probLocks = ref<Map<string, "yes" | "no">>(new Map());
+
+  function getProbLock(key: string | undefined): "yes" | "no" | null {
+    if (!key) return null;
+    return probLocks.value.get(key) ?? null;
+  }
+
+  /** Cycle a lock through: null → "yes" → "no" → null. */
+  function cycleProbLock(key: string) {
+    const cur = probLocks.value.get(key);
+    const next = new Map(probLocks.value);
+    if (cur === undefined) next.set(key, "yes");
+    else if (cur === "yes") next.set(key, "no");
+    else next.delete(key);
+    probLocks.value = next;
+    runSimulation();
+  }
+
+  function clearAllProbLocks() {
+    if (probLocks.value.size === 0) return;
+    probLocks.value = new Map();
+    runSimulation();
+  }
+
+  const probLockCount = computed(() => probLocks.value.size);
+
+  // ── Per-track buff-lane expand state ──
+  const BUFF_VIS_KEY = "endaxis_dmg_calc_buff_visible_tracks";
+  const buffExpandedByTrack = ref<Record<string, boolean>>((() => {
+    try {
+      const raw = localStorage.getItem(BUFF_VIS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  })());
+
+  function isBuffExpanded(trackId: string): boolean {
+    // Default: expanded
+    return buffExpandedByTrack.value[trackId] !== false;
+  }
+
+  function toggleBuffExpanded(trackId: string) {
+    const current = isBuffExpanded(trackId);
+    buffExpandedByTrack.value = {
+      ...buffExpandedByTrack.value,
+      [trackId]: !current,
+    };
+    try {
+      localStorage.setItem(BUFF_VIS_KEY, JSON.stringify(buffExpandedByTrack.value));
+    } catch { /* ignore quota */ }
+  }
+
   // ── Simulation result ──
   const simResult = shallowRef<SimulationResult | null>(null);
   const simError = ref<string | null>(null);
@@ -116,7 +172,7 @@ export function useDamageCalcState() {
         inputs.builds,
         inputs.skills,
         inputs.enemyConfig,
-        { ...inputs.config, critMode: critMode.value, validateConditions: false },
+        { ...inputs.config, critMode: critMode.value, validateConditions: false, probLocks: probLocks.value },
         inputs.triggersByActor,
       );
       const pendingHeavyInfo = extractInterruptedHeavies(pass1.events, inputs.skills);
@@ -145,7 +201,7 @@ export function useDamageCalcState() {
         inputs.builds,
         inputs.skills,
         inputs.enemyConfig,
-        { ...inputs.config, critMode: critMode.value, validateConditions: false },
+        { ...inputs.config, critMode: critMode.value, validateConditions: false, probLocks: probLocks.value },
         inputs.triggersByActor,
         inputs.executionSkillByActor,
         staggerWindows,
@@ -355,6 +411,8 @@ export function useDamageCalcState() {
     selectedHitKey,
     settlementOverlayVisible,
     critMode,
+    probLocks,
+    probLockCount,
     simResult,
     simError,
     endTime,
@@ -373,6 +431,10 @@ export function useDamageCalcState() {
     adaptedProjections,
     tracksMeta,
 
+    // Buff expand state
+    isBuffExpanded,
+    toggleBuffExpanded,
+
     // Actions
     runSimulation,
     selectCharacter,
@@ -384,6 +446,9 @@ export function useDamageCalcState() {
     toggleSettlementOverlay,
     closeSettlementOverlay,
     toggleCritMode,
+    getProbLock,
+    cycleProbLock,
+    clearAllProbLocks,
     getBuffDetail,
     goBack,
   };

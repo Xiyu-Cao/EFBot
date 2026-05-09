@@ -2325,3 +2325,169 @@ describe("V2 Kernel — launch/knockdown bonus stagger", () => {
     expect(ev.stagger).toBeCloseTo(20, 5);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// probLocks — per-damage crit lock override
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — probLocks (per-damage crit lock)", () => {
+  /** Build a character with 0% crit rate, 50% crit damage. */
+  function makeNoCritBuild() {
+    const input: CharacterInput = {
+      id: "ACTOR", name: "ACTOR", element: "physical", rarity: 6,
+      promotion: 4, potentialLevel: 0, talentLevels: {},
+      baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+      baseAttack: 300, baseHp: 1000,
+      mainAttribute: "strength", subAttribute: "agility",
+      weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      // Default crit_rate = 0, crit_damage = 50 from base — no extra modifiers needed.
+      statModifiers: [],
+    };
+    return computeCharacterBuild(input);
+  }
+
+  /** Single-hit attack skill that can crit. */
+  function makeSingleHitSkill(): Skill {
+    return {
+      id: "single_hit",
+      type: "attack",
+      name: "test attack",
+      element: "physical",
+      duration: 1,
+      spCost: 0,
+      cooldown: 0,
+      hits: [{
+        offset: 0.1,
+        checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "attack" },
+        effects: [],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+  }
+
+  it("emits a critEventKey on each damage event when canCrit=true", () => {
+    const build = makeNoCritBuild();
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeSingleHitSkill(), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const dmg = result.events.find(e => e.type === "damage") as any;
+    expect(dmg).toBeTruthy();
+    expect(dmg.critEventKey).toBe("crit:a:0:0");
+  });
+
+  it("expected mode without lock: crit zone < 1.5 (probability-weighted blend, not forced)", () => {
+    const build = makeNoCritBuild();
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeSingleHitSkill(), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const dmg = result.events.find(e => e.type === "damage") as any;
+    // With baseline (low) crit rate, the expected-blend zone is between 1 and 1.5.
+    expect(dmg.zones.crit).toBeGreaterThanOrEqual(1);
+    expect(dmg.zones.crit).toBeLessThan(1.5);
+    expect(dmg.isCrit).toBe(false);
+  });
+
+  it("lock=yes overrides expected mode → crit multiplier applied", () => {
+    const build = makeNoCritBuild();
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:0:0", "yes"]]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeSingleHitSkill(), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", probLocks });
+    const dmg = result.events.find(e => e.type === "damage") as any;
+    expect(dmg.isCrit).toBe(true);
+    expect(dmg.zones.crit).toBeCloseTo(1.5, 5); // 1 + 50/100
+  });
+
+  it("lock=no with high crit rate overrides expected mode → no crit", () => {
+    // Force 100% crit rate via stat modifier.
+    const input: CharacterInput = {
+      id: "ACTOR", name: "ACTOR", element: "physical", rarity: 6,
+      promotion: 4, potentialLevel: 0, talentLevels: {},
+      baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+      baseAttack: 300, baseHp: 1000,
+      mainAttribute: "strength", subAttribute: "agility",
+      weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [
+        { source: "test", stat: "crit_rate", value: 100, type: "flat" as const },
+      ],
+    };
+    const build = computeCharacterBuild(input);
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:0:0", "no"]]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeSingleHitSkill(), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", probLocks });
+    const dmg = result.events.find(e => e.type === "damage") as any;
+    expect(dmg.isCrit).toBe(false);
+    expect(dmg.zones.crit).toBeCloseTo(1, 5);
+  });
+
+  it("real mode: lock=yes still forces crit regardless of rng", () => {
+    const build = makeNoCritBuild();
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:0:0", "yes"]]);
+    // rng always returns 0.99 (well above 0% rate); without lock would not crit.
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: makeSingleHitSkill(), startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "real", rng: () => 0.99, probLocks });
+    const dmg = result.events.find(e => e.type === "damage") as any;
+    expect(dmg.isCrit).toBe(true);
+    expect(dmg.zones.crit).toBeCloseTo(1.5, 5);
+  });
+
+  it("locks are scoped per (actionId, hitIndex, damageIdx) — different damages independent", () => {
+    // Two hits on same skill → two distinct keys.
+    const skill: Skill = {
+      id: "two_hit",
+      type: "attack",
+      name: "test",
+      element: "physical",
+      duration: 1, spCost: 0, cooldown: 0,
+      hits: [
+        { offset: 0.1, checkpointIndex: 0, effects: [], standardLogic: true,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "attack" } },
+        { offset: 0.5, checkpointIndex: 0, effects: [], standardLogic: true,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "attack" } },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 1] }],
+    };
+    const build = makeNoCritBuild();
+    // Lock only hit 0, leave hit 1 default (no crit at 0% rate).
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:0:0", "yes"]]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", probLocks });
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+    expect(dmgs.length).toBe(2);
+    expect(dmgs[0].critEventKey).toBe("crit:a:0:0");
+    expect(dmgs[0].isCrit).toBe(true);
+    expect(dmgs[1].critEventKey).toBe("crit:a:1:0");
+    expect(dmgs[1].isCrit).toBe(false);
+  });
+
+  it("damages with canCrit=false get no critEventKey and ignore locks", () => {
+    const skill: Skill = {
+      id: "no_crit_hit",
+      type: "attack",
+      name: "test",
+      element: "physical",
+      duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0, effects: [], standardLogic: true,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const build = makeNoCritBuild();
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:0:0", "yes"]]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", probLocks });
+    const dmg = result.events.find(e => e.type === "damage") as any;
+    expect(dmg.critEventKey).toBeUndefined();
+    expect(dmg.isCrit).toBe(false);
+    expect(dmg.zones.crit).toBeCloseTo(1, 5);
+  });
+});

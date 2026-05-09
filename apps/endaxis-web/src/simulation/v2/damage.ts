@@ -79,6 +79,14 @@ export interface DamageContext {
   // Crit
   critMode: "real" | "expected";
   rng: () => number;        // RNG for real mode
+  /** Stable key identifying the crit prob event for this damage instance.
+   *  Format: `crit:<actionId>:<hitIndex>:<damageIdx>`. Used to look up
+   *  user-supplied probLocks. Optional — kernel only sets it when locks
+   *  may apply (damage-calc page); other call sites can leave undefined. */
+  critEventKey?: string;
+  /** User-supplied locks: probEventKey → "yes" (force trigger) | "no" (force skip).
+   *  Locks take priority over critMode; missing entries fall back to mode. */
+  probLocks?: Map<string, "yes" | "no">;
 }
 
 /** Active buff modifiers applied at this moment. */
@@ -243,6 +251,40 @@ function getFragility(target: DamageContext["target"], element: DamageElement, s
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Probability event resolution (unified for crit + future variant locks)
+// ═══════════════════════════════════════════════════════════════════
+
+export type ProbEventOutcome =
+  | { kind: "binary"; yes: boolean }   // real-mode roll OR locked outcome
+  | { kind: "expected"; weight: number }; // expected-mode → caller blends
+
+/**
+ * Resolve a probability event. Lock > mode > roll.
+ *
+ * - If `probLocks` has the key → forced binary outcome (overrides mode).
+ * - Else if mode is "expected" → return weight, caller blends both branches.
+ * - Else "real" → roll once via rng.
+ */
+export function resolveProbEvent(
+  key: string | undefined,
+  weight: number,
+  mode: "real" | "expected",
+  rng: () => number,
+  probLocks?: Map<string, "yes" | "no">,
+): ProbEventOutcome {
+  if (key && probLocks) {
+    const locked = probLocks.get(key);
+    if (locked === "yes") return { kind: "binary", yes: true };
+    if (locked === "no")  return { kind: "binary", yes: false };
+  }
+  if (mode === "expected") {
+    return { kind: "expected", weight: Math.max(0, Math.min(1, weight)) };
+  }
+  // Real mode
+  return { kind: "binary", yes: rng() < weight };
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Crit resolution
 // ═══════════════════════════════════════════════════════════════════
 
@@ -259,20 +301,21 @@ function resolveCrit(ctx: DamageContext): CritResult {
   ));
   const totalDmg = sumFlat(ctx.source.buildStats.critDamage) + ctx.source.buffModifiers.critDamageBonus;
   const critDmgRatio = totalDmg / 100; // 50% → 0.5
+  const weight = totalRate / 100;
 
-  if (ctx.critMode === "expected") {
+  const outcome = resolveProbEvent(ctx.critEventKey, weight, ctx.critMode, ctx.rng, ctx.probLocks);
+
+  if (outcome.kind === "expected") {
+    // Expected mode: blend both branches by probability.
     return {
-      multiplier: 1 + (totalRate / 100) * critDmgRatio,
+      multiplier: 1 + outcome.weight * critDmgRatio,
       isCrit: false, // no binary crit in expected mode
     };
   }
-
-  // Real mode: roll
-  const roll = ctx.rng();
-  if (roll < totalRate / 100) {
-    return { multiplier: 1 + critDmgRatio, isCrit: true };
-  }
-  return { multiplier: 1, isCrit: false };
+  // Binary outcome (real-roll or locked).
+  return outcome.yes
+    ? { multiplier: 1 + critDmgRatio, isCrit: true }
+    : { multiplier: 1, isCrit: false };
 }
 
 // ═══════════════════════════════════════════════════════════════════

@@ -45,11 +45,16 @@ export function extractWeaponPassiveStats(
   for (const ps of weapon.passiveStats) {
     const value = ps.values[tierIndex] ?? ps.values[ps.values.length - 1] ?? 0;
     if (value === 0) continue;
+    // Weapon "attack" passives are always percent ("攻击力+14%"), not flat
+    // attack points. Other stats (originium_arts_power, *_dmg, *_bonus,
+    // crit_rate, ...) are routed through sumFlat in damage.ts which reads
+    // flatModifiers regardless of semantic meaning, so "flat" stays correct.
+    const type: "flat" | "percent" = ps.stat === "attack" ? "percent" : "flat";
     modifiers.push({
       source: `weapon_${weapon.id}`,
       stat: ps.stat,
       value,
-      type: "flat",
+      type,
     });
   }
   return modifiers;

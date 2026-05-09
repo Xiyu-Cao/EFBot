@@ -130,12 +130,12 @@ export interface BuffBar {
 /**
  * Project buff bars from buff_apply/buff_remove events.
  *
- * Re-application semantics: `refresh` / stack-bump buffs emit a `buff_apply`
- * per hit. Instead of opening a fresh segment each time (which makes the
- * intermediate bars look tiny), we KEEP the original startTime and just push
- * the endTime forward + update stacks. The result is a single bar spanning
- * from first application to last application + duration, reflecting the
- * final stack count — matches how these buffs read in-game.
+ * Re-application semantics:
+ *  - Pure refresh (same stacks): extend endTime, keep current segment.
+ *  - Stack change (different stacks): close current segment at the new event
+ *    time with the OLD stack count, open a fresh segment from that time
+ *    onward with the new stack count. This gives 1/N → 2/N → 3/N progression
+ *    on the timeline instead of one merged bar showing only the final count.
  *
  * Keyed by (target, buffId) so that a self-buff of the same `buffId` applied
  * to different actors doesn't collide.
@@ -153,37 +153,48 @@ export function projectBuffBars(
       ? `${be.target}::${be.buffId}`
       : `${be.targetId || be.actorId}::${be.buffId}`;
 
+  const openBar = (be: BuffEvent, key: string) => {
+    counter++;
+    active.set(key, {
+      id: `buff_${counter}`,
+      buffId: be.buffId,
+      name: be.buffName,
+      target: be.target,
+      actorId: be.actorId,
+      startTime: be.time,
+      endTime: be.time + be.duration,
+      stacks: be.stacks,
+      color: be.target === "enemy" ? "#ff4d4f" : be.target === "team" ? "#faad14" : "#b37feb",
+      stat: be.stat,
+      zone: be.zone,
+      sourceRef: be.sourceRef,
+    });
+  };
+
   for (const e of events) {
     if (e.type === "buff_apply") {
       const be = e as BuffEvent;
       const key = keyOf(be);
       const prev = active.get(key);
       if (prev) {
-        // Refresh / stack bump — extend bar to new (time + duration), update
-        // stacks + latest metadata. Do not split into a new segment.
-        const newEnd = be.time + be.duration;
-        if (newEnd > prev.endTime) prev.endTime = newEnd;
-        prev.stacks = be.stacks;
-        prev.name = be.buffName;
-        prev.stat = be.stat;
-        prev.zone = be.zone;
-        prev.sourceRef = be.sourceRef;
+        if (prev.stacks === be.stacks) {
+          // Pure refresh — extend current segment, refresh metadata.
+          const newEnd = be.time + be.duration;
+          if (newEnd > prev.endTime) prev.endTime = newEnd;
+          prev.name = be.buffName;
+          prev.stat = be.stat;
+          prev.zone = be.zone;
+          prev.sourceRef = be.sourceRef;
+        } else {
+          // Stack count changed — close previous segment at this event's time
+          // with the OLD stack count, then open a new segment with the new count.
+          prev.endTime = be.time;
+          completed.push(prev);
+          active.delete(key);
+          openBar(be, key);
+        }
       } else {
-        counter++;
-        active.set(key, {
-          id: `buff_${counter}`,
-          buffId: be.buffId,
-          name: be.buffName,
-          target: be.target,
-          actorId: be.actorId,
-          startTime: be.time,
-          endTime: be.time + be.duration,
-          stacks: be.stacks,
-          color: be.target === "enemy" ? "#ff4d4f" : be.target === "team" ? "#faad14" : "#b37feb",
-          stat: be.stat,
-          zone: be.zone,
-          sourceRef: be.sourceRef,
-        });
+        openBar(be, key);
       }
     } else if (e.type === "buff_remove") {
       const be = e as BuffEvent;
@@ -693,6 +704,19 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
   let counter = 0;
   const id = () => `hfx_${++counter}`;
 
+  // Dedup markers that represent the same logical effect emitted as multiple
+  // events at the same time — e.g. 碎甲 fires a `break_change` AND a cosmetic
+  // `buff_apply` (both keyed as effectType="armorBreak") so the enemy debuff
+  // row can render the vuln. Without this dedup the marker row shows two
+  // identical icons above the hit.
+  const seenKeys = new Set<string>();
+  const pushMarker = (m: HitEffectMarker) => {
+    const key = `${m.time}::${m.effectType}::${m.sourceId}`;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    markers.push(m);
+  };
+
   for (const e of events) {
     switch (e.type) {
       case "attachment_change": {
@@ -700,7 +724,7 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
         // Only show application events (stacks > 0), not expiry/clear
         if (ae.stacks > 0 && ae.element) {
           const elementNames: Record<string, string> = { fire: "灼热附着", cold: "寒冷附着", electro: "电磁附着", nature: "自然附着" };
-          markers.push({
+          pushMarker({
             id: id(), time: ae.time, sourceId: ae.sourceId || "", actionId: "",
             effectType: `${ae.element}_attach`,
             name: elementNames[ae.element] || `${ae.element}附着`,
@@ -716,7 +740,7 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
         // crystal consumption) have their details accessible via the buff row
         // + right panel; inlining them above the hit clutters the view.
         if (be.fromTrigger) break;
-        markers.push({
+        pushMarker({
           id: id(), time: be.time, sourceId: be.actorId, actionId: "",
           effectType: be.buffId,
           name: be.buffName,
@@ -731,7 +755,7 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
         const bk = e as BreakEvent;
         const physType = bk.physicalType || (bk.stacks > bk.prevStacks ? "break_apply" : "break_consume");
         const physNames: Record<string, string> = { slam: "猛击", armorBreak: "碎甲", launch: "击飞", knockdown: "倒地", break_apply: "破防", break_consume: "消耗破防" };
-        markers.push({
+        pushMarker({
           id: id(), time: bk.time, sourceId: bk.sourceId || "", actionId: "",
           effectType: physType,
           name: physNames[physType] || physType,
@@ -741,7 +765,7 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
       case "anomaly_apply": {
         const an = e as AnomalyEvent;
         const anomalyNames: Record<string, string> = { burning: "燃烧", frozen: "冻结", conduction: "导电", corrosion: "腐蚀" };
-        markers.push({
+        pushMarker({
           id: id(), time: an.time, sourceId: an.sourceId, actionId: "",
           effectType: an.anomalyType,
           name: anomalyNames[an.anomalyType] || an.anomalyType,
@@ -751,7 +775,7 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
       case "stack_change": {
         const se = e as StackBuffEvent;
         if (se.stacks > se.prevStacks) {
-          markers.push({
+          pushMarker({
             id: id(), time: se.time, sourceId: se.actorId, actionId: "",
             effectType: se.buffType,
             name: se.buffType,
@@ -762,7 +786,7 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
       case "damage": {
         const de = e as DamageEvent;
         if (de.fromTrigger) {
-          markers.push({
+          pushMarker({
             id: id(), time: de.time, sourceId: de.sourceId, actionId: de.actionId,
             effectType: "trigger_damage",
             name: de.triggerName || "追加攻击",

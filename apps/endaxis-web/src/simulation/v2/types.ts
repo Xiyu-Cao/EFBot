@@ -265,6 +265,13 @@ export interface SkillVariant {
    *  Stored on the variant because the boost is tied to the action instance
    *  that consumed the enabling buff — not to the actor's long-lived state. */
   extraComboZone?: number;
+  /** Probability (0..1) that this variant fires when conditions match.
+   *  Receives the source build so dynamic stats (e.g. ALESH 智识 加成 钓珍鳞概率)
+   *  can be computed at simulation time without freezing into the data file.
+   *  When undefined, variant fires deterministically (current behaviour).
+   *  Hookup in selectVariant + cast-level prob-event lock is pending — leaving
+   *  this field as the type口子 for the second-pass implementation. */
+  probability?: (build: CharacterBuild) => number;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -453,6 +460,10 @@ export interface DamageEvent extends BaseEvent {
   triggerName?: string;
   /** Per-zone multiplier breakdown for damage-calc page (optional; set by kernel). */
   zones?: DamageZones;
+  /** Stable key for the crit prob event behind this damage instance.
+   *  Format: `crit:<actionId>:<hitIndex>:<damageIdx>`. Set when the damage
+   *  could crit (canCrit=true). Used by damage-calc UI to bind locks. */
+  critEventKey?: string;
 }
 
 /** Gauge change (charge or consume). */

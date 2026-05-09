@@ -38,8 +38,18 @@ const scrollContainer = ref(null)
         >
           <div class="char-element-dot" :style="{ background: store.getColor(track.element || 'default') }" />
           <div class="char-name" :title="track.name">{{ track.name || track.id }}</div>
+          <button
+            class="buff-toggle"
+            :class="{ active: state.isBuffExpanded(track.id) }"
+            :title="state.isBuffExpanded(track.id) ? '收起 buff 图标' : '展开 buff 图标'"
+            @click.stop="state.toggleBuffExpanded(track.id)"
+          >{{ state.isBuffExpanded(track.id) ? '▸' : '◂' }}</button>
         </div>
-        <div class="enemy-header">敌方状态</div>
+        <div class="enemy-header">
+          <div class="enemy-sub">队伍</div>
+          <div class="enemy-sub">附着</div>
+          <div class="enemy-sub">敌方</div>
+        </div>
       </div>
 
       <!-- Timeline body -->
@@ -135,14 +145,39 @@ const scrollContainer = ref(null)
 }
 
 .enemy-header {
-  width: 100px;
+  width: 168px;
   flex-shrink: 0;
+  display: flex;
+  font-size: 11px;
+  color: #888;
+  border-left: 1px solid #333;
+}
+
+.enemy-sub {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  color: #888;
+  border-right: 1px solid #2a2c34;
 }
+.enemy-sub:last-child { border-right: none; }
+
+.buff-toggle {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  width: 18px;
+  height: 18px;
+  line-height: 14px;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.buff-toggle:hover { color: #ddd; border-color: #666; }
+.buff-toggle.active { color: #ffd700; border-color: #ffd700; }
 
 .timeline-body {
   display: flex;
