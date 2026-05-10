@@ -3683,8 +3683,17 @@ export const useTimelineStore = defineStore('timeline', () => {
             if (baseCooldown > 0) {
                 const cdReduction = Number(track.linkCdReduction) || 0
                 const effectiveCd = baseCooldown * (1 - cdReduction / 100)
+                // Match same-skill prev link only — multi-link characters (e.g., ROSSI 第二段
+                // with cooldown=0) shouldn't drive the CD timer for the primary link skill.
+                // Identify by V2 skill id when available, else fallback to legacy id.
+                const skillIdToMatch = skill._v2SkillId || skill.id
                 const prevLink = [...track.actions]
-                    .filter(a => a.type === 'link' && !a.isDisabled)
+                    .filter(a => {
+                        if (a.isDisabled) return false
+                        if (a.type !== 'link') return false
+                        const aId = a._v2SkillId || a.id
+                        return aId === skillIdToMatch
+                    })
                     .sort((a, b) => b.startTime - a.startTime)
                     .find(a => a.startTime < startTime)
                 if (prevLink) {
@@ -3729,6 +3738,35 @@ export const useTimelineStore = defineStore('timeline', () => {
             })
             if (overlap) {
                 return { valid: false, reason: tr('timeline.strict.overlap', { name: overlap.name || overlap.type }) }
+            }
+        }
+
+        // requiresPreviousAction: chained skill placement check (e.g., ROSSI 第二段
+        // must follow rossi_link within [92f, 167f]). Field declared on Skill in V2;
+        // carried through adapter.convertSkillToLegacyVariant for placeable variants.
+        if (skill.requiresPreviousAction) {
+            const req = skill.requiresPreviousAction
+            const minSec = (Number(req.withinFrames?.min) || 0) / 60
+            const maxSec = (Number(req.withinFrames?.max) || 0) / 60
+            // Find the most recent matching previous action that started before this one
+            const prev = [...track.actions]
+                .filter(a => {
+                    if (a.isDisabled) return false
+                    if (a.startTime >= startTime) return false
+                    if (req.skillId) return a._v2SkillId === req.skillId || a.id === req.skillId
+                    if (req.actionType) return a.type === req.actionType
+                    return false
+                })
+                .sort((a, b) => b.startTime - a.startTime)[0]
+            if (!prev) {
+                return { valid: false, reason: tr('timeline.strict.requiresPrevAction', { name: req.skillId || req.actionType }) || `requires previous ${req.skillId || req.actionType}` }
+            }
+            const sinceStart = startTime - prev.startTime
+            if (sinceStart < minSec - 0.001 || sinceStart > maxSec + 0.001) {
+                const minF = Math.round(minSec * 60)
+                const maxF = Math.round(maxSec * 60)
+                const sinceF = Math.round(sinceStart * 60)
+                return { valid: false, reason: tr('timeline.strict.requiresPrevActionWindow', { min: minF, max: maxF, since: sinceF }) || `must place within [${minF}f, ${maxF}f] after previous ${req.skillId || req.actionType} (got ${sinceF}f)` }
             }
         }
 

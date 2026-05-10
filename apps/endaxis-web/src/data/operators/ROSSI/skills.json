@@ -2,10 +2,10 @@
   "_doc": "Skill static definitions. Level data uses unified index 0-11 (RANK1-9 + M1-M3).",
   "attack": {
     "id": "attack",
-    "name": "血红之影",
+    "name": "沸腾狼血",
     "type": "attack",
     "icon": "/avatars/ROSSI/icon_skill_wulfa_01.webp",
-    "description": "",
+    "description": "普通攻击：对敌人进行至多5段攻击，造成物理伤害。作为主控干员时，重击会造成18点失衡。\n下落攻击：处于空中时使用普通攻击，会下落并攻击附近敌人，造成物理伤害。\n处决攻击：附近有敌人处于失衡状态时使用普通攻击，将处决该敌人，造成大量物理伤害并恢复一定技力。",
     "levelHeaders": [
       "1",
       "2",
@@ -144,10 +144,10 @@
   },
   "skill": {
     "id": "skill",
-    "name": "狼之珀",
+    "name": "血红之影",
     "type": "skill",
     "icon": "/avatars/ROSSI/icon_skill_wulfa_01.webp",
-    "description": "",
+    "description": "冲向目标，造成物理伤害并施加击飞。\n若目标已经拥有破防，则会额外释放狼之珀冲向目标，造成灼热伤害。",
     "levelHeaders": [
       "1",
       "2",
@@ -238,7 +238,7 @@
     "name": "燎影时刻",
     "type": "link",
     "icon": "/avatars/ROSSI/icon_combo_skill_wulfa_01.webp",
-    "description": "",
+    "description": "当有敌人同时处于破防和法术附着状态时可以发动。\n洛茜的连携技可连续发动两次，第一次会对目标造成物理伤害。\n第二次将消耗目标全部的法术附着，对其造成基于消耗层数的物理伤害并造成一次击飞，同时在一段时间内提升自身的暴击率和暴击伤害。\n当第二次连携技精准衔接时，可以额外施加1层破防。",
     "levelHeaders": [
       "1",
       "2",
@@ -397,7 +397,7 @@
     "name": "\"利爪\"奇袭",
     "type": "ultimate",
     "icon": "/avatars/ROSSI/icon_ultimate_skill_wulfa_01.webp",
-    "description": "",
+    "description": "挥动披风迅捷戳击，在短时间内对目标造成多段灼热伤害，之后使用匕首进行两段斩击，造成大量灼热伤害并施加灼热附着。\n本次技能将在暴击时造成更高的暴击伤害。",
     "levelHeaders": [
       "1",
       "2",

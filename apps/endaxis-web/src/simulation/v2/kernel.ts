@@ -102,6 +102,19 @@ const STAT_ZONE_TO_MODIFIER: Record<string, Record<string, keyof BuffModifiers>>
   combo: { _default: "combo" },
   attackPercent: { _default: "attackPercent", all_dmg: "attackPercent" },
   attackFlat: { _default: "attackFlat" },
+  // Enemy-side debuffs: applied via `buff_apply target: enemy stat: X_dmg zone: vulnerability`.
+  // BuffModifierDef.zone stores the BuffModifiers field name; when the kernel reads
+  // enemy.buffManager.aggregateModifiers, these sums flow through EnemyState.get*Vulnerability
+  // getters into DamageContext.target.* fields and the fragility/vulnerability damage zones.
+  vulnerability: {
+    physical_dmg: "physicalVulnerability",
+    arts_dmg:     "artsVulnerability",
+    blaze_dmg:    "blazeVulnerability",
+    cold_dmg:     "coldVulnerability",
+    emag_dmg:     "emagVulnerability",
+    nature_dmg:   "natureVulnerability",
+    all_dmg:      "vulnerabilityAll",
+  },
 };
 
 /**
@@ -109,9 +122,10 @@ const STAT_ZONE_TO_MODIFIER: Record<string, Record<string, keyof BuffModifiers>>
  * Returns null if the mapping is unknown.
  */
 function resolveBuffModifierZone(stat: string, zone: string): keyof BuffModifiers | null {
-  // Crit is special — stat determines rate vs damage
-  if (zone === "crit" || stat === "crit_rate") return "critRateBonus";
-  if (stat === "crit_dmg") return "critDamageBonus";
+  // Crit is special — stat determines rate vs damage. Check stat FIRST so that
+  // `stat:"crit_dmg" zone:"crit"` resolves to critDamageBonus (not critRateBonus).
+  if (stat === "crit_dmg" || stat === "crit_damage") return "critDamageBonus";
+  if (stat === "crit_rate" || zone === "crit") return "critRateBonus";
 
   const zoneMap = STAT_ZONE_TO_MODIFIER[zone];
   if (!zoneMap) return null;
@@ -281,16 +295,61 @@ class EnemyState {
 
   buffManager = new BuffManager();
 
-  /** Physical fragility at `time`, summing baseline sources with armor-break vuln (if still active). */
-  getPhysicalFragility(time: number): number {
-    const abv = this.armorBreakVuln && time < this.armorBreakVuln.expiresAt ? this.armorBreakVuln.value : 0;
-    return this.physicalFragility + abv;
+  /** Aggregate enemy debuff modifiers from buffManager at `time`.
+   *  Returns the partial BuffModifiers slice carrying vulnerability/fragility sums
+   *  (populated by `buff_apply target: enemy stat: X_dmg zone: vulnerability`). */
+  private aggregateBuffDebuffs(time: number): Partial<BuffModifiers> {
+    return this.buffManager.aggregateModifiers(time);
   }
 
-  /** Magic fragility at `time`, summing baseline with conduction (if still active). */
+  /** Physical fragility at `time`: baseline + armor-break vuln + buff-applied 物理脆弱. */
+  getPhysicalFragility(time: number): number {
+    const abv = this.armorBreakVuln && time < this.armorBreakVuln.expiresAt ? this.armorBreakVuln.value : 0;
+    const bm = this.aggregateBuffDebuffs(time);
+    return this.physicalFragility + abv + (bm.physicalVulnerability || 0);
+  }
+
+  /** Magic fragility at `time`: baseline + conduction + buff-applied 法术脆弱. */
   getMagicFragility(time: number): number {
     const cv = this.conductionFragility && time < this.conductionFragility.expiresAt ? this.conductionFragility.value : 0;
-    return this.magicFragility + cv;
+    const bm = this.aggregateBuffDebuffs(time);
+    return this.magicFragility + cv + (bm.artsVulnerability || 0);
+  }
+
+  /** Element-specific fragility at `time`: baseline + buff-applied X_脆弱.
+   *  Note: `physical` overlaps with school-fragility above but is kept consistent
+   *  for code that indexes elementFragility by a generic element key. */
+  getElementFragility(time: number, element: DamageElement): number {
+    const baseline = this.elementFragility[element] || 0;
+    const bm = this.aggregateBuffDebuffs(time);
+    let buffSum = 0;
+    switch (element) {
+      case "blaze":  buffSum = bm.blazeVulnerability || 0; break;
+      case "cold":   buffSum = bm.coldVulnerability || 0; break;
+      case "emag":   buffSum = bm.emagVulnerability || 0; break;
+      case "nature": buffSum = bm.natureVulnerability || 0; break;
+      // physical element doesn't get an element-specific vuln (use physicalFragility instead),
+      // but we still allow buff_apply with element='physical' for completeness.
+      case "physical": buffSum = 0; break;
+    }
+    return baseline + buffSum;
+  }
+
+  /** Snapshot all element fragilities into a Record (for DamageContext.target.elementFragility). */
+  getElementFragilities(time: number): Record<DamageElement, number> {
+    return {
+      physical: this.getElementFragility(time, "physical"),
+      blaze:    this.getElementFragility(time, "blaze"),
+      cold:     this.getElementFragility(time, "cold"),
+      emag:     this.getElementFragility(time, "emag"),
+      nature:   this.getElementFragility(time, "nature"),
+    };
+  }
+
+  /** All-damage 易伤 at `time`: baseline + buff-applied 全伤害易伤. */
+  getVulnerability(time: number): number {
+    const bm = this.aggregateBuffDebuffs(time);
+    return this.vulnerability + (bm.vulnerabilityAll || 0);
   }
 
   /** Resist reduction at `time`, summing baseline with corrosion (time-accrued, if still active). */
@@ -810,6 +869,18 @@ export function simulate(
       if (!placed) continue;
       const tracker = stackBuffs.get(markerActorId);
       const markerBuild = entry.build;
+      // previousActions: this actor's prior placedSkills that started before
+      // the marker time, sorted descending by startTime. Used by
+      // previousActionTiming variant condition for chained-skill timing checks.
+      const previousActions = skills
+        .filter(s => s.actorId === markerActorId && s.startTime < markerTime)
+        .sort((a, b) => b.startTime - a.startTime)
+        .map(s => ({
+          startTime: s.startTime,
+          actorId: s.actorId,
+          skillId: s.skill.id,
+          actionType: s.skill.type,
+        }));
       const condState: ConditionState = {
         stackBuffs: tracker?.getAllStacks() || {},
         ultimateActive: isUltimateActive(markerActorId, markerTime),
@@ -820,6 +891,8 @@ export function simulate(
           corrosion: enemy.anomalies.corrosion.active,
         },
         triggerData: placed.triggerData,
+        previousActions,
+        currentTime: markerTime,
       };
       const selected = selectVariant(placed.variants || [], condState);
 
@@ -978,6 +1051,21 @@ export function simulate(
               actorId: aActorId, actionId: aActionId, time,
               code: "ISSUE_COOLDOWN_ACTIVE",
               message: `${typeLabel}冷却中: ${(cdExpiry - time).toFixed(1)}s后可用`,
+            };
+            break;
+          }
+        }
+        // Release conditions check (e.g. ROSSI 连携技 needs 敌人破防 + 法术附着).
+        // Reuses TriggerCondition format and the trigger processor's evaluator.
+        if (effSkill.releaseConditions && effSkill.releaseConditions.length > 0) {
+          const relState = buildTriggerState(aActorId, time);
+          const failed = effSkill.releaseConditions.find(c => !triggerProc.evalCondition(c, relState));
+          if (failed) {
+            const typeLabel = effSkill.type === "link" ? "连携技" : effSkill.type === "ultimate" ? "终结技" : effSkill.type === "skill" ? "战技" : "技能";
+            validationError = {
+              actorId: aActorId, actionId: aActionId, time,
+              code: "ISSUE_RELEASE_CONDITION",
+              message: `${typeLabel}释放条件不满足: ${failed.type}`,
             };
             break;
           }
@@ -1210,10 +1298,10 @@ export function simulate(
               resistNature: enemyConfig.baseMagicResist,
               resistReduction: enemy.getResistReduction(hitTime),
               isStaggered: enemy.isStaggered,
-              vulnerability: enemy.vulnerability,
+              vulnerability: enemy.getVulnerability(hitTime),
               physicalFragility: enemy.getPhysicalFragility(hitTime),
               magicFragility: enemy.getMagicFragility(hitTime),
-              elementFragility: { ...enemy.elementFragility },
+              elementFragility: enemy.getElementFragilities(hitTime),
             },
             multiplier: eDmg.multiplier,
             element: eDmg.element,
@@ -1299,6 +1387,10 @@ export function simulate(
       resolveQueuedDamages();
 
       // ════════════ ③ Skill damage ════════════
+      // Carries result fields out of the if-block so post-damage trigger events
+      // (Step 2 below) can include isCrit + damage in event.data.
+      let lastHitWasCrit = false;
+      let lastHitDamage = 0;
       if (hit.damage) {
         const mult = resolveMultiplier(actorId, hit.damage);
         const baseBuffMods = getBuffModifiers(actorId, hitTime);
@@ -1322,10 +1414,10 @@ export function simulate(
             resistNature: enemyConfig.baseMagicResist,
             resistReduction: enemy.getResistReduction(hitTime),
             isStaggered: enemy.isStaggered,
-            vulnerability: enemy.vulnerability,
+            vulnerability: enemy.getVulnerability(hitTime),
             physicalFragility: enemy.getPhysicalFragility(hitTime),
             magicFragility: enemy.getMagicFragility(hitTime),
-            elementFragility: { ...enemy.elementFragility },
+            elementFragility: enemy.getElementFragilities(hitTime),
           },
           multiplier: mult,
           element: hit.damage.element,
@@ -1338,6 +1430,9 @@ export function simulate(
           probLocks,
         };
         const result = resolveDamage(ctx);
+        // Carry isCrit into outer scope so the post-damage trigger event can include it.
+        lastHitWasCrit = result.isCrit;
+        lastHitDamage = result.finalDamage;
         emit({
           type: "damage", time: hitTime,
           sourceId: actorId, targetId: "boss",
@@ -1378,17 +1473,20 @@ export function simulate(
       // Step 2: synthesise post-damage trigger events and queue alongside step 1's.
       if (hit.damage) {
         const sourceType = hit.damage.sourceType;
-        hitTriggerEvents.push({ type: "hit_damage", time: hitTime, sourceActorId: actorId, data: { actionType: sourceType } });
+        // Include isCrit + damage so trigger conditions like `crit_hit` can filter,
+        // and trigger actions can scaleBy event.isCrit / event.damage.
+        const hitData = { actionType: sourceType, isCrit: lastHitWasCrit, damage: lastHitDamage };
+        hitTriggerEvents.push({ type: "hit_damage", time: hitTime, sourceActorId: actorId, data: hitData });
         const typeMap: Record<string, string> = { attack: "attack_hit", skill: "skill_hit", link: "link_hit", ultimate: "ultimate_hit", execution: "execution_hit" };
         const specificType = typeMap[sourceType];
         if (specificType) {
-          hitTriggerEvents.push({ type: specificType as any, time: hitTime, sourceActorId: actorId, data: {} });
+          hitTriggerEvents.push({ type: specificType as any, time: hitTime, sourceActorId: actorId, data: { isCrit: lastHitWasCrit, damage: lastHitDamage } });
         }
         if (skill.isHeavyAttack && hitIdx === skill.hits.length - 1) {
-          hitTriggerEvents.push({ type: "heavy_attack_hit", time: hitTime, sourceActorId: actorId, data: {} });
+          hitTriggerEvents.push({ type: "heavy_attack_hit", time: hitTime, sourceActorId: actorId, data: { isCrit: lastHitWasCrit, damage: lastHitDamage } });
         }
         if (sourceType === "attack" && skill.id.includes("aerial")) {
-          hitTriggerEvents.push({ type: "aerial_hit" as any, time: hitTime, sourceActorId: actorId, data: {} });
+          hitTriggerEvents.push({ type: "aerial_hit" as any, time: hitTime, sourceActorId: actorId, data: { isCrit: lastHitWasCrit, damage: lastHitDamage } });
         }
         if (hit.damage.stagger > 0) {
           hitTriggerEvents.push({ type: "stagger_increased", time: hitTime, sourceActorId: actorId, data: {} });
@@ -1611,10 +1709,10 @@ export function simulate(
           resistNature: enemyConfig.baseMagicResist,
           resistReduction: enemy.getResistReduction(time),
           isStaggered: enemy.isStaggered,
-          vulnerability: enemy.vulnerability,
+          vulnerability: enemy.getVulnerability(time),
           physicalFragility: enemy.getPhysicalFragility(time),
           magicFragility: enemy.getMagicFragility(time),
-          elementFragility: { ...enemy.elementFragility },
+          elementFragility: enemy.getElementFragilities(time),
         },
         multiplier: eDmg.multiplier,
         element: eDmg.element,
@@ -2336,6 +2434,12 @@ export function simulate(
           stagger?: ValueSource;
           element?: DamageElement;
           school?: DamageSchool;
+          /** When true, skip sourceType-based bonuses (skill_dmg_bonus / attack_dmg_bonus / etc.).
+           *  Used for talent DOT damage that is logically separate from the triggering skill —
+           *  e.g. ROSSI 斫痕 DOT inherits 战技 source context but should NOT pick up "战技伤害+15%"
+           *  potentials because the talent damage isn't itself a 战技 hit. */
+          skipSourceTypeBonus?: boolean;
+          canCrit?: boolean;
         };
         const delay = rv(p.delay, 0);
         const mult = rv(p.multiplier, 0)
@@ -2368,16 +2472,17 @@ export function simulate(
               resistNature: enemyConfig.baseMagicResist,
               resistReduction: enemy.getResistReduction(dmgTime),
               isStaggered: enemy.isStaggered,
-              vulnerability: enemy.vulnerability,
+              vulnerability: enemy.getVulnerability(dmgTime),
               physicalFragility: enemy.getPhysicalFragility(dmgTime),
               magicFragility: enemy.getMagicFragility(dmgTime),
-              elementFragility: { ...enemy.elementFragility },
+              elementFragility: enemy.getElementFragilities(dmgTime),
             },
             multiplier: mult,
             element: p.element || build.element,
             school: p.school || "physical",
             sourceType: derivedSourceType,
-            canCrit: true,
+            canCrit: p.canCrit !== false,
+            skipSourceTypeBonus: p.skipSourceTypeBonus === true,
             critMode: config.critMode,
             rng,
             critEventKey,

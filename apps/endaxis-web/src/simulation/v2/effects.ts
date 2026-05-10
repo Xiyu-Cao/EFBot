@@ -332,6 +332,16 @@ export interface ConditionState {
   enemyAnomalies?: Partial<Record<import("./types").AnomalyType, boolean>>;
   /** One-shot trigger-time data passed from the placed action (e.g. pogranichnk link: consumedBreakStacks). */
   triggerData?: Record<string, unknown>;
+  /**
+   * Previous actions of this actor that started before this variant marker,
+   * sorted descending by startTime (most recent first). Used by
+   * `previousActionTiming` variant condition for "chained skill" auto-select
+   * (e.g. ROSSI 第二段 精确衔接 fires when placement is in [122f, 167f] after
+   * 第一段 starts).
+   */
+  previousActions?: Array<{ startTime: number; actorId: string; skillId: string; actionType: import("./types").ActionType }>;
+  /** Current variant marker time (used to compute "since previous action" window). */
+  currentTime?: number;
 }
 
 /**
@@ -376,6 +386,21 @@ function evalCondition(cond: VariantCondition, state: ConditionState): boolean {
       case "!=": return value !== target;
       default: return false;
     }
+  }
+  if (cond.type === "previousActionTiming") {
+    // Find most recent matching prev action; check time-since against window.
+    const window = cond.prevSinceFrames;
+    if (!window) return false;
+    const minSec = window.min / 60;
+    const maxSec = window.max / 60;
+    const prev = (state.previousActions || []).find(a => {
+      if (cond.prevSkillId) return a.skillId === cond.prevSkillId;
+      if (cond.prevActionType) return a.actionType === cond.prevActionType;
+      return false;
+    });
+    if (!prev) return false;
+    const sinceSec = (state.currentTime ?? 0) - prev.startTime;
+    return sinceSec >= minSec - 0.001 && sinceSec <= maxSec + 0.001;
   }
   return false;
 }

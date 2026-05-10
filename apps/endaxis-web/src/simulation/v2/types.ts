@@ -223,6 +223,36 @@ export interface Skill {
   interruptibleBy?: ActionType[];
   /** Visual duration override for frontend display (e.g., internal CD indicator when kernel duration=0). */
   displayDuration?: number;
+  /**
+   * Placement-time precondition: this skill can only be placed in the timeline if
+   * a matching previous action's start time falls within the given window.
+   *
+   * Currently used for "chained skill" patterns like ROSSI 连携技第二段 — must
+   * be placed within [92f, 167f] after 第一段 (= rossi_link) starts.
+   *
+   * Validated by storeAdapter / timelineStore at action push time. Outside
+   * the window: placement is rejected (or marked invalid for UI feedback).
+   */
+  requiresPreviousAction?: {
+    /** Match by exact skill ID. If omitted, matches any skill of type `actionType`. */
+    skillId?: string;
+    /** Match by action type (skill / link / ultimate / attack). */
+    actionType?: ActionType;
+    /** Window in frames relative to the previous action's start time. */
+    withinFrames: { min: number; max: number };
+  };
+  /**
+   * Release conditions checked at action_start time (kernel validation phase).
+   * All conditions must pass; otherwise the action is marked as failed validation
+   * and the skill aborts (no hits emitted).
+   *
+   * E.g. ROSSI 连携技 (rossi_link): "当有敌人同时处于破防和法术附着状态时可以发动"
+   * → releaseConditions: [enemy_has_break, enemy_has_attachment].
+   *
+   * Reuses TriggerCondition format. Supported types include enemy_has_break,
+   * enemy_has_attachment, enemy_has_anomaly, enemy_has_buff, etc.
+   */
+  releaseConditions?: TriggerCondition[];
   // Note: SP restore within a skill is a HitEffect on a specific hit, not a Skill-level field.
   // gaugeGain for self is also derived from SP consumption (handled by kernel).
 }
@@ -233,7 +263,7 @@ export interface Skill {
 
 /** Condition for variant selection (evaluated at skill cast time). */
 export interface VariantCondition {
-  type: "stackBuff" | "ultimateActive" | "enemyAnomaly" | "triggerData";
+  type: "stackBuff" | "ultimateActive" | "enemyAnomaly" | "triggerData" | "previousActionTiming";
   /** For stackBuff: which buff type to check. */
   buffType?: string;
   /** For enemyAnomaly: which magic anomaly to check on the current enemy. */
@@ -246,6 +276,12 @@ export interface VariantCondition {
   op?: ">=" | "<=" | ">" | "<" | "==" | "!=";
   /** For stackBuff: comparison value. */
   value?: number;
+  /** For previousActionTiming: match by exact skill ID. */
+  prevSkillId?: string;
+  /** For previousActionTiming: match by action type. */
+  prevActionType?: ActionType;
+  /** For previousActionTiming: window in frames relative to the previous action's start time. */
+  prevSinceFrames?: { min: number; max: number };
 }
 
 /** A variant override for a skill. */

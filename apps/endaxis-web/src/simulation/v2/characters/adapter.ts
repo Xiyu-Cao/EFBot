@@ -9,6 +9,11 @@
  */
 
 import type { Skill } from "../types";
+import {
+  applyOverridesToModule,
+  getOverridesForChar,
+  overridesVersion,
+} from "../hitTimingOverrides";
 // NOTE: Cooldown resolution (ultimate from ultimateCooldowns.json, link from
 // mod.skillData levelData at actor level, plus potential `cooldown_modifier`
 // flat-seconds) is owned by `simulation/v2/panel.ts#buildCharacterPanel`.
@@ -24,6 +29,7 @@ const V2_MODULES: Record<string, () => Promise<any>> = {
   LIFENG: () => import("./lifeng"),
   ARCLIGHT: () => import("./arclight"),
   CHENQIANYU: () => import("./chenqianyu"),
+  ROSSI: () => import("./rossi"),
 };
 
 export const V2_READY_IDS = new Set(Object.keys(V2_MODULES));
@@ -31,21 +37,46 @@ export const V2_READY_IDS = new Set(Object.keys(V2_MODULES));
 /** Characters that require enemy attack/HP/healing systems — not supported yet. */
 export const UNSUPPORTED_IDS = new Set(["EMBER", "CATCHER", "SNOWSHINE"]);
 
-/** Cache for loaded modules */
-const moduleCache: Record<string, any> = {};
+/** Cache for raw, unmodified imported modules. Always immutable. */
+const _rawModuleCache: Record<string, any> = {};
+/** Cache for override-applied modules, keyed by charId; carries the overridesVersion it was built against. */
+const _effectiveModuleCache: Record<string, { mod: any; version: number }> = {};
+
+/** Get the raw module from cache (sync). Used internally; returns null if not yet imported. */
+function _getRaw(charId: string): any | null {
+  return _rawModuleCache[charId] || null;
+}
+
+/** Recompute the override-applied module for a char, caching against current overridesVersion. */
+function _getEffective(charId: string): any | null {
+  const raw = _getRaw(charId);
+  if (!raw) return null;
+  const version = overridesVersion.value;
+  const cached = _effectiveModuleCache[charId];
+  if (cached && cached.version === version) return cached.mod;
+  const ov = getOverridesForChar(charId);
+  const effective = applyOverridesToModule(raw, ov);
+  _effectiveModuleCache[charId] = { mod: effective, version };
+  return effective;
+}
 
 export async function loadV2Module(charId: string) {
-  if (moduleCache[charId]) return moduleCache[charId];
-  const loader = V2_MODULES[charId];
-  if (!loader) return null;
-  const mod = await loader();
-  moduleCache[charId] = mod;
-  return mod;
+  if (!_rawModuleCache[charId]) {
+    const loader = V2_MODULES[charId];
+    if (!loader) return null;
+    _rawModuleCache[charId] = await loader();
+  }
+  return _getEffective(charId);
 }
 
 /** Synchronous version — returns null if not yet loaded */
 export function getV2Module(charId: string) {
-  return moduleCache[charId] || null;
+  return _getEffective(charId);
+}
+
+/** Returns the raw, override-free module if loaded. Used by the timing-tuner UI to read defaults. */
+export function getRawV2Module(charId: string) {
+  return _getRaw(charId);
 }
 
 /** Preload all v2 modules */
@@ -53,6 +84,19 @@ export async function preloadV2Modules() {
   await Promise.all(
     Object.keys(V2_MODULES).map(id => loadV2Module(id))
   );
+}
+
+/**
+ * Re-run applyV2Overrides for every v2-ready char in a roster.
+ * Call this after hit-timing overrides change so legacy fields
+ * (skill_damage_ticks, attack_segments, etc.) get the new timings
+ * before validateTimeline rebuilds inputs.
+ */
+export function reapplyV2OverridesToRoster(roster: any[]): void {
+  if (!Array.isArray(roster)) return;
+  for (const c of roster) {
+    if (c && V2_READY_IDS.has(c.id)) applyV2Overrides(c);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -112,6 +156,28 @@ export function convertAttackToSegments(attackSkills: Skill[]): any[] {
     }));
 }
 
+/** Convert a v2 Skill into a legacy variant entry (for char.variants[]).
+ *  Used for `skills.link[1..]` — secondary link skills exposed as user-placeable
+ *  alternates in the timeline editor (e.g. ROSSI 连携技第二段 二次施放). */
+export function convertSkillToLegacyVariant(skill: Skill): any {
+  return {
+    id: skill.id,
+    name: skill.name,
+    type: skill.type,
+    duration: skill.duration,
+    icon: "",
+    allowedTypes: [],
+    physicalAnomaly: [],
+    damageTicks: convertHitsToTicks(skill),
+    cooldown: skill.cooldown ?? 0,
+    gaugeGain: 0,
+    // Carry the requiresPreviousAction field through for placement validation
+    // (timelineStore will read this when validating action placement).
+    ...(skill.requiresPreviousAction ? { requiresPreviousAction: skill.requiresPreviousAction } : {}),
+    _v2SkillId: skill.id,
+  };
+}
+
 /**
  * Apply v2 data overrides to a characterRoster entry (mutates in place).
  * Call this after characterRoster is loaded but before the skill library is built.
@@ -132,17 +198,26 @@ export function applyV2Overrides(char: any): boolean {
   }
 
   // ── Link (连携技) ──
+  // skills.link can be a single Skill or Skill[] (multi-link variants).
+  //   - skills.link[0] (or single) = primary link, exposed via char.link_*
+  //   - skills.link[1..] = additional placeable variants, written to char.variants[]
+  const linkVariants: any[] = [];
   if (skills.link) {
-    // Single link or array of variants
-    const primaryLink = Array.isArray(skills.link) ? skills.link[0] : skills.link;
+    const linkArray = Array.isArray(skills.link) ? skills.link : [skills.link];
+    const primaryLink = linkArray[0];
     const legacy = convertSkillToLegacy(primaryLink);
     char.link_duration = legacy.duration;
     char.link_damage_ticks = legacy.damageTicks;
     char.link_anomalies = [];  // V2: effects are in hit.effects
+    // Push each non-primary as a placeable variant (e.g., ROSSI 第二段)
+    for (let i = 1; i < linkArray.length; i++) {
+      linkVariants.push(convertSkillToLegacyVariant(linkArray[i]));
+    }
   }
 
-  // V2 characters: clear legacy variants — V2 kernel handles variant selection internally
-  char.variants = [];
+  // V2 characters: kernel handles condition-based variant selection internally,
+  // but multi-skill arrays (e.g., link[]) become placeable variants here.
+  char.variants = linkVariants;
 
   // ── Ultimate (终结技) ──
   if (skills.ultimate) {

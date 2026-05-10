@@ -24,12 +24,14 @@
           "description": "战技的狼之珀造成伤害后，会对目标施加爪印斫痕状态，持续15秒，该效果无法叠加。爪印斫痕持续期间，目标每秒受到洛茜攻击力25%的物理伤害，且受到的物理伤害和灼热伤害+6%。",
           "effects": [
             {
-              "type": "stat_bonus",
-              "stat": "attack_percent",
-              "value": 25,
-              "unit": "percent",
-              "scope": "runtime_conditional",
-              "note": "conditional buff"
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "DOT component: 25% ATK physical/sec, canCrit assumed (pending test); 15s duration"
+            },
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "Vulnerability component: target physical/blaze taken +6%, 15s duration; non-stacking"
             }
           ]
         },
@@ -39,12 +41,14 @@
           "description": "战技的狼之珀造成伤害后，会对目标施加爪印斫痕状态，持续25秒，该效果无法叠加。爪印斫痕持续期间，目标每秒受到洛茜攻击力30%的物理伤害，且受到的物理伤害和灼热伤害+12%。",
           "effects": [
             {
-              "type": "stat_bonus",
-              "stat": "attack_percent",
-              "value": 30,
-              "unit": "percent",
-              "scope": "runtime_conditional",
-              "note": "conditional buff"
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "DOT component: 30% ATK physical/sec, canCrit assumed (pending test); 25s duration"
+            },
+            {
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "Vulnerability component: target physical/blaze taken +12%, 25s duration; non-stacking"
             }
           ]
         }
@@ -68,12 +72,9 @@
           "description": "洛茜对处于爪印斫痕状态的敌人施放技能造成暴击伤害时，会额外触发一次攻击力12%的灼热伤害，并且为自身回复[智识×0.04]点生命值。若目标同时处于燃烧状态，则上述伤害和治疗效果提升至1.5倍。",
           "effects": [
             {
-              "type": "stat_bonus",
-              "stat": "attack_percent",
-              "value": 12,
-              "unit": "percent",
-              "scope": "runtime_conditional",
-              "note": "conditional buff"
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "TBD pending测试: extra 12% ATK blaze damage on crit hits against 斫痕 targets; 1.5x if target burning. Heal portion = intellect×0.04"
             }
           ]
         },
@@ -83,12 +84,9 @@
           "description": "洛茜对处于爪印斫痕状态的敌人施放技能造成暴击伤害时，会额外触发一次攻击力24%的灼热伤害，并且为自身回复[智识×0.08]点生命值。若目标同时处于燃烧状态，则上述伤害和治疗效果提升至1.5倍。",
           "effects": [
             {
-              "type": "stat_bonus",
-              "stat": "attack_percent",
-              "value": 24,
-              "unit": "percent",
-              "scope": "runtime_conditional",
-              "note": "conditional buff"
+              "type": "parsed_unimplemented",
+              "scope": "parsed_unimplemented",
+              "note": "TBD pending测试: extra 24% ATK blaze damage on crit hits against 斫痕 targets; 1.5x if target burning. Heal portion = intellect×0.08"
             }
           ]
         }

@@ -120,6 +120,22 @@ export interface BuffModifiers {
   // Crit modifiers
   critRateBonus: number;    // added to base crit rate
   critDamageBonus: number;  // added to base crit damage
+
+  // ─── Enemy-side debuff aggregations ─────────────────────────────────
+  // These are populated only when aggregating an enemy's BuffManager
+  // (target-side debuffs like 物理脆弱/灼热脆弱/易伤). They are read by
+  // EnemyState getters that combine them with baseline + hardcoded specials
+  // (armor-break vuln, conduction fragility, etc.) and surface through
+  // DamageContext.target.* fields. Source-side (actor) buff aggregation
+  // ignores these — they're zero-valued unless explicitly applied via
+  // `buff_apply target: enemy stat: X_dmg zone: vulnerability`.
+  vulnerabilityAll: number;       // 易伤 (all damage) (%)
+  physicalVulnerability: number;  // 物理脆弱 (%)
+  artsVulnerability: number;      // 法术脆弱 (%)
+  blazeVulnerability: number;     // 灼热脆弱 (%)
+  coldVulnerability: number;      // 寒冷脆弱 (%)
+  emagVulnerability: number;      // 电磁脆弱 (%)
+  natureVulnerability: number;    // 自然脆弱 (%)
 }
 
 /** Result of a damage calculation. */
@@ -437,5 +453,12 @@ export function emptyBuffModifiers(): BuffModifiers {
     brokenDmgBonus: 0,
     critRateBonus: 0,
     critDamageBonus: 0,
+    vulnerabilityAll: 0,
+    physicalVulnerability: 0,
+    artsVulnerability: 0,
+    blazeVulnerability: 0,
+    coldVulnerability: 0,
+    emagVulnerability: 0,
+    natureVulnerability: 0,
   };
 }

@@ -182,8 +182,22 @@ export class TriggerProcessor {
     }
   }
 
-  private evalCondition(cond: TriggerCondition, state: TriggerState): boolean {
+  /** Public access to the condition evaluator for cross-system reuse
+   *  (e.g., kernel release-condition validation on action_start). */
+  public evalCondition(cond: TriggerCondition, state: TriggerState): boolean {
     switch (cond.type) {
+      case "compound_and": {
+        const conds = (cond.params?.conditions as TriggerCondition[]) || [];
+        return conds.every(c => this.evalCondition(c, state));
+      }
+      case "compound_or": {
+        const conds = (cond.params?.conditions as TriggerCondition[]) || [];
+        return conds.some(c => this.evalCondition(c, state));
+      }
+      case "compound_not": {
+        const inner = cond.params?.condition as TriggerCondition | undefined;
+        return inner ? !this.evalCondition(inner, state) : true;
+      }
       case "enemy_has_attachment": {
         const el = cond.params.element as MagicElement | undefined;
         if (el) return state.enemy.attachmentElement === el;

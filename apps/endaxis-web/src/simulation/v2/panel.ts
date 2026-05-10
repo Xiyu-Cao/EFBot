@@ -206,10 +206,17 @@ export function adjustSkillCooldowns(
 // ═══════════════════════════════════════════════════════════════════
 
 /** Map talent_X → numeric value for the actor's current talent level.
- *  Picks the highest-promotion stage with `promotion <= level`. */
+ *  Picks the highest-promotion stage with `promotion <= level`.
+ *
+ *  When `activePotentialEffects` is supplied, any `{ type: "talent_enhance",
+ *  talent: "talent_X", valueBonus: N }` entries are accumulated into the
+ *  resolved value. Lets potentials like ROSSI P3 (沸血 +8%) and LIFENG P3
+ *  (顿悟 +0.05/point) modify the talent_X resolved by `multiplierFromTalent`
+ *  / `valueRef: "talent_X"` without character-side hardcoding. */
 export function resolveTalentValues(
   mod: any,
   talentLevels: Record<string, number>,
+  activePotentialEffects?: Array<{ type?: string; talent?: string; valueBonus?: number }>,
 ): Map<string, number> {
   const map = new Map<string, number>();
   if (!Array.isArray(mod?.talents)) return map;
@@ -218,8 +225,16 @@ export function resolveTalentValues(
     if (level <= 0 || !Array.isArray(talent.stages)) continue;
     const stage = [...talent.stages].reverse().find((s: any) => Number(s.promotion) <= level);
     if (!stage) continue;
-    const value = stage.value ?? stage.damageMultiplier ?? stage.valuePerPoint ?? 0;
-    map.set(talent.id, Number(value) || 0);
+    const baseValue = Number(stage.value ?? stage.damageMultiplier ?? stage.valuePerPoint ?? 0) || 0;
+    let bonus = 0;
+    if (Array.isArray(activePotentialEffects)) {
+      for (const eff of activePotentialEffects) {
+        if (eff?.type === "talent_enhance" && eff?.talent === talent.id) {
+          bonus += Number(eff.valueBonus) || 0;
+        }
+      }
+    }
+    map.set(talent.id, baseValue + bonus);
   }
   return map;
 }
@@ -438,7 +453,13 @@ export function buildCharacterPanel(
     triggers: [], // populated by caller (weapon + equipment triggers come from outside)
     skillData: mod.skillData,
     skillLevels,
-    talentValues: resolveTalentValues(mod, growth.talentLevels || {}),
+    talentValues: resolveTalentValues(
+      mod,
+      growth.talentLevels || {},
+      // configured._activeEffects carries all active talent + potential effects;
+      // resolveTalentValues filters for talent_enhance entries.
+      (configured as any)?._activeEffects,
+    ),
     totalAttackSegments,
   };
 }

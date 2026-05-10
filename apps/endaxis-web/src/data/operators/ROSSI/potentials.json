@@ -1,4 +1,99 @@
 {
   "_doc": "Potential definitions (1-5). Text descriptions from wiki; structured effects to be added.",
-  "potentials": []
+  "potentials": [
+    {
+      "level": 1,
+      "name": "憧憬的起点",
+      "description": "战技血红之影和连携技燎影时刻的伤害倍率提升至原本的1.15倍。\n战技释放的狼之珀在命中敌人后返还10点技力。",
+      "effects": [
+        {
+          "type": "damage_bonus",
+          "stat": "skill_dmg_bonus",
+          "value": 15,
+          "unit": "percent",
+          "scope": "static",
+          "note": "战技伤害 +15% (additive in dmgBonus zone). 实测对 战技 全部 hit (含 狼之珀 4 sub-hits) 一致生效"
+        },
+        {
+          "type": "damage_bonus",
+          "stat": "link_dmg_bonus",
+          "value": 15,
+          "unit": "percent",
+          "scope": "static",
+          "note": "连携伤害 +15%"
+        }
+      ],
+      "_implementation_note": "SP refund (狼之珀命中返还10技力) 部分待 V2 自定义 trigger 实装"
+    },
+    {
+      "level": 2,
+      "name": "理想的距离",
+      "description": "敏捷+20，暴击率+7%。",
+      "effects": [
+        {
+          "type": "stat_bonus",
+          "stat": "agility",
+          "value": 20,
+          "unit": "flat",
+          "scope": "static"
+        },
+        {
+          "type": "stat_bonus",
+          "stat": "crit_rate",
+          "value": 7,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ]
+    },
+    {
+      "level": 3,
+      "name": "有形的责任",
+      "description": "天赋沸血效果加强：触发的基础伤害倍率+8%，回复的基础生命值+[智识×0.04]。",
+      "effects": [
+        {
+          "type": "talent_enhance",
+          "talent": "talent_1",
+          "valueBonus": 8,
+          "unit": "percent",
+          "scope": "static",
+          "note": "Talent_1 沸血 base mult +8%. Resolved at runtime by panel.ts resolveTalentValues + multiplierFromTalent('talent_1')."
+        },
+        {
+          "type": "parsed_unimplemented",
+          "scope": "parsed_unimplemented",
+          "note": "Heal portion +[intellect × 0.04] — heal system未实装"
+        }
+      ]
+    },
+    {
+      "level": 4,
+      "name": "纯真的心愿",
+      "description": "终结技\"利爪\"奇袭所需的终结技能量-15%。",
+      "effects": [
+        {
+          "type": "gauge_modifier",
+          "stat": "ult_gauge_cost",
+          "value": -15,
+          "unit": "percent",
+          "scope": "static"
+        }
+      ]
+    },
+    {
+      "level": 5,
+      "name": "传说的终点",
+      "description": "终结技\"利爪\"奇袭的伤害倍率提升至原本的1.1倍，暴击伤害额外+30%。",
+      "effects": [
+        {
+          "type": "damage_bonus",
+          "stat": "ultimate_dmg_bonus",
+          "value": 10,
+          "unit": "percent",
+          "scope": "static",
+          "note": "终结技伤害 +10% (additive in dmgBonus zone)"
+        }
+      ]
+    }
+  ]
 }

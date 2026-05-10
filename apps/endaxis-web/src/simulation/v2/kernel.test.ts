@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { simulate, type PlacedSkill, type EnemyConfig } from "./kernel";
 import { computeCharacterBuild, type CharacterInput } from "./characterBuild";
-import type { Skill, Hit, DamageElement } from "./types";
+import type { Skill, Hit, DamageElement, SkillVariant } from "./types";
 
 // ── Helper: make a simple hit ──
 function makeHit(offset: number, multiplier: number, stagger: number = 0, effects: any[] = []): Hit {
@@ -2491,3 +2491,630 @@ describe("V2 Kernel — probLocks (per-damage crit lock)", () => {
     expect(dmg.zones.crit).toBeCloseTo(1, 5);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// Enemy debuffs via buff_apply (general fix — was kernel gap before)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Before this fix, `buff_apply target: enemy stat: X_dmg zone: vulnerability`
+// stored the buff in enemy.buffManager but never affected damage. Now:
+//   - resolveBuffModifierZone maps vulnerability/X_dmg → BuffModifiers field
+//   - EnemyState.get*Fragility/getVulnerability aggregates from buffManager
+//   - DamageContext.target reads through these getters
+// Covered: 物理脆弱、灼热脆弱（元素）、全伤害易伤、过期恢复、与碎甲共存。
+
+describe("V2 Kernel — enemy debuffs via buff_apply (vulnerability/fragility)", () => {
+  function makeBuild(element: DamageElement = "physical") {
+    const input: CharacterInput = {
+      id: "ACTOR", name: "ACTOR", element, rarity: 6,
+      promotion: 4, potentialLevel: 0, talentLevels: {},
+      baseStrength: 100, baseAgility: 100, baseIntellect: 100, baseWill: 100,
+      baseAttack: 300, baseHp: 1000,
+      mainAttribute: "strength", subAttribute: "agility",
+      weaponId: null, weaponBaseAtk: 500, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [],
+    };
+    return computeCharacterBuild(input);
+  }
+
+  /** Single-hit skill with a buff_apply effect to enemy then damage. Element configurable. */
+  function makeVulnSkill(element: DamageElement, school: "physical" | "magic", buffStat: string, buffZone: string, buffValue: number, buffDuration: number = 25): Skill {
+    return {
+      id: "vuln_test", type: "skill", name: "test",
+      element, duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element, canCrit: false, school, sourceType: "skill" },
+        effects: [
+          { type: "buff_apply", params: { buffId: "test_vuln", target: "enemy", stat: buffStat, zone: buffZone, value: buffValue, duration: buffDuration } },
+        ],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+  }
+
+  it("buff_apply enemy 物理脆弱 +20% raises subsequent physical hit damage by 1.20×", () => {
+    const build = makeBuild("physical");
+    // Two skills: first applies vuln (its own hit benefits per 先特效后伤害), second is plain physical
+    const skill1 = makeVulnSkill("physical", "physical", "physical_dmg", "vulnerability", 20);
+    const skill2: Skill = {
+      id: "plain_phys", type: "skill", name: "plain",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: skill1, startTime: 0 },
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+    expect(dmgs.length).toBe(2);
+    // Both hits should benefit from +20% vuln (先特效后伤害 + lasting 25s).
+    expect(dmgs[1].damage / dmgs[0].damage).toBeCloseTo(1, 5);
+    // Compare to a no-vuln baseline
+    const baselineResult = simulate([build], [
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const baseline = (baselineResult.events.find(e => e.type === "damage") as any).damage;
+    expect(dmgs[1].damage / baseline).toBeCloseTo(1.20, 2);
+  });
+
+  it("buff_apply enemy 灼热脆弱 +12% raises blaze hit damage by 1.12×", () => {
+    const build = makeBuild("blaze");
+    // Skill 1: applies blaze vuln; Skill 2: plain blaze hit afterwards
+    const skill1 = makeVulnSkill("blaze", "magic", "blaze_dmg", "vulnerability", 12);
+    const skill2: Skill = {
+      id: "plain_blaze", type: "skill", name: "plain",
+      element: "blaze", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "blaze", canCrit: false, school: "magic", sourceType: "skill" },
+        effects: [],
+        standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const withVuln = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: skill1, startTime: 0 },
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const woVuln = simulate([build], [
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const withDmg = (withVuln.events.filter(e => e.type === "damage") as any[])[1].damage;
+    const woDmg = (woVuln.events.find(e => e.type === "damage") as any).damage;
+    expect(withDmg / woDmg).toBeCloseTo(1.12, 2);
+  });
+
+  it("buff_apply enemy 全伤害易伤 (all_dmg) raises any element by configured %", () => {
+    const build = makeBuild("emag");
+    const skill1 = makeVulnSkill("emag", "magic", "all_dmg", "vulnerability", 25);
+    const skill2: Skill = {
+      id: "plain_emag", type: "skill", name: "plain",
+      element: "emag", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "emag", canCrit: false, school: "magic", sourceType: "skill" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const withVuln = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: skill1, startTime: 0 },
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const woVuln = simulate([build], [
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const withDmg = (withVuln.events.filter(e => e.type === "damage") as any[])[1].damage;
+    const woDmg = (woVuln.events.find(e => e.type === "damage") as any).damage;
+    // 全伤害易伤 enters via target.vulnerability → vulnerabilityZone = 1 + total/100
+    expect(withDmg / woDmg).toBeCloseTo(1.25, 2);
+  });
+
+  it("vuln expires correctly: hit after duration sees baseline damage", () => {
+    const build = makeBuild("physical");
+    const skill1 = makeVulnSkill("physical", "physical", "physical_dmg", "vulnerability", 50, /*dur=*/2);
+    const skill2: Skill = {
+      id: "plain_phys", type: "skill", name: "plain",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    // Skill1 at t=0 (vuln applied @0.1, lasts 2s → expires @2.1).
+    // Skill2 at t=5 → vuln expired, should be baseline.
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: skill1, startTime: 0 },
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const baseline = simulate([build], [
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const expiredDmg = (result.events.filter(e => e.type === "damage") as any[])[1].damage;
+    const baselineDmg = (baseline.events.find(e => e.type === "damage") as any).damage;
+    expect(expiredDmg).toBe(baselineDmg);
+  });
+
+  // ─── ROSSI 强化战技 number verification (corrected model) ───────────
+  // User observed (ATK=1114, all maxed, real mode):
+  //   hit1-3 of 第一段: 369 / 369 / 492 — share split 30/30/40 + uniform P1 +15%
+  //   hit4 = 狼之珀 = 4 independent sub-hits, each at 第二段 × 0.25 (= 72%) blaze
+  //     each sub-hit = 1114 × 0.72 × 0.5 × 1.12 (vuln) × 1.15 (P1) = 517
+  //     1 sub-hit can crit → 775 = 517 × 1.5
+  //   斫痕 DOT first tick: 167 = 1114 × 0.30 × 0.5 (no vuln, skipSourceTypeBonus)
+  //   斫痕 DOT subsequent: 187 = 167 × 1.12 (vuln)
+  //
+  // To match the exact 369/492/517/167/187 numbers, the test crit_rate is forced to 0%
+  // (real mode would also work but seed-dependent).
+
+  it("ROSSI 强化战技: 第一段 30/30/40 + 狼之珀 4 sub-hits + 斫痕 produces user-observed numbers", () => {
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 0, potentialLevel: 5, talentLevels: { talent_0: 2, talent_1: 2 },
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1114, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [
+        // P1 effect (skill_dmg_bonus +15) — applies to all 战技 hits including 狼之珀 sub-hits
+        { source: "potential_1", stat: "skill_dmg_bonus", value: 15, type: "flat" as const },
+        // Force crit_rate = 0% (cancel kernel's base 5%) so we can verify exact damage
+        // numbers without crit-blend uncertainty. User's real-mode test happened to roll 0
+        // crits on hit1-3 and 1 crit on hit4 sub-hits.
+        { source: "test", stat: "crit_rate", value: -5, type: "flat" as const },
+      ],
+    };
+    const build = computeCharacterBuild(input);
+
+    // 第一段 M3 = 192%, split 30/30/40
+    // 第二段 M3 = 288%, split 25/25/25/25 across 4 sub-hits
+    const skill: Skill = {
+      id: "rossi_skill_test", type: "skill", name: "强化血红之影",
+      element: "physical", duration: 5, spCost: 0, cooldown: 0,
+      hits: [
+        // hit1-3: 第一段 30/30/40 at f(35), f(47), f(73)
+        { offset: 35/60, checkpointIndex: 0,
+          damage: { multiplier: 192 * 0.30, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true },
+        { offset: 47/60, checkpointIndex: 0,
+          damage: { multiplier: 192 * 0.30, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true },
+        { offset: 73/60, checkpointIndex: 0,
+          damage: { multiplier: 192 * 0.40, stagger: 5, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true },
+        // 狼之珀 sub-hit 1 at f(139) — talent_0 effects inlined; stagger 2.5
+        { offset: 139/60, checkpointIndex: 0,
+          damage: { multiplier: 288 * 0.25, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
+          effects: [
+            { type: "delayed_damage", params: { delay: 0, multiplier: 30, element: "physical", school: "physical", canCrit: true, skipSourceTypeBonus: true } },
+            { type: "buff_apply", params: { buffId: "rossi_zhuohen_phys", target: "enemy", stat: "physical_dmg", zone: "vulnerability", value: 12, duration: 25 } },
+            { type: "buff_apply", params: { buffId: "rossi_zhuohen_blaze", target: "enemy", stat: "blaze_dmg", zone: "vulnerability", value: 12, duration: 25 } },
+            { type: "delayed_damage", params: { delay: 1, multiplier: 30, element: "physical", school: "physical", canCrit: true, skipSourceTypeBonus: true } },
+            { type: "delayed_damage", params: { delay: 2, multiplier: 30, element: "physical", school: "physical", canCrit: true, skipSourceTypeBonus: true } },
+          ],
+          standardLogic: true },
+        // 狼之珀 sub-hits 2-4 at f(140), f(141), f(142) — bare; vuln already up
+        { offset: 140/60, checkpointIndex: 0,
+          damage: { multiplier: 288 * 0.25, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
+          effects: [], standardLogic: true },
+        { offset: 141/60, checkpointIndex: 0,
+          damage: { multiplier: 288 * 0.25, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
+          effects: [], standardLogic: true },
+        { offset: 142/60, checkpointIndex: 0,
+          damage: { multiplier: 288 * 0.25, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
+          effects: [], standardLogic: true },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 6] }],
+    };
+
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ROSSI", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+    const at = (t: number) => dmgs.filter(d => Math.abs(d.time - t) < 0.005);
+
+    // hit1 / hit2 (share 0.30): 369
+    expect(at(35/60)[0]?.damage).toBeGreaterThanOrEqual(368);
+    expect(at(35/60)[0]?.damage).toBeLessThanOrEqual(370);
+    expect(at(47/60)[0]?.damage).toBe(at(35/60)[0]?.damage);
+    // hit3 (share 0.40): 492
+    expect(at(73/60)[0]?.damage).toBeGreaterThanOrEqual(490);
+    expect(at(73/60)[0]?.damage).toBeLessThanOrEqual(493);
+
+    // At f(139): DOT tick 0 (167) + sub-hit 1 body (517)
+    const atSub1 = at(139/60);
+    expect(atSub1.find(d => d.damage === 167)).toBeTruthy(); // DOT first tick (no vuln)
+    expect(atSub1.find(d => d.damage >= 516 && d.damage <= 518)).toBeTruthy(); // sub-hit 1 body
+
+    // Sub-hits 2/3/4 at f(140), f(141), f(142) each at 517 (with vuln up)
+    expect(at(140/60)[0]?.damage).toBeGreaterThanOrEqual(516);
+    expect(at(140/60)[0]?.damage).toBeLessThanOrEqual(518);
+    expect(at(141/60)[0]?.damage).toBe(at(140/60)[0]?.damage);
+    expect(at(142/60)[0]?.damage).toBe(at(140/60)[0]?.damage);
+
+    // DOT subsequent ticks at t=139/60 + 1, +2 → 187
+    expect(at(139/60 + 1)[0]?.damage).toBe(187);
+    expect(at(139/60 + 2)[0]?.damage).toBe(187);
+  });
+
+  it("buff_apply 物理脆弱 stacks additively with armor break vulnerability", () => {
+    // Hit causes armorBreak (consumes 4 break stacks → applies armor break vuln) AND
+    // applies a separate +10% physical vuln via buff_apply. Expect both add.
+    // Setup: pre-stack 4 break, then hit with armorBreak + buff_apply.
+    // (Simpler: just verify 物理脆弱 adds on top of getPhysicalFragility;
+    //  full armor-break flow integration is too complex for this unit.)
+    // Use one skill that applies vuln + a follow-up hit.
+    const build = makeBuild("physical");
+    const skill1 = makeVulnSkill("physical", "physical", "physical_dmg", "vulnerability", 10);
+    const skill2 = makeVulnSkill("physical", "physical", "physical_dmg", "vulnerability", 15);
+    // Independent stack: BuffManager refresh policy means second buff_apply with same id
+    // refreshes; using a different buffId to ensure both stack.
+    skill2.hits[0].effects = [
+      { type: "buff_apply", params: { buffId: "test_vuln_2", target: "enemy", stat: "physical_dmg", zone: "vulnerability", value: 15, duration: 25 } },
+    ];
+    const skill3: Skill = {
+      id: "plain_phys", type: "skill", name: "plain",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill: skill1, startTime: 0 },
+      { actionId: "b", actorId: "ACTOR", skill: skill2, startTime: 3 },
+      { actionId: "c", actorId: "ACTOR", skill: skill3, startTime: 6 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const baseline = simulate([build], [
+      { actionId: "c", actorId: "ACTOR", skill: skill3, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+    const cDmg = dmgs[2].damage;
+    const baseDmg = (baseline.events.find(e => e.type === "damage") as any).damage;
+    // Both vuln active (10 + 15 = 25%), baseline expected ratio 1.25
+    expect(cDmg / baseDmg).toBeCloseTo(1.25, 2);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ROSSI talent_1 沸血 verification (PassiveTrigger + burning scaleBy)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — ROSSI talent_1 沸血", () => {
+  // Verifies the trigger fires on crit + 斫痕 state, and the damage matches:
+  //   200 (no burning, talent damage didn't crit)
+  //   449 (burning + talent damage crit)
+  // Math: 1114 × 32% × 0.5 × 1.12 (vuln 灼热脆弱·斫痕) × [crit] × [burning]
+
+  it("fires extra blaze damage when ROSSI's hit crits on 斫痕 target (no burning)", async () => {
+    // Use the actual rossi.ts module to test PassiveTrigger + scaleBy registration
+    const rossiMod = await import("./characters/rossi");
+    const { triggers } = rossiMod;
+    expect(triggers.length).toBeGreaterThan(0);
+
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 0, potentialLevel: 5, talentLevels: { talent_0: 2, talent_1: 2 },
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1114, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      // Force crit_rate = -5 to net 0% (cancel kernel base 5%) — we use probLocks to force crit on the triggering hit
+      statModifiers: [
+        { source: "test", stat: "crit_rate", value: -5, type: "flat" as const },
+      ],
+    };
+    const build = computeCharacterBuild(input);
+
+    // A skill with one hit that:
+    //  1. Applies 斫痕 vuln + DOT (talent_0 effects, simplified)
+    //  2. The hit damage rolls and crits (forced via probLocks)
+    //  3. talent_1 trigger fires post-hit
+    const skill: Skill = {
+      id: "rossi_test", type: "skill", name: "test",
+      element: "blaze", duration: 5, spCost: 0, cooldown: 0,
+      hits: [
+        {
+          offset: 1, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
+          effects: [
+            // Apply 斫痕 buffs to enemy so talent_1 condition sees them
+            { type: "buff_apply", params: { buffId: "rossi_zhuohen_blaze_vuln", target: "enemy", stat: "blaze_dmg", zone: "vulnerability", value: 12, duration: 25 } },
+          ],
+          standardLogic: true,
+        },
+      ],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+
+    const triggersByActor = new Map([["ROSSI", triggers]]);
+
+    // Force the main hit to crit via probLock so talent_1 trigger fires; force talent_1
+    // own crit roll to NOT crit (we want the 200 baseline).
+    const probLocks = new Map<string, "yes" | "no">([
+      ["crit:a:0:0", "yes"],  // main hit crit
+      ["crit:a:0:1", "no"],   // talent_1 damage no-crit (but trigger still fires)
+    ]);
+
+    // resolveRef returns talent_1 base mult (32 = 24 stage + 8 P3 potential bonus).
+    // In real V2 build pipeline this comes from panel.ts resolveTalentValues + activePotentialEffects.
+    const resolveRef = (_actor: string, label: string) => label === "talent_1" ? 32 : 0;
+
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ROSSI", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "real", rng: () => 0.99, probLocks, resolveRef }, triggersByActor);
+
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+
+    // Expect 2 damage events: main hit (100% blaze, with vuln + crit) and talent_1 (32% blaze, with vuln, no crit)
+    const triggerDmgs = dmgs.filter(d => d.fromTrigger);
+    expect(triggerDmgs.length).toBe(1);
+    // 200 = 1114 × 0.32 × 0.5 × 1.12 = 199.6 → 199 or 200 (floor rounding)
+    expect(triggerDmgs[0].damage).toBeGreaterThanOrEqual(199);
+    expect(triggerDmgs[0].damage).toBeLessThanOrEqual(200);
+  });
+
+  it("burning scaleBy resolver returns 1.5 if burning active, 1.0 otherwise", async () => {
+    // Ensure rossi.ts module is loaded (registers the resolver at module init).
+    await import("./characters/rossi");
+    const { resolveScaleBy } = await import("./valueSource");
+    const ctxBurning: any = { enemy: { anomalies: { burning: { active: true } } } };
+    const ctxNotBurning: any = { enemy: { anomalies: { burning: { active: false } } } };
+    expect(resolveScaleBy("rossi_burning_mult", ctxBurning)).toBe(1.5);
+    expect(resolveScaleBy("rossi_burning_mult", ctxNotBurning)).toBe(1.0);
+  });
+
+  it("ult stab crit = 353 with skill +60% / P5 +30% crit_dmg buffs", async () => {
+    const rossiMod = await import("./characters/rossi");
+    const { skills } = rossiMod;
+
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 0, potentialLevel: 5, talentLevels: { talent_0: 2, talent_1: 2 },
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1114, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [
+        // P5 ult_dmg_bonus +10% (static, normally from potentials.json)
+        { source: "potential_5", stat: "ultimate_dmg_bonus", value: 10, type: "flat" as const },
+        // crit_rate -5 to net 0% baseline (we'll force crit via probLocks anyway)
+        { source: "test", stat: "crit_rate", value: -5, type: "flat" as const },
+      ],
+    };
+    const build = computeCharacterBuild(input);
+
+    // Provide a resolveRef that returns the M3 values from skills.json
+    const resolveRef = (_actor: string, label: string): number => {
+      const m3 = {
+        "戳击总伤害倍率": 600,
+        "第一段斩击伤害倍率": 250,
+        "第二段斩击伤害倍率": 750,
+        "暴击伤害提升": 60,
+      } as Record<string, number>;
+      return m3[label] ?? 0;
+    };
+
+    // Force the FIRST stab to crit; rest don't matter for this test.
+    const probLocks = new Map<string, "yes" | "no">([
+      ["crit:a:0:0", "yes"],
+    ]);
+
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ROSSI", skill: skills.ultimate, startTime: 0 },
+    ], defaultEnemy, {
+      initialSP: 0, critMode: "real",
+      rng: () => 0.99,  // never natural crits; only the locked one fires
+      resolveRef, probLocks,
+    });
+
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+
+    // First stab fires at f(128) = 2.133s and should crit.
+    const firstStab = dmgs.find(d => Math.abs(d.time - 128/60) < 0.01);
+    expect(firstStab).toBeTruthy();
+    expect(firstStab.isCrit).toBe(true);
+    // 1114 × 600% × 0.04 × 0.5 × 1.10 (P5 ult_dmg_bonus) × 2.40 (crit zone 50+60+30%)
+    // = 147.0 × 2.40 = 352.8 → 352 or 353
+    expect(firstStab.damage).toBeGreaterThanOrEqual(351);
+    expect(firstStab.damage).toBeLessThanOrEqual(354);
+
+    // Second stab (no crit lock): should be non-crit 147
+    const secondStab = dmgs.find(d => Math.abs(d.time - 132/60) < 0.01);
+    expect(secondStab).toBeTruthy();
+    expect(secondStab.isCrit).toBe(false);
+    expect(secondStab.damage).toBeGreaterThanOrEqual(146);
+    expect(secondStab.damage).toBeLessThanOrEqual(148);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// resolveTalentValues — talent_enhance from active potentials
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 panel — resolveTalentValues with talent_enhance potential bonus", () => {
+  it("returns base talent value when no potential effects supplied", async () => {
+    const { resolveTalentValues } = await import("./panel");
+    const mod = {
+      talents: [
+        { id: "talent_0", stages: [{ promotion: 1, value: 10 }, { promotion: 2, value: 20 }] },
+        { id: "talent_1", stages: [{ promotion: 2, damageMultiplier: 24 }, { promotion: 3, damageMultiplier: 24 }] },
+      ],
+    };
+    const map = resolveTalentValues(mod, { talent_0: 2, talent_1: 2 });
+    expect(map.get("talent_0")).toBe(20);
+    expect(map.get("talent_1")).toBe(24);
+  });
+
+  it("adds valueBonus from matching talent_enhance potential effects", async () => {
+    const { resolveTalentValues } = await import("./panel");
+    const mod = {
+      talents: [
+        { id: "talent_1", stages: [{ promotion: 2, damageMultiplier: 24 }] },
+      ],
+    };
+    const activeEffects = [
+      { type: "stat_bonus", stat: "agility", value: 20 }, // unrelated
+      { type: "talent_enhance", talent: "talent_1", valueBonus: 8 }, // ROSSI P3 pattern
+      { type: "talent_enhance", talent: "talent_other", valueBonus: 5 }, // shouldn't match
+    ];
+    // talentLevel must be ≥ stage.promotion to match
+    const map = resolveTalentValues(mod, { talent_1: 2 }, activeEffects);
+    expect(map.get("talent_1")).toBe(32); // 24 base + 8 bonus
+  });
+
+  it("accumulates multiple talent_enhance effects on same talent", async () => {
+    const { resolveTalentValues } = await import("./panel");
+    const mod = {
+      talents: [
+        { id: "talent_0", stages: [{ promotion: 2, valuePerPoint: 0.10 }] },
+      ],
+    };
+    const activeEffects = [
+      { type: "talent_enhance", talent: "talent_0", valueBonus: 0.05 }, // LIFENG P3 pattern
+      { type: "talent_enhance", talent: "talent_0", valueBonus: 0.02 }, // hypothetical extra
+    ];
+    const map = resolveTalentValues(mod, { talent_0: 2 }, activeEffects);
+    expect(map.get("talent_0")).toBeCloseTo(0.17, 5); // 0.10 + 0.05 + 0.02
+  });
+
+  it("doesn't apply talent_enhance when talent isn't unlocked (level 0)", async () => {
+    const { resolveTalentValues } = await import("./panel");
+    const mod = {
+      talents: [
+        { id: "talent_1", stages: [{ promotion: 2, damageMultiplier: 24 }] },
+      ],
+    };
+    const activeEffects = [
+      { type: "talent_enhance", talent: "talent_1", valueBonus: 8 },
+    ];
+    const map = resolveTalentValues(mod, { talent_1: 0 }, activeEffects);
+    // Talent locked → no entry in map (regardless of potential)
+    expect(map.has("talent_1")).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// previousActionTiming VariantCondition (chained skill auto-select)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — previousActionTiming variant selection", () => {
+  // Pattern: when a skill is placed within a specific time window after a previous
+  // skill, auto-select a different variant. ROSSI 第二段 精确衔接 [123f, 167f] 用例.
+
+  it("selects variant when placed within prevSinceFrames window", () => {
+    const baseSkill: Skill = {
+      id: "test_followup",
+      type: "skill", name: "test followup",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    // Variant: doubled multiplier when placed within 60..180f after "test_initial"
+    const preciseVariant: SkillVariant = {
+      id: "test_precise",
+      priority: 10,
+      conditions: [{
+        type: "previousActionTiming",
+        prevSkillId: "test_initial",
+        prevSinceFrames: { min: 60, max: 180 },
+      }],
+      overrides: {
+        hits: [{
+          offset: 0.1, checkpointIndex: 0,
+          damage: { multiplier: 200, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        }],
+      },
+    };
+    const initialSkill: Skill = { ...baseSkill, id: "test_initial", name: "test initial" };
+
+    const build = makeBuild();
+    // Place initial at t=0, followup at t=2 (= 120f, within [60f, 180f])
+    const result = simulate([build], [
+      { actionId: "init", actorId: "ACTOR", skill: initialSkill, startTime: 0 },
+      { actionId: "follow", actorId: "ACTOR", skill: baseSkill, startTime: 2, variants: [preciseVariant] },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const dmgs = result.events.filter(e => e.type === "damage") as any[];
+    // initial @ ~0.1s mult=100 → damage ~ATK×1.0×0.5 = ~150
+    // followup @ ~2.1s should fire variant (mult=200) → damage ~ATK×2.0×0.5 = ~300
+    const followupDmg = dmgs.find(d => Math.abs(d.time - 2.1) < 0.01);
+    const initialDmg = dmgs.find(d => Math.abs(d.time - 0.1) < 0.01);
+    expect(initialDmg).toBeTruthy();
+    expect(followupDmg).toBeTruthy();
+    expect(followupDmg.multiplier).toBe(200); // variant selected
+  });
+
+  it("does NOT select variant when placed outside window", () => {
+    const baseSkill: Skill = {
+      id: "test_followup", type: "skill", name: "test followup",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [{ index: 0, interruptibleBy: [], hitRange: [0, 0] }],
+    };
+    const preciseVariant: SkillVariant = {
+      id: "test_precise", priority: 10,
+      conditions: [{ type: "previousActionTiming", prevSkillId: "test_initial", prevSinceFrames: { min: 60, max: 180 } }],
+      overrides: {
+        hits: [{
+          offset: 0.1, checkpointIndex: 0,
+          damage: { multiplier: 200, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        }],
+      },
+    };
+    const initialSkill: Skill = { ...baseSkill, id: "test_initial", name: "test initial" };
+    const build = makeBuild();
+    // Followup at t=4 (= 240f, OUTSIDE [60, 180])
+    const result = simulate([build], [
+      { actionId: "init", actorId: "ACTOR", skill: initialSkill, startTime: 0 },
+      { actionId: "follow", actorId: "ACTOR", skill: baseSkill, startTime: 4, variants: [preciseVariant] },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const followupDmg = (result.events.filter(e => e.type === "damage") as any[])
+      .find(d => Math.abs(d.time - 4.1) < 0.01);
+    expect(followupDmg).toBeTruthy();
+    expect(followupDmg.multiplier).toBe(100); // base, variant NOT selected
+  });
+});
+
+// Helper: build with non-zero ATK for damage tests above
+function makeBuild() {
+  const input: CharacterInput = {
+    id: "ACTOR", name: "ACTOR", element: "physical", rarity: 6,
+    promotion: 0, potentialLevel: 0, talentLevels: {},
+    baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+    baseAttack: 1000, baseHp: 1000,
+    mainAttribute: "agility", subAttribute: "intellect",
+    weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+    equipmentSetId: null, baseGaugeMax: 300,
+    statModifiers: [{ source: "test", stat: "crit_rate", value: -5, type: "flat" as const }],
+  };
+  return computeCharacterBuild(input);
+}

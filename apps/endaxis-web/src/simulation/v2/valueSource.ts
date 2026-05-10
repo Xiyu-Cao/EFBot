@@ -82,6 +82,10 @@ export interface EventContext {
 export interface EnemyStateView {
   attachment: { element: MagicElement | null; stacks: number; expiresAt: number };
   breakStacks: number;
+  /** Magic anomaly states — exposed for scaleBy resolvers that depend on
+   *  anomaly active flags (e.g. ROSSI 沸血 burning ×1.5). Optional for
+   *  back-compat with any caller that doesn't supply anomaly info. */
+  anomalies?: Record<AnomalyType, { active: boolean; level: number; expiresAt: number }>;
 }
 
 export interface ResolveContext {
