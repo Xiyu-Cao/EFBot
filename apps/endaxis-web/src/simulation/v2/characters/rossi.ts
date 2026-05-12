@@ -5,18 +5,17 @@
  * Weapon type: sword
  * Main attribute: agility, Sub attribute: intellect
  *
- * NOTE — current state (in-progress, partial coverage):
- * - 战技 is implemented as the **强化版 (when target has 破防)** — the 4-hit
- *   sequence with hit4 = 狼之珀. The basic 3-hit version (non-破防) is待 a
- *   `enemyBreak` SkillVariant condition that the kernel doesn't yet support.
- * - 狼之珀 (hit4) merges 4 in-game sub-hits (1-2f apart, identical damage)
- *   into a single hit at the full 第二段倍率, with the total 失衡 (10) on the merge.
- * - Talent 0 (斫痕): vuln + 25-tick DOT inlined as hit4 effects (see comments).
- * - Talent 1 (沸血): not implemented (mechanic待 user 测试 confirm).
- * - Hit timings are user's median measurements (template); subject to refinement.
+ * NOTE — current state:
+ * - 战技 basic (3 hit, 110f) is the default; 强化版 (basic + 4 狼之珀 sub-hits,
+ *   192f) auto-selected via the `enemyHasBreak` SkillVariant condition.
+ * - 狼之珀 = 4 sub-hits (1f apart, equal 第二段倍率 × 0.25 share). Sub-hit 1
+ *   carries the talent_0 vuln + 25-tick DOT.
+ * - Talent 0 (斫痕): vuln + DOT effects inlined on 狼之珀 sub-hit 1.
+ * - Talent 1 (沸血): trigger fires on crit on 斫痕 target → extra blaze damage.
+ * - Hit timings are user's median measurements; refine via HitTimingTuner.
  */
 
-import type { Skill, PassiveTrigger, DamageElement, HitEffect } from "../types";
+import type { Skill, PassiveTrigger, DamageElement, HitEffect, Hit, SkillVariant, VariantCondition } from "../types";
 import { registerScaleByResolver } from "../valueSource";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -140,63 +139,75 @@ export const potentials = [];
 // DOT damages set skipSourceTypeBonus=true (talent damage shouldn't pick up P1's
 // 战技伤害+15%). school/element bonuses + vuln still apply normally.
 
-const DOT_MULT = 30;        // 30% ATK
-const DOT_DURATION = 25;    // 25 ticks at 1s intervals → delays 0..24
-const VULN_VALUE = 12;      // 物理 / 灼热 脆弱 +12% (talent_0 P2)
-const VULN_DURATION = 25;   // 25s
-//
-// TODO: gate values on talent stage (P1 → 25%/15s/+6%, P2 → 30%/25s/+12%).
-// Currently hardcoded to P2; 待 kernel 加 talent_enhance 动态读取.
+/** Stage values for 斫痕 — looked up by talent_0 level (1 = 精英化1, 2 = 精英化2).
+ *  Used by makeZhuoHenEffects to build stage-appropriate effect array. */
+interface ZhuoHenStage {
+  dotMultiplier: number;  // ATK% per tick
+  dotDuration: number;    // total ticks at 1s intervals
+  vulnValue: number;      // 物理 / 灼热 脆弱 percent
+  vulnDuration: number;   // seconds
+}
+const ZHUOHEN_STAGES: Record<number, ZhuoHenStage> = {
+  1: { dotMultiplier: 25, dotDuration: 15, vulnValue: 6,  vulnDuration: 15 },
+  2: { dotMultiplier: 30, dotDuration: 25, vulnValue: 12, vulnDuration: 25 },
+};
 
-function makeZhuoHenEffects(): HitEffect[] {
+/** Build 斫痕 effect array for a specific talent_0 stage. Returns [] when
+ *  talent_0 is locked (caller selects the no-talent variant instead).
+ *
+ *  斫痕 = a single compound debuff `rossi_zhuohen` that bundles 物理脆弱 +
+ *  灼热脆弱 into one named state (one buff bar, one icon — matches the in-game
+ *  presentation where 爪印斫痕 is a unified status, not two stacked debuffs).
+ *  The two stat modifiers live inside the buff via `modifiers: []`, and any
+ *  trigger gating (e.g. fevorousBlood's "is target in 斫痕?") just checks the
+ *  one buff id. */
+function makeZhuoHenEffects(stage: ZhuoHenStage): HitEffect[] {
   const effects: HitEffect[] = [];
-  // 1. First DOT tick BEFORE any buff_apply
+  // 1. First DOT tick BEFORE the buff_apply (order matters: this tick fires
+  //    against pre-vuln enemy state, subsequent ticks against post-vuln).
+  // hideFromHits keeps these out of the per-hit damage breakdown — treated as
+  // a debuff DOT in the UI (analogous to 燃烧), not as N+ extra rows under
+  // 战技 hit3. Damage still counts in totals.
   effects.push({
     type: "delayed_damage",
     params: {
       delay: 0,
-      multiplier: DOT_MULT,
+      multiplier: stage.dotMultiplier,
       element: "physical",
       school: "physical",
       canCrit: true,
       skipSourceTypeBonus: true,
+      hideFromHits: true,
+      triggerName: "爪印斫痕",
     },
   });
-  // 2. Apply 物理脆弱 +12% to enemy
+  // 2. Apply the compound 爪印斫痕 debuff — ONE buff with TWO modifiers
+  //    (物理脆弱 + 灼热脆弱). Single buff bar, single icon, atomic application.
   effects.push({
     type: "buff_apply",
     params: {
-      buffId: "rossi_zhuohen_physical_vuln",
+      buffId: "rossi_zhuohen",
       target: "enemy",
-      stat: "physical_dmg",
-      zone: "vulnerability",
-      value: VULN_VALUE,
-      duration: VULN_DURATION,
+      duration: stage.vulnDuration,
+      modifiers: [
+        { stat: "physical_dmg", zone: "vulnerability", value: stage.vulnValue },
+        { stat: "blaze_dmg",    zone: "vulnerability", value: stage.vulnValue },
+      ],
     },
   });
-  // 3. Apply 灼热脆弱 +12% to enemy
-  effects.push({
-    type: "buff_apply",
-    params: {
-      buffId: "rossi_zhuohen_blaze_vuln",
-      target: "enemy",
-      stat: "blaze_dmg",
-      zone: "vulnerability",
-      value: VULN_VALUE,
-      duration: VULN_DURATION,
-    },
-  });
-  // 4. Subsequent DOT ticks
-  for (let i = 1; i < DOT_DURATION; i++) {
+  // 3. Subsequent DOT ticks
+  for (let i = 1; i < stage.dotDuration; i++) {
     effects.push({
       type: "delayed_damage",
       params: {
         delay: i,
-        multiplier: DOT_MULT,
+        multiplier: stage.dotMultiplier,
         element: "physical",
         school: "physical",
         canCrit: true,
         skipSourceTypeBonus: true,
+        hideFromHits: true,
+        triggerName: "爪印斫痕",
       },
     });
   }
@@ -281,30 +292,29 @@ const aerialAttack: Skill = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// Part 4: Skills — 战技 (强化版, 当目标有破防时)
+// Part 4: Skills — 战技 血红之影 (basic 普通版 + 强化版 variant on 破防)
 // ═══════════════════════════════════════════════════════════════════
-
+//
 // Hit timing (frames; averaged from user 7 测组 for hit1-3, 4 测组 for hit4):
 //   Basic 战技 duration:        110f (1.83s, XYZ from 150 avg ×3 sets)
 //   强化战技 duration:           192f (3.20s, XYZ from 311.5 avg ×4 sets)
-//   hit1 = 35f, hit2 = 47f, hit3 = 73f (击飞 5失衡)  ← hit1-3 同 between basic / strengthened
+//   hit1 = 35f, hit2 = 47f, hit3 = 73f (击飞 5失衡)  ← hit1-3 are IDENTICAL between basic / 强化
 //   hit4 = 139f (狼之珀 first sub-hit; sub-hits 2-4 at 140/141/142f, 1f apart per user)
 //
 // 第一段倍率 split: 30/30/40 across hit1/hit2/hit3 (reverse-engineered from 369/369/492).
 //
-// 狼之珀 = 4 sub-hits, 第二段倍率 × 0.25 each. Each independently canCrit=true (real mode
-// rolls per sub-hit; observed 1 sub-hit crit → 775).
+// 狼之珀 (强化 only) = 4 sub-hits, 第二段倍率 × 0.25 each. Each independently canCrit=true
+// (real mode rolls per sub-hit; observed 1 sub-hit crit → 775).
 // Sub-hit 1 carries talent_0 effects (vuln + DOT) — only fires once per cast.
 // 10 失衡分摊到 4 个 sub-hit (2.5 each); maintains correct total even if sub-hits drop.
 //
-// TODO: enemyBreak SkillVariant condition not yet supported by kernel — currently only
-// the 强化版 (4-hit) is encoded. Basic 战技 (no 破防, hit1-3 only at duration 110f) is待
-// 待 enemyBreak 条件支持后加 variant.
+// 强化 trigger: at action_start, if `enemy.breakStacks > 0` → 强化 variant overrides
+// duration + hits to include the 4 狼之珀 sub-hits. Otherwise basic version fires.
 
-const skill: Skill = {
-  id: "rossi_skill", type: "skill", name: "血红之影（强化）",
-  element: "physical", duration: f(192), spCost: 100, cooldown: 0,
-  hits: [
+// Shared hit1-3 (identical between basic and 强化). Factored as a function so each call
+// site gets fresh Hit objects (effects[] arrays mutate when traversed, so don't share).
+function makeSkillHits123(): Hit[] {
+  return [
     { offset: f(35), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 0.30 }, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "skill" }, effects: [], standardLogic: true },
     { offset: f(47), checkpointIndex: 0, damage: { multiplierRef: { label: "第一段伤害倍率", share: 0.30 }, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "skill" }, effects: [], standardLogic: true },
     {
@@ -313,21 +323,97 @@ const skill: Skill = {
       effects: [{ type: "physical_anomaly", params: { physicalType: "launch" } }],
       standardLogic: true,
     },
-    // 狼之珀 sub-hit 1 — carries talent_0 effects; stagger 2.5 (10/4 split)
-    {
-      offset: f(139), checkpointIndex: 0,
-      damage: { multiplierRef: { label: "第二段伤害倍率", share: 0.25 }, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
-      effects: makeZhuoHenEffects(),
-      standardLogic: true,
+  ];
+}
+
+// 狼之珀 — ONE in-game hit that rolls 4 separate damage instances (each
+// independently crits) within 3 frames. Modeled as 1 Hit at 139f carrying:
+//   • the main damage roll (第二段倍率 × 0.25, stagger 15 at M3)
+//   • 3 delayed_damage effects at +1/+2/+3 frame delays, also at 第二段倍率
+//     × 0.25, also canCrit (each gets its own critEventKey via the kernel).
+// This naturally collapses 4 ticks to one "landing event" (one hit_damage
+// trigger fires, one SP-refund triggers, etc.) without needing silentTriggers
+// on multiple Hit entries.
+//
+// Note on stagger: kernel hit.stagger is a literal number — no mastery scaling
+// yet (M0-M2 = 10/12, M3 = 15 per skills.json "第二段失衡值"). 15 is hardcoded
+// for now; refine when staggerRef lands.
+function makeWolfPearlExtraDamages(): HitEffect[] {
+  // 3 of the 4 damage rolls land 1/2/3 frames after the main; the kernel emits
+  // each as its own damage event with an independent crit roll.
+  return [1, 2, 3].map((dframes) => ({
+    type: "delayed_damage" as const,
+    params: {
+      delay: f(dframes),
+      multiplierRef: { label: "第二段伤害倍率", share: 0.25 },
+      element: "blaze" as const,
+      school: "magic" as const,
+      canCrit: true,
+      triggerName: "狼之珀",
     },
-    // 狼之珀 sub-hits 2-4 — bare; benefit from vuln applied in sub-hit 1's Phase 1.
-    // Stagger 2.5 each (preserves 10 total even if some miss).
-    { offset: f(140), checkpointIndex: 0, damage: { multiplierRef: { label: "第二段伤害倍率", share: 0.25 }, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" }, effects: [], standardLogic: true },
-    { offset: f(141), checkpointIndex: 0, damage: { multiplierRef: { label: "第二段伤害倍率", share: 0.25 }, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" }, effects: [], standardLogic: true },
-    { offset: f(142), checkpointIndex: 0, damage: { multiplierRef: { label: "第二段伤害倍率", share: 0.25 }, stagger: 2.5, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" }, effects: [], standardLogic: true },
-  ],
+  }));
+}
+
+/** Build the 强化战技 hits array for a given 斫痕 stage. Optional `extraSubHit1Effects`
+ *  appended to sub-hit 1 (used by P1 potential to add SP refund). */
+function makeEnhancedHits(zhuoHenEffects: HitEffect[], extraSubHit1Effects: HitEffect[] = []): Hit[] {
+  // 狼之珀 hit: main damage + 斫痕 effects + 3 extra damage rolls + (optional)
+  // P1 SP refund. Effect ordering matters: 斫痕 DOT/vuln 在前 (Phase 1 runs
+  // declaration order so DOT tick 0 fires pre-vuln, vuln then applied for
+  // subsequent ticks; see makeZhuoHenEffects). 3 extra damages last.
+  const wolfPearlHit: Hit = {
+    offset: f(139), checkpointIndex: 0,
+    damage: { multiplierRef: { label: "第二段伤害倍率", share: 0.25 }, stagger: 15, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
+    effects: [...zhuoHenEffects, ...extraSubHit1Effects, ...makeWolfPearlExtraDamages()],
+    standardLogic: true,
+  };
+  return [...makeSkillHits123(), wolfPearlHit];
+}
+
+// Base skill: 普通版 (3 hits, duration 110f). Fires when target is NOT 破防.
+const skill: Skill = {
+  id: "rossi_skill", type: "skill", name: "血红之影",
+  element: "physical", duration: f(110), spCost: 100, cooldown: 0,
+  hits: makeSkillHits123(),
   checkpoints: [],
 };
+
+// P1 potential: 狼之珀命中敌人后返还10点技力. Counts as 1 landing per cast → fires
+// on sub-hit 1 only (other sub-hits have silentTriggers + no effects).
+const P1_SP_REFUND_EFFECT: HitEffect = {
+  type: "sp_restore",
+  params: { amount: 10, isTrueSP: false },
+};
+
+// 强化 variants — three flavours keyed by talent_0 unlock level. Priority
+// cascade: highest level matching wins. enhanced_p2 (priority 30) matches at
+// talent_0 ≥ 2; enhanced_p1 (20) at ≥ 1; enhanced_no_talent (10) is the
+// fallback when enemy is broken but talent_0 isn't unlocked yet (promotion 0).
+//
+// Each variant has a separate "with P1 potential" entry to gate the SP refund.
+// That gives 6 enhanced variants total — manageable thanks to makeEnhancedHits().
+function buildEnhancedVariant(id: string, priority: number, condTalent: VariantCondition | null, condPotential: VariantCondition | null, zhuoHenStage: ZhuoHenStage | null): SkillVariant {
+  const zhuoHenEffects = zhuoHenStage ? makeZhuoHenEffects(zhuoHenStage) : [];
+  const spRefund = condPotential ? [P1_SP_REFUND_EFFECT] : [];
+  const conditions: VariantCondition[] = [{ type: "enemyHasBreak" }];
+  if (condTalent) conditions.push(condTalent);
+  if (condPotential) conditions.push(condPotential);
+  return {
+    id, priority, conditions,
+    overrides: { duration: f(192), hits: makeEnhancedHits(zhuoHenEffects, spRefund) },
+  };
+}
+
+// 6 enhanced variants — priority cascade picks the right combination of
+// (talent_0 level) × (P1 potential present).
+const ZH_P1 = ZHUOHEN_STAGES[1]!;
+const ZH_P2 = ZHUOHEN_STAGES[2]!;
+const enh_p2_p1pot     = buildEnhancedVariant("rossi_skill_enh_p2_p1pot",     35, { type: "talentLevel", talentId: "talent_0", op: ">=", value: 2 }, { type: "potentialLevel", op: ">=", value: 1 }, ZH_P2);
+const enh_p2_nopot     = buildEnhancedVariant("rossi_skill_enh_p2_nopot",     30, { type: "talentLevel", talentId: "talent_0", op: ">=", value: 2 }, null,                                          ZH_P2);
+const enh_p1_p1pot     = buildEnhancedVariant("rossi_skill_enh_p1_p1pot",     25, { type: "talentLevel", talentId: "talent_0", op: ">=", value: 1 }, { type: "potentialLevel", op: ">=", value: 1 }, ZH_P1);
+const enh_p1_nopot     = buildEnhancedVariant("rossi_skill_enh_p1_nopot",     20, { type: "talentLevel", talentId: "talent_0", op: ">=", value: 1 }, null,                                          ZH_P1);
+const enh_notalent_p1pot = buildEnhancedVariant("rossi_skill_enh_notalent_p1pot", 15, null, { type: "potentialLevel", op: ">=", value: 1 }, null);
+const enh_notalent_nopot = buildEnhancedVariant("rossi_skill_enh_notalent_nopot", 10, null, null,                                           null);
 
 // ═══════════════════════════════════════════════════════════════════
 // Part 5: Skills — 连携技 (燎影时刻)
@@ -344,14 +430,35 @@ const skill: Skill = {
 //
 // hit2 effect: 终结技充能 +10 (gauge_gain).
 //
-// 第二段 ("二次施放") = link2nd, placed manually in [92, 167]f after first cast.
-// 精确衔接 = link2ndPrecise, placed in [123, 167]f → triggers precision variant
-// with longer animation + extra +1 break stack on enemy.
+// 第二段 ("二次施放") = link2nd, placed manually in [92f, 92f+6s = 452f] after
+// the first cast — same 6s window as a standard link queue.
+// 精确衔接 = link2ndPrecise, placed in [123f, 167f] sub-window → triggers
+// precision variant with longer animation + extra +1 break stack on enemy.
+//
+// CD model: 第一段 and 第二段 share a single CD bucket `rossi_link_group`.
+//   - 第一段 (cd=15s) writes its expiry as `end + cooldownStartOffset + 15s`
+//     where the offset (= window length 92f+6s minus 第一段 duration 154f) makes
+//     the CD start at the window close — matching game behaviour when 第二段
+//     is never placed.
+//   - 第二段 (cd=15s, no offset) writes `end + 15s`; kernel Math.max-extends
+//     the bucket so a later expiry wins. 第二段 skips its own CD check
+//     (gated by requiresPreviousAction window instead).
+
+// Window in frames: 92f open, 92f + 6s (= 360f) → 452f close. Match the standard
+// 6-second link queue window.
+const LINK_WINDOW_MIN_F = 92;
+const LINK_WINDOW_MAX_F = 452;
+// CD-start offset for 第一段: from action_end to window_close (= 452f - 154f).
+const LINK_PRIMARY_CD_OFFSET_FRAMES = LINK_WINDOW_MAX_F - 154;
 
 const link: Skill = {
   id: "rossi_link", type: "link", name: "燎影时刻 (第一段)",
   element: "physical", duration: f(154), spCost: 0, cooldown: 15,
   detach: f(83),
+  // Shared CD bucket with 第二段 — kernel Math.max-extends on write.
+  cooldownGroup: "rossi_link_group",
+  // CD timer starts at 第二段-window-close, not at 第一段 end.
+  cooldownStartOffset: f(LINK_PRIMARY_CD_OFFSET_FRAMES),
   // Release condition (per skill description): "当有敌人同时处于破防和法术附着状态时可以发动"
   releaseConditions: [
     { type: "enemy_has_break", params: {} },
@@ -401,31 +508,23 @@ const link: Skill = {
 //   hit2b: 1114 × 1.80 × 1 × 0.5 × 1.15 = 1153.0 → 1153
 //   total: 3074 ≈ 3076 (实测, 差 2 = floor 舍入)
 
-function makeLink2ndBuffHit(): import("../types").Hit {
+function makeLink2ndBuffHit(): Hit {
   return {
     offset: 0, checkpointIndex: 0,
     damage: null,
     effects: [
+      // 二段连携 同时提升暴击率 + 暴击伤害 — modeled as a SINGLE buff with two
+      // modifiers, since in-game it's one named effect (not two separate buffs).
       {
         type: "buff_apply",
         params: {
-          buffId: "rossi_link_crit_rate_buff",
+          buffId: "rossi_link_crit_buff",
           target: "self",
-          stat: "crit_rate",
-          zone: "crit",
-          valueRef: "暴击率提升",
           durationRef: "增益效果的持续时间（秒）",
-        },
-      },
-      {
-        type: "buff_apply",
-        params: {
-          buffId: "rossi_link_crit_dmg_buff",
-          target: "self",
-          stat: "crit_dmg",
-          zone: "crit",
-          valueRef: "暴击伤害提升",
-          durationRef: "增益效果的持续时间（秒）",
+          modifiers: [
+            { stat: "crit_rate", zone: "crit", valueRef: "暴击率提升" },
+            { stat: "crit_dmg",  zone: "crit", valueRef: "暴击伤害提升" },
+          ],
         },
       },
     ],
@@ -435,12 +534,17 @@ function makeLink2ndBuffHit(): import("../types").Hit {
 
 const link2nd: Skill = {
   id: "rossi_link_2nd", type: "link", name: "燎影时刻 (第二段)",
-  element: "physical", duration: f(95), spCost: 0, cooldown: 0,
-  // Placement constraint: must follow rossi_link within [92f, 167f].
+  element: "physical", duration: f(95), spCost: 0, cooldown: 15,
+  // Placement constraint: must follow rossi_link within the standard 6s link
+  // queue window. Sub-window [123f, 167f] auto-selects the 精确衔接 variant.
   requiresPreviousAction: {
     skillId: "rossi_link",
-    withinFrames: { min: 92, max: 167 },
+    withinFrames: { min: LINK_WINDOW_MIN_F, max: LINK_WINDOW_MAX_F },
   },
+  // Shared CD bucket with 第一段 — Math.max-extend pushes the timer to whichever
+  // is later (window-close from 第一段 or 第二段.end + 15s). Self CD check skipped
+  // because requiresPreviousAction is set.
+  cooldownGroup: "rossi_link_group",
   hits: [
     makeLink2ndBuffHit(),
     // hit2a @ 32f: base 第二段倍率 + 击飞 + 5失衡 + gauge +10
@@ -468,7 +572,7 @@ const link2nd: Skill = {
 
 // 精确衔接 variant: when link2nd is placed within [123f, 167f] after rossi_link,
 // auto-select this variant (longer animation + break_apply).
-const link2ndPreciseVariant: import("../types").SkillVariant = {
+const link2ndPreciseVariant: SkillVariant = {
   id: "rossi_link_2nd_precise",
   priority: 10,
   conditions: [{
@@ -524,9 +628,11 @@ const link2ndPreciseVariant: import("../types").SkillVariant = {
 //   暴击 (crit_dmg = 50% base + 60% skill + 30% P5 = 140%, crit zone 2.40):
 //     每段戳击: 147 × 2.4 = 352.8 → 353 (实测累加 +353 per stab crit) ✓
 //
-// Crit damage buffs are inlined as buff_apply on hit1 (first stab @ 128f), duration
-// covering the full ult animation (5.5s). Both buffs apply during ult cast and expire
-// after action_end:
+// Crit damage bonuses are inlined as `buff_apply { internal: true }` on hit1
+// (first stab @ 128f), duration covering the full ult animation (5.5s). They
+// modify the BuffManager for correct damage zone resolution but are hidden from
+// the UI buff bar / hit-marker row because conceptually they're part of the ult
+// itself, not externally-tracked buffs:
 //   • skill 内置 +60% crit_dmg (uses skills.json valueRef "暴击伤害提升", M3 = 60)
 //   • P5 +30% crit_dmg (hardcoded; 待 kernel 加 potential-conditional 后结构化)
 
@@ -537,28 +643,22 @@ const ULT_DURATION_FRAMES = 330;
 const ultStabHits = ULT_STAB_OFFSETS.map((frame, i) => ({
   offset: f(frame), checkpointIndex: 0,
   damage: { multiplierRef: { label: "戳击总伤害倍率", share: 0.04 }, stagger: 0, element: "blaze" as DamageElement, canCrit: true, school: "magic" as const, sourceType: "ultimate" as const },
-  // hit1 carries the ult crit_dmg buffs (skill +60% + P5 +30%); rest are bare.
+  // hit1 carries the ult crit_dmg bonuses (skill 内置 +60% + P5 +30%) as a
+  // single internal buff with two modifiers; merged into one buff_apply so
+  // the BuffManager bookkeeping stays compact, and `internal: true` keeps
+  // both effects out of the UI buff bar / hit-marker row.
   effects: i === 0 ? [
     {
       type: "buff_apply",
       params: {
-        buffId: "rossi_ult_crit_dmg_skill",
+        buffId: "rossi_ult_crit_dmg_internal",
         target: "self",
-        stat: "crit_dmg",
-        zone: "crit",
-        valueRef: "暴击伤害提升",  // skills.json ult M3 = 60
         duration: ULT_DURATION_FRAMES / 60,  // 5.5s
-      },
-    },
-    {
-      type: "buff_apply",
-      params: {
-        buffId: "rossi_ult_crit_dmg_p5",
-        target: "self",
-        stat: "crit_dmg",
-        zone: "crit",
-        value: 30,  // P5 +30% (hardcoded; 待 potential-conditional)
-        duration: ULT_DURATION_FRAMES / 60,
+        internal: true,
+        modifiers: [
+          { stat: "crit_dmg", zone: "crit", valueRef: "暴击伤害提升" },  // skill M3 = 60
+          { stat: "crit_dmg", zone: "crit", value: 30 },                  // P5 +30%
+        ],
       },
     },
   ] : [],
@@ -606,10 +706,17 @@ export const skills = {
   ultimate,
 };
 
-// 精确衔接 variant fires only when current skill = link2nd AND placement ∈ [123f, 167f]
-// after rossi_link starts. For link (第一段) the previousActionTiming condition won't
-// match (no prior rossi_link in that window — link CD is 15s ≫ 167f).
+// Variants:
+//   - skill[6 entries]: enemy 破防 at cast → 强化战技 (basic 3-hit + 4 狼之珀
+//     sub-hits, 192f). Picked from a 2D (talent_0 level × P1 potential) grid
+//     via priority cascade; non-broken targets fall through to the basic skill.
+//   - link[rossi_link_2nd_precise]: 第二段 placed in [123f, 167f] after 第一段
+//     → adds +1 break stack, longer animation.
+//   For link (第一段) the previousActionTiming condition won't match (no prior
+//   rossi_link in that window — 第一段's own CD bucket prevents re-placement
+//   within the link window anyway).
 export const variants = {
+  skill: [enh_p2_p1pot, enh_p2_nopot, enh_p1_p1pot, enh_p1_nopot, enh_notalent_p1pot, enh_notalent_nopot],
   link: [link2ndPreciseVariant],
 };
 
@@ -650,8 +757,22 @@ const fevorousBlood: PassiveTrigger = {
       conditions: [
         // Triggering hit must be a crit
         { type: "crit_hit", params: {} },
-        // Target must be in 斫痕 state — check via the blaze vuln buff applied by talent_0
-        { type: "enemy_has_buff", params: { buffId: "rossi_zhuohen_blaze_vuln" } },
+        // Target must be in 斫痕 state — single canonical buff id covers both
+        // the 物理脆弱 + 灼热脆弱 components (compound buff).
+        { type: "enemy_has_buff", params: { buffId: "rossi_zhuohen" } },
+        // Per game description "施放技能" — only fire on 战技 / 连携 / 终结技
+        // hits. Excludes 普攻 / 重击 / 下落 / 处决 (all sourceType="attack") and
+        // any debuff-derived damage events.
+        {
+          type: "compound_or",
+          params: {
+            conditions: [
+              { type: "source_action_type", params: { actionType: "skill" } },
+              { type: "source_action_type", params: { actionType: "link" } },
+              { type: "source_action_type", params: { actionType: "ultimate" } },
+            ],
+          },
+        },
       ],
     },
   },

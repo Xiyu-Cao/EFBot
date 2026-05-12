@@ -19,6 +19,7 @@ import ResourceMonitor from '../components/ResourceMonitor.vue'
 import AbilityExpansionOverlay from '../components/AbilityExpansionOverlay.vue'
 import StatsDetailOverlay from '../components/StatsDetailOverlay.vue'
 import ValidationResultDialog from '../components/ValidationResultDialog.vue'
+import HitTimingTuner from '../components/HitTimingTuner.vue'
 
 /** Editor mode: 'timeline' | 'abilityExpansion' | 'statsDetail' */
 const editorMode = ref('timeline')
@@ -63,10 +64,14 @@ function tryEnterRealisticMode() {
   // If not passed, validationDialogVisible is already true — dialog shows errors
 }
 
+/** Hit timing tuner dialog (开发中, feature/hit-timing-override). */
+const hitTunerVisible = ref(false)
+
 function onHeaderMenuCommand(cmd) {
   if (cmd === 'export') openExportDialog()
   else if (cmd === 'load') triggerImport()
   else if (cmd === 'receive') openImportShareDialog()
+  else if (cmd === 'hit-tuning') hitTunerVisible.value = true
   else if (cmd.startsWith('lang-')) changeLocale(cmd.slice(5))
 }
 
@@ -759,6 +764,14 @@ onUnmounted(() => {
                   </span>
                   {{ t('common.receive') }}
                 </el-dropdown-item>
+                <el-dropdown-item divided command="hit-tuning">
+                  <span class="menu-item-icon">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
+                    </svg>
+                  </span>
+                  Hit 校准（开发中）
+                </el-dropdown-item>
                 <el-dropdown-item divided command="lang-zh-CN" :disabled="locale === 'zh-CN'">
                   <span class="menu-item-icon">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -868,6 +881,7 @@ onUnmounted(() => {
     </div>
 
     <ValidationResultDialog />
+    <HitTimingTuner v-model="hitTunerVisible" />
   </div>
 </template>
 

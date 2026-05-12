@@ -330,6 +330,18 @@ export interface ConditionState {
   ultimateActive: boolean;
   /** Enemy's currently active magic anomalies (by type → active bool). Optional for back-compat. */
   enemyAnomalies?: Partial<Record<import("./types").AnomalyType, boolean>>;
+  /** True when the enemy currently has at least one break stack (= 破防 state).
+   *  Used by the `enemyHasBreak` variant condition — e.g. ROSSI 战技 switches
+   *  to the 强化版 (extra 狼之珀 sub-hits) when target is 破防 at cast time. */
+  enemyHasBreak?: boolean;
+  /** Per-talent unlock level for the casting actor (0 = locked, 1 = 精英化1
+   *  stage value, 2 = 精英化2 stage value, etc.). Drives `talentLevel` variant
+   *  conditions — e.g. ROSSI 战技 picks 斫痕 P1 vs P2 effects based on whether
+   *  talent_0 is at level 1 or 2. */
+  talentLevels?: Record<string, number>;
+  /** Casting actor's potential level (0-5). Drives `potentialLevel` variant
+   *  conditions — e.g. ROSSI P1 unlocks the 狼之珀 SP refund. */
+  potentialLevel?: number;
   /** One-shot trigger-time data passed from the placed action (e.g. pogranichnk link: consumedBreakStacks). */
   triggerData?: Record<string, unknown>;
   /**
@@ -370,6 +382,40 @@ function evalCondition(cond: VariantCondition, state: ConditionState): boolean {
     const active = state.enemyAnomalies?.[cond.anomalyType] === true;
     const want = cond.present ?? true;
     return active === want;
+  }
+  if (cond.type === "enemyHasBreak") {
+    const broken = state.enemyHasBreak === true;
+    const want = cond.present ?? true;
+    return broken === want;
+  }
+  if (cond.type === "talentLevel") {
+    if (!cond.talentId) return false;
+    const level = state.talentLevels?.[cond.talentId] ?? 0;
+    const target = cond.value ?? 0;
+    const op = cond.op || ">=";
+    switch (op) {
+      case ">=": return level >= target;
+      case "<=": return level <= target;
+      case ">":  return level > target;
+      case "<":  return level < target;
+      case "==": return level === target;
+      case "!=": return level !== target;
+      default: return false;
+    }
+  }
+  if (cond.type === "potentialLevel") {
+    const level = state.potentialLevel ?? 0;
+    const target = cond.value ?? 0;
+    const op = cond.op || ">=";
+    switch (op) {
+      case ">=": return level >= target;
+      case "<=": return level <= target;
+      case ">":  return level > target;
+      case "<":  return level < target;
+      case "==": return level === target;
+      case "!=": return level !== target;
+      default: return false;
+    }
   }
   if (cond.type === "triggerData") {
     if (!cond.field) return false;

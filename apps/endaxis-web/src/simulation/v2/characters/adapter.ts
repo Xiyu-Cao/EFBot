@@ -209,6 +209,10 @@ export function applyV2Overrides(char: any): boolean {
     char.link_duration = legacy.duration;
     char.link_damage_ticks = legacy.damageTicks;
     char.link_anomalies = [];  // V2: effects are in hit.effects
+    // Carry V2 skill id through to the legacy base skill — front-end (e.g.
+    // ActionItem placement-window indicator) and storeAdapter's per-segment
+    // chain resolution both look up by `_v2SkillId`.
+    char.link_v2SkillId = primaryLink.id;
     // Push each non-primary as a placeable variant (e.g., ROSSI 第二段)
     for (let i = 1; i < linkArray.length; i++) {
       linkVariants.push(convertSkillToLegacyVariant(linkArray[i]));
@@ -227,6 +231,12 @@ export function applyV2Overrides(char: any): boolean {
     char.ultimate_damage_ticks = legacy.damageTicks;
     char.ultimate_animationTime = legacy.animationTime;
     char.ultimate_gaugeCost = skills.ultimate.gaugeCost;
+    // Ultimate gauge cost == gauge max for this character: the bar fills to the
+    // cost, then a cast empties it. Override the legacy gamedata.json value
+    // (which can be stale or post-P4-discounted) so V2 module is the single
+    // source of truth. potential `gauge_modifier` (e.g. P4 -15%) is applied
+    // on top by timelineStore.resolveGaugeMax / characterBuild.gaugeMax.
+    char.ultimate_gaugeMax = skills.ultimate.gaugeCost;
     char.ultimate_anomalies = [];  // V2: effects are in hit.effects
   }
 

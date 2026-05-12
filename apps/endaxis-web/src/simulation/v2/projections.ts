@@ -174,6 +174,10 @@ export function projectBuffBars(
   for (const e of events) {
     if (e.type === "buff_apply") {
       const be = e as BuffEvent;
+      // Internal (skill-private) modifiers are not user-facing buffs — kernel
+      // still applies them to BuffManager so damage zones resolve correctly,
+      // but they're invisible in the UI buff bar / icon column.
+      if (be.internal) continue;
       const key = keyOf(be);
       const prev = active.get(key);
       if (prev) {
@@ -723,10 +727,18 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
         const ae = e as AttachmentEvent;
         // Only show application events (stacks > 0), not expiry/clear
         if (ae.stacks > 0 && ae.element) {
+          // MagicElement uses fire/cold/electro/nature, but the icon database
+          // keys are blaze_attach/cold_attach/emag_attach/nature_attach. Map
+          // back so the icon lookup succeeds (otherwise the marker falls back
+          // to plain text — was visible for 灼热附着 / 电磁附着 only).
+          const elementToIconKey: Record<string, string> = {
+            fire: "blaze", cold: "cold", electro: "emag", nature: "nature",
+          };
+          const iconKey = elementToIconKey[ae.element] || ae.element;
           const elementNames: Record<string, string> = { fire: "灼热附着", cold: "寒冷附着", electro: "电磁附着", nature: "自然附着" };
           pushMarker({
             id: id(), time: ae.time, sourceId: ae.sourceId || "", actionId: "",
-            effectType: `${ae.element}_attach`,
+            effectType: `${iconKey}_attach`,
             name: elementNames[ae.element] || `${ae.element}附着`,
             element: ae.element,
           });
@@ -740,6 +752,9 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
         // crystal consumption) have their details accessible via the buff row
         // + right panel; inlining them above the hit clutters the view.
         if (be.fromTrigger) break;
+        // Internal skill-private modifiers (e.g. ROSSI 终结技 +60% / P5 +30%
+        // crit_dmg) are not user-facing buffs — hide their hit markers too.
+        if (be.internal) break;
         pushMarker({
           id: id(), time: be.time, sourceId: be.actorId, actionId: "",
           effectType: be.buffId,
@@ -785,6 +800,10 @@ export function projectHitEffects(events: SimEvent[]): HitEffectMarker[] {
       }
       case "damage": {
         const de = e as DamageEvent;
+        // Skip damages explicitly hidden from the per-hit display (e.g.
+        // ROSSI 爪印斫痕 25-tick DOT — like 燃烧, damage counts but doesn't
+        // visually clutter the parent action's hit row).
+        if (de.hideFromHits) break;
         if (de.fromTrigger) {
           pushMarker({
             id: id(), time: de.time, sourceId: de.sourceId, actionId: de.actionId,

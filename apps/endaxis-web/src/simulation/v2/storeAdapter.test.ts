@@ -157,6 +157,59 @@ describe("storeAdapter — attack chain detection", () => {
   });
 });
 
+describe("storeAdapter — multi-link _v2SkillId resolution (ROSSI)", () => {
+  beforeAll(async () => {
+    await preloadV2Modules();
+  });
+
+  // Regression: storeAdapter.resolveSkillForAction was returning skills.link[0]
+  // for ALL link actions, ignoring _v2SkillId. This made ROSSI 第二段 placements
+  // resolve back to 第一段 in the kernel, tripping the group CD check.
+  it("link action with _v2SkillId=rossi_link_2nd resolves to 第二段, not 第一段", () => {
+    const track = makeTrack("ROSSI", [
+      makeAction({
+        type: "link", startTime: 0, duration: 154 / 60,
+        id: "ROSSI_link", _v2SkillId: "rossi_link",
+      }),
+      makeAction({
+        type: "link", startTime: 7, duration: 95 / 60,
+        id: "ROSSI_variant_rossi_link_2nd", _v2SkillId: "rossi_link_2nd",
+      }),
+    ]);
+
+    const result = buildV2Inputs(
+      [track], [], [], SYSTEM,
+      () => null,
+      () => 300,
+    );
+
+    expect(result).not.toBeNull();
+    const links = result!.skills.filter(s => s.skill.type === "link");
+    expect(links).toHaveLength(2);
+    expect(links[0].skill.id).toBe("rossi_link");
+    expect(links[1].skill.id).toBe("rossi_link_2nd");
+    // Sanity: the 2nd resolves to the chained skill with requiresPreviousAction set
+    expect(links[1].skill.requiresPreviousAction).toBeDefined();
+    expect(links[1].skill.cooldownGroup).toBe("rossi_link_group");
+  });
+
+  it("link action with NO _v2SkillId still falls back to link[0] (primary)", () => {
+    const track = makeTrack("ROSSI", [
+      makeAction({ type: "link", startTime: 0, duration: 154 / 60, id: "ROSSI_link" }),
+    ]);
+
+    const result = buildV2Inputs(
+      [track], [], [], SYSTEM,
+      () => null,
+      () => 300,
+    );
+
+    expect(result).not.toBeNull();
+    const link = result!.skills.find(s => s.skill.type === "link");
+    expect(link!.skill.id).toBe("rossi_link");
+  });
+});
+
 describe("storeAdapter — cooldown_modifier flat-seconds application", () => {
   it("collectPotentialCooldownMods sums only active potentials (level ≤ chosen)", () => {
     const mod = {

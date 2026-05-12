@@ -182,6 +182,10 @@ export function projectHitDamageDetails(events: SimEvent[]): Map<string, HitDama
     }
     if (e.type !== "damage") continue;
     const de = e as DamageEvent;
+    // Damages explicitly hidden from the per-hit table (debuff-style DOTs like
+    // ROSSI 爪印斫痕) are excluded here. They still flow through the global
+    // damage event stream for totals / DPS / cross-actor settlement views.
+    if (de.hideFromHits) continue;
 
     let source: HitSource;
     if (de.fromTrigger) {

@@ -2939,6 +2939,12 @@ export const useTimelineStore = defineStore('timeline', () => {
                 ? []
                 : getAllowed(activeChar[`${suffix}_allowed_types`])
 
+            // Carry V2 skill id when set by adapter.applyV2Overrides
+            // (currently `char.link_v2SkillId` for the primary link). The
+            // front-end uses this to look up per-skill-id CDs and chained-
+            // skill placement windows.
+            const v2SkillId = activeChar[`${suffix}_v2SkillId`]
+
             return {
                 id: globalId, type: type, name: name,
                 librarySource: 'character',
@@ -2947,6 +2953,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                 damageTicks: finalDamageTicks,
                 allowedTypes: finalAllowedTypes,
                 physicalAnomaly: finalAnomalies,
+                ...(v2SkillId ? { _v2SkillId: v2SkillId } : {}),
             }
         }
 
@@ -5257,17 +5264,105 @@ export const useTimelineStore = defineStore('timeline', () => {
             if (Array.isArray(s)) return Number(s[0]?.cooldown) || 0
             return Number(s.cooldown) || 0
         }
+        /**
+         * Multi-segment chain CD visualization rule: a link skill that owns a
+         * `cooldownGroup` and has no `requiresPreviousAction` is the PRIMARY of
+         * a chain (e.g. ROSSI rossi_link 第一段). Conceptually its CD belongs to
+         * the shared bucket — the bucket's gate matters at the END of the chain
+         * (= 第二段) — so we hide the CD bar on the primary and show it only on
+         * the followup.
+         */
+        const isPrimaryOfChain = (s) => Boolean(s?.cooldownGroup) && !s?.requiresPreviousAction
         for (const panel of panels) {
             const linkBase = firstCd(panel.resolvedSkills?.link)
             const skillBase = firstCd(panel.resolvedSkills?.skill)
             const ultBase = firstCd(panel.resolvedSkills?.ultimate)
             const linkPct = clampPct(sumStat(panel, 'link_cd_reduction'))
-            // skill_cd_reduction / ultimate_cd_reduction not wired yet — apply 0%.
+            // Per-skill-id link CD map, used by ActionItem to differentiate
+            // multi-link segments (ROSSI 第一段 vs 第二段). Primary-of-chain
+            // skills emit 0 so no CD bar renders for them.
+            const linkBySkillId = new Map()
+            const linkSkills = Array.isArray(panel.resolvedSkills?.link)
+                ? panel.resolvedSkills.link
+                : (panel.resolvedSkills?.link ? [panel.resolvedSkills.link] : [])
+            for (const s of linkSkills) {
+                if (!s?.id) continue
+                const cd = isPrimaryOfChain(s) ? 0 : Number(s.cooldown) || 0
+                linkBySkillId.set(s.id, cd > 0 ? cd * (1 - linkPct / 100) : 0)
+            }
+            // Top-level `link` field: backwards-compat for non-V2 / single-link
+            // actors. For multi-link characters this matches link[0]'s value
+            // (or 0 if hidden); the per-skill-id map is the authoritative source.
+            const linkVisibleBase = linkSkills.length > 0 && isPrimaryOfChain(linkSkills[0])
+                ? 0
+                : linkBase
             map.set(panel.actorId, {
-                link: linkBase > 0 ? linkBase * (1 - linkPct / 100) : 0,
+                link: linkVisibleBase > 0 ? linkVisibleBase * (1 - linkPct / 100) : 0,
                 skill: skillBase,
                 ultimate: ultBase,
+                linkBySkillId,
             })
+        }
+        return map
+    })
+
+    /**
+     * Map of multi-link placement windows, keyed by primary skill id within
+     * each actor. Used by ActionItem to draw "可施放窗口" and "精确衔接窗口"
+     * indicators on the primary segment (e.g. ROSSI 第一段) so the user can
+     * eyeball when to drop the followup.
+     *
+     * Shape: Map<actorId, Map<primarySkillId, {
+     *   placementOpen, placementClose,         // seconds, relative to primary.startTime
+     *   precisionOpen?, precisionClose?,       // optional sub-window
+     * }>>
+     */
+    const linkFollowupWindowsByActor = computed(() => {
+        const map = new Map()
+        const panels = v2Panels.value
+        if (!panels) return map
+        for (const panel of panels) {
+            const linkSkills = Array.isArray(panel.resolvedSkills?.link)
+                ? panel.resolvedSkills.link
+                : []
+            const followupBySkillId = new Map()
+            for (const s of linkSkills) {
+                const rpa = s?.requiresPreviousAction
+                if (!rpa?.skillId || !rpa?.withinFrames) continue
+                // Scan link variants for a precision sub-window keyed to the
+                // same primary skill via previousActionTiming.
+                const variantList = panel.variants?.link || []
+                let precisionWindow = null
+                for (const v of variantList) {
+                    const c = (v?.conditions || []).find(
+                        cnd => cnd?.type === 'previousActionTiming' && cnd?.prevSkillId === rpa.skillId
+                    )
+                    if (c?.prevSinceFrames) {
+                        precisionWindow = {
+                            open: (Number(c.prevSinceFrames.min) || 0) / 60,
+                            close: (Number(c.prevSinceFrames.max) || 0) / 60,
+                        }
+                        break
+                    }
+                }
+                followupBySkillId.set(rpa.skillId, {
+                    // The followup skill id (e.g. "rossi_link_2nd") — used by
+                    // ActionItem to detect whether the user has placed the
+                    // followup in the window. When not placed, the primary
+                    // segment renders a synthetic post-window CD bar to
+                    // represent the kernel's group-bucket expiry.
+                    followupSkillId: s.id,
+                    placementOpen: (Number(rpa.withinFrames.min) || 0) / 60,
+                    placementClose: (Number(rpa.withinFrames.max) || 0) / 60,
+                    ...(precisionWindow ? {
+                        precisionOpen: precisionWindow.open,
+                        precisionClose: precisionWindow.close,
+                    } : {}),
+                })
+            }
+            if (followupBySkillId.size > 0) {
+                map.set(panel.actorId, followupBySkillId)
+            }
         }
         return map
     })
@@ -6962,6 +7057,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         computedAnomalyDebuffsEffective,
         v2Panels,
         v2EffectiveCooldowns,
+        linkFollowupWindowsByActor,
         v2HitEffects: computed(() => _v2ProjectedData.value?.hitEffects || []),
         v2ActionBars: computed(() => _v2ProjectedData.value?.actionBars || null),
         v2AttackSegments: computed(() => _v2AttackSegmentMap.value || null),

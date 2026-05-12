@@ -94,6 +94,17 @@ export interface Hit {
    * false = custom handler needed (character-specific).
    */
   standardLogic: boolean;
+  /**
+   * When true, this hit does not emit hit_damage / *_hit / heavy_attack_hit /
+   * stagger_increased / aerial_hit trigger events. The damage event itself is
+   * still emitted (totals/DPS unaffected) — only the trigger plumbing is muted.
+   *
+   * Used for "logically single but mechanically multi-hit" sequences like
+   * ROSSI 强化战技's 4 狼之珀 sub-hits, which the game treats as one landing
+   * event (talent_1 沸血 fires once per cast, not 4x; P1 SP refund fires once
+   * total). Set on sub-hits 2-4; sub-hit 1 fires triggers normally.
+   */
+  silentTriggers?: boolean;
 }
 
 /** Damage component of a hit. */
@@ -253,6 +264,28 @@ export interface Skill {
    * enemy_has_attachment, enemy_has_anomaly, enemy_has_buff, etc.
    */
   releaseConditions?: TriggerCondition[];
+  /**
+   * Cooldown group key. When set, the kernel keys this skill's CD timer by
+   * `${actorId}/${cooldownGroup}` instead of `${actorId}/${skillId}` — so
+   * multiple skills can share a single CD bucket. Writes use Math.max so the
+   * latest contributor only extends the timer.
+   *
+   * Used for chained-skill sequences like ROSSI 燎影时刻: 第一段 + 第二段
+   * share one CD bucket; the timer advances when either segment writes a
+   * later expiry. Without this field, behaviour matches the legacy per-skill
+   * key (`${actorId}/${skillId}`).
+   */
+  cooldownGroup?: string;
+  /**
+   * Seconds to delay the CD timer's start relative to action end. Used when
+   * the in-game CD doesn't begin until some moment AFTER the skill's animation
+   * ends — e.g. ROSSI 第一段: CD starts at the 第二段 placement window close
+   * (start + 92f + 6s), not at 第一段 end.
+   *
+   * Effect: `cooldowns[key] = max(existing, end + cooldownStartOffset + effCd)`.
+   * Defaults to 0 (CD starts immediately at action end, the legacy behaviour).
+   */
+  cooldownStartOffset?: number;
   // Note: SP restore within a skill is a HitEffect on a specific hit, not a Skill-level field.
   // gaugeGain for self is also derived from SP consumption (handled by kernel).
 }
@@ -263,18 +296,19 @@ export interface Skill {
 
 /** Condition for variant selection (evaluated at skill cast time). */
 export interface VariantCondition {
-  type: "stackBuff" | "ultimateActive" | "enemyAnomaly" | "triggerData" | "previousActionTiming";
+  type: "stackBuff" | "ultimateActive" | "enemyAnomaly" | "triggerData" | "previousActionTiming" | "enemyHasBreak" | "talentLevel" | "potentialLevel";
   /** For stackBuff: which buff type to check. */
   buffType?: string;
   /** For enemyAnomaly: which magic anomaly to check on the current enemy. */
   anomalyType?: AnomalyType;
-  /** For enemyAnomaly: true = require active, false = require absent. Default true. */
+  /** For enemyAnomaly / enemyHasBreak: true = require active/broken, false = require absent.
+   *  Default true. */
   present?: boolean;
   /** For triggerData: key into placed.triggerData (e.g. "consumedBreakStacks"). */
   field?: string;
-  /** For stackBuff / triggerData: comparison operator. */
+  /** For stackBuff / triggerData / talentLevel / potentialLevel: comparison operator. */
   op?: ">=" | "<=" | ">" | "<" | "==" | "!=";
-  /** For stackBuff: comparison value. */
+  /** For stackBuff / talentLevel / potentialLevel: comparison value. */
   value?: number;
   /** For previousActionTiming: match by exact skill ID. */
   prevSkillId?: string;
@@ -282,6 +316,8 @@ export interface VariantCondition {
   prevActionType?: ActionType;
   /** For previousActionTiming: window in frames relative to the previous action's start time. */
   prevSinceFrames?: { min: number; max: number };
+  /** For talentLevel: which talent id (e.g. "talent_0") to read level on. */
+  talentId?: string;
 }
 
 /** A variant override for a skill. */
@@ -494,6 +530,12 @@ export interface DamageEvent extends BaseEvent {
   fromTrigger?: boolean;
   /** Display name for trigger-produced damage (e.g., "幻影追击") */
   triggerName?: string;
+  /** When true, this damage contributes to totals/DPS but is NOT listed under
+   *  the parent action's hit damage breakdown — modeled like a debuff DOT
+   *  (e.g. ROSSI 爪印斫痕 25-tick 物理 DOT, conceptually analogous to 燃烧).
+   *  Projection layers filter on this flag so the user doesn't see one parent
+   *  hit explode into 25+ rows in the damage-calc table. */
+  hideFromHits?: boolean;
   /** Per-zone multiplier breakdown for damage-calc page (optional; set by kernel). */
   zones?: DamageZones;
   /** Stable key for the crit prob event behind this damage instance.
@@ -554,6 +596,13 @@ export interface BuffEvent extends BaseEvent {
    *  triggered buffs so the above-hit icon row shows only the skill's own
    *  declared effects. */
   fromTrigger?: boolean;
+  /** True for "internal" skill-private modifiers — bonuses bundled with the
+   *  skill itself rather than externally tracked buffs. Examples: ROSSI 终结技's
+   *  内置 +60% crit_dmg and the P5 +30% crit_dmg, both of which the player
+   *  thinks of as part of the ult, not as separate buffs. UI (buff bars,
+   *  buff icon columns, damage calc buff list) filters these out; the kernel
+   *  still applies them to BuffManager so the damage zone resolution is correct. */
+  internal?: boolean;
 }
 
 /** Stack buff (special layer) change. */

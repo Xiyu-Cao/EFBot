@@ -574,10 +574,13 @@ export function simulate(
   // startTime lets us tell whether `time` is past the skill's last-hit offset,
   // which in turn enables the 后摇 relaxed-interrupt rule.
   const activeActions = new Map<string, { placed: PlacedSkill; skill: Skill; startTime: number; endTime: number }>();
-  // Track per-skill cooldowns: Map<`${actorId}/${skillId}`, expiresAt>.
-  // Gates any skill with `skill.cooldown > 0` (link/skill/ultimate).
+  // Track per-skill cooldowns: Map<`${actorId}/${skillId-or-cooldownGroup}`, expiresAt>.
+  // Gates any skill with `skill.cooldown > 0` (link/skill/ultimate). Skills that
+  // declare `cooldownGroup` share a single bucket (Math.max-extend on write) —
+  // see ROSSI 燎影时刻 (link 第一段 + 第二段 share one CD timer).
   const cooldowns = new Map<string, number>();
-  const cdKey = (actorId: string, skillId: string) => `${actorId}/${skillId}`;
+  const cdKey = (actorId: string, skill: Skill) =>
+    `${actorId}/${skill.cooldownGroup ?? skill.id}`;
   /**
    * Effective cooldown after stat reductions — in-game formula is
    *   `(cd - flat) * (1 - pct/100)`
@@ -751,9 +754,16 @@ export function simulate(
       }
     }
 
+    // Instant-cast skills (duration=0, e.g. LASTRITE skillInChain) run alongside
+    // the active action — their hits/effects fire in-place but they don't displace
+    // the running animation. Skip the entire interrupt block (0a/0b/0c) and the
+    // activeActions update for these. The running action stays active, and
+    // subsequent actions still see the original running skill.
+    const isInstantCast = skill.duration === 0;
+
     // ── 0a. Check if action can proceed (switch + per-actor interrupt) ──
     const activeAct = activeActions.get(actorId);
-    if (activeAct && time < activeAct.endTime) {
+    if (!isInstantCast && activeAct && time < activeAct.endTime) {
       const isSwitch = needsMainControl(skill) && currentMainControl !== null && actorId !== currentMainControl;
       // Switch can interrupt anything except ultimate animation
       const switchCanInterrupt = isSwitch && activeAct.skill.type !== "ultimate";
@@ -767,7 +777,8 @@ export function simulate(
     }
 
     // ── 0b. Main control switch ──
-    if (needsMainControl(skill) && actorId !== currentMainControl) {
+    // Instant-cast skills don't change main control (they don't displace animation).
+    if (!isInstantCast && needsMainControl(skill) && actorId !== currentMainControl) {
       if (currentMainControl !== null) {
         // Interrupt old main's active action (unless ultimate animation)
         const oldActive = activeActions.get(currentMainControl);
@@ -780,8 +791,9 @@ export function simulate(
     }
 
     // ── 0c. Per-actor interrupt ──
-    // If we reach here, canInterrupt or switchCanInterrupt was true (checked in 0a)
-    if (activeAct && time < activeAct.endTime) {
+    // If we reach here, canInterrupt or switchCanInterrupt was true (checked in 0a).
+    // Skip for instant-cast — running action keeps going.
+    if (!isInstantCast && activeAct && time < activeAct.endTime) {
       interruptInfo.set(activeAct.placed.actionId, time);
       activeAct.endTime = time;
     }
@@ -790,7 +802,11 @@ export function simulate(
     // endTime uses base.duration here — variant-extended duration is not reflected
     // in activeActions (B4 sub-issue: subsequent placed inside variant tail won't
     // be treated as interrupts). Acceptable trade-off; revisit if it bites.
-    activeActions.set(actorId, { placed, skill, startTime: time, endTime: time + skill.duration });
+    // Instant-cast skills don't enter activeActions — they don't have an animation
+    // window that could be interrupted by subsequent actions.
+    if (!isInstantCast) {
+      activeActions.set(actorId, { placed, skill, startTime: time, endTime: time + skill.duration });
+    }
 
     // ── 1. Variant selection marker (Phase B evaluates variant against live state) ──
     if (placed.variants?.length) {
@@ -890,6 +906,14 @@ export function simulate(
           conduction: enemy.anomalies.conduction.active,
           corrosion: enemy.anomalies.corrosion.active,
         },
+        // Snapshot of 破防 state at the marker — drives e.g. ROSSI 战技 →
+        // 强化版 variant selection when target is broken at cast time.
+        enemyHasBreak: enemy.breakStacks > 0,
+        // Talent / potential level snapshots — drive `talentLevel` /
+        // `potentialLevel` variant conditions (e.g. ROSSI 战技 picks 斫痕 P1 vs
+        // P2 effects, P1 potential unlocks 狼之珀 SP refund).
+        talentLevels: { ...markerBuild.talentLevels },
+        potentialLevel: markerBuild.potentialLevel,
         triggerData: placed.triggerData,
         previousActions,
         currentTime: markerTime,
@@ -1042,9 +1066,11 @@ export function simulate(
           }
           executionUsedInWindow.add(scan.windowStart);
         }
-        // Per-skill CD check
-        if (effSkill.cooldown > 0) {
-          const cdExpiry = cooldowns.get(cdKey(aActorId, effSkill.id)) || 0;
+        // Per-skill CD check. Skills with `requiresPreviousAction` are chained
+        // follow-ups (e.g. ROSSI link 第二段) — their real gate is the chain
+        // window, not the shared CD bucket, so skip CD checking for them.
+        if (effSkill.cooldown > 0 && !effSkill.requiresPreviousAction) {
+          const cdExpiry = cooldowns.get(cdKey(aActorId, effSkill)) || 0;
           if (time < cdExpiry - 0.001) {
             const typeLabel = effSkill.type === "link" ? "连携技" : effSkill.type === "ultimate" ? "终结技" : effSkill.type === "skill" ? "战技" : "技能";
             validationError = {
@@ -1148,10 +1174,18 @@ export function simulate(
       }
 
       // ── Set per-skill cooldown (uses variant.cooldown + variant.duration — B4 fix) ──
+      // Math.max-extend so a chained follow-up in the same `cooldownGroup`
+      // (e.g. ROSSI 第二段) only pushes the timer later, never shortens it.
+      // `cooldownStartOffset` delays the CD start past action end for skills
+      // whose in-game CD begins later (e.g. ROSSI 第一段: starts at window-close).
       if (effSkill.cooldown > 0) {
         const endTime = time + effSkill.duration;
         const effCd = effectiveCooldown(effSkill, aBuild);
-        cooldowns.set(cdKey(aActorId, effSkill.id), endTime + effCd);
+        const offset = effSkill.cooldownStartOffset ?? 0;
+        const key = cdKey(aActorId, effSkill);
+        const newExpiry = endTime + offset + effCd;
+        const prev = cooldowns.get(key) ?? 0;
+        cooldowns.set(key, Math.max(prev, newExpiry));
       }
 
       continue;
@@ -1471,7 +1505,10 @@ export function simulate(
       drainSlot(slotQueues.afterSkillDamage);
 
       // Step 2: synthesise post-damage trigger events and queue alongside step 1's.
-      if (hit.damage) {
+      // `silentTriggers` hits skip trigger event emission (the damage itself
+      // still landed in Phase ③) — used for multi-hit groups the game models
+      // as one landing, e.g. ROSSI 强化战技 狼之珀 sub-hits 2-4.
+      if (hit.damage && !hit.silentTriggers) {
         const sourceType = hit.damage.sourceType;
         // Include isCrit + damage so trigger conditions like `crit_hit` can filter,
         // and trigger actions can scaleBy event.isCrit / event.damage.
@@ -1786,8 +1823,19 @@ export function simulate(
     switch (effect.type) {
       case "magic_attachment": {
         // hit.offset 已经是命中时间（脱手→飞行→命中 全部折算到 hit.offset）。
-        // 远程附着角色把 hit.offset 设成命中点即可，不应额外用 delay。
-        const p = effect.params as { element: DamageElement; stacks?: number };
+        // 远程附着角色把 hit.offset 设成命中点即可，一般不用 delay。
+        //
+        // `delay` field is supported for trigger-driven attachments where the
+        // attachment lands later than the triggering hit (e.g. LASTRITE 低温灌注
+        // 幻影追击: heavy attack hit → 19f later, phantom damage + cold
+        // attachment). State mutation still happens at the current `time` (the
+        // attachment outcome is decided against enemy state at trigger fire
+        // time), but the emitted events carry `time + delay` so the UI marker
+        // and downstream triggers see the correct in-game timing. The tight gap
+        // (~19f) means no other interactions land in-between in practice.
+        const p = effect.params as { element: DamageElement; stacks?: number; delay?: number };
+        const delay = Math.max(0, Number(p.delay) || 0);
+        const emitTime = time + delay;
         const magicEl = DAMAGE_ELEMENT_TO_MAGIC[p.element];
         if (!magicEl) break;
         const stacks = p.stacks || 1;
@@ -1800,14 +1848,14 @@ export function simulate(
               const prev = enemy.attachment.stacks;
               enemy.attachment.element = outcome.element;
               enemy.attachment.stacks = outcome.newStacks;
-              enemy.attachment.expiresAt = time + ATTACHMENT_DURATION;
+              enemy.attachment.expiresAt = emitTime + ATTACHMENT_DURATION;
               emit({
-                type: "attachment_change", time, sourceId: actorId,
+                type: "attachment_change", time: emitTime, sourceId: actorId,
                 element: outcome.element, stacks: outcome.newStacks,
                 prevElement: prev > 0 ? enemy.attachment.element : null, prevStacks: prev,
               });
               hitTriggerEvents?.push({
-                type: "attachment_applied", time, sourceActorId: actorId,
+                type: "attachment_applied", time: emitTime, sourceActorId: actorId,
                 data: { element: p.element, stacks: outcome.newStacks, actionType: skillType },
               });
             } else if (outcome.type === "burst") {
@@ -1817,6 +1865,9 @@ export function simulate(
               // with skipSourceTypeBonus (元素+学派增伤吃, 战技/普攻/终结增伤不吃).
               // Tagged fromTrigger so the damage-calc page groups it under
               // "法术爆发" (UI shows independent number, matching in-game).
+              // Note: when `delay > 0`, burst damage still resolves at current
+              // time via effectDamages pipeline (Phase 2 unaware of delay);
+              // only the trigger event uses emitTime for UI consistency.
               const artsPower = build.stats.originiumArtsPower;
               const burstMult = magicBurstMult(outcome.stacks, artsPower);
               effectDamages.push({
@@ -1829,7 +1880,7 @@ export function simulate(
                 triggerName: "法术爆发",
               });
               hitTriggerEvents?.push({
-                type: "magic_burst", time, sourceActorId: actorId,
+                type: "magic_burst", time: emitTime, sourceActorId: actorId,
                 data: { element: p.element, stacks: outcome.stacks, actionType: skillType },
               });
             } else if (outcome.type === "reaction") {
@@ -1838,7 +1889,7 @@ export function simulate(
               const prevStacks = enemy.attachment.stacks;
               enemy.attachment = { element: null, stacks: 0, expiresAt: 0 };
               emit({
-                type: "attachment_change", time, sourceId: actorId,
+                type: "attachment_change", time: emitTime, sourceId: actorId,
                 element: null, stacks: 0,
                 prevElement: prevEl, prevStacks,
               });
@@ -2226,12 +2277,27 @@ export function simulate(
         // value/valueRef can be a ValueSource (literal, label, or object with scaleBy).
         // E.g. LASTRITE 低温症: { label: "talent_0", scaleBy: "event.stacks" }
         // scales the buff value by the consumed-attachment-stacks from the triggering event.
+        //
+        // Two input shapes are supported:
+        //   (a) top-level stat/zone/value/valueRef — single-modifier buff (legacy)
+        //   (b) modifiers: [{stat,zone,value/valueRef}, ...] — multi-modifier buff
+        //   For e.g. ROSSI 二段连携 暴击率 + 暴击伤害 single buff.
         const modifiers: BuffModifierDef[] = [];
         if (p.stat && p.zone) {
           const modZone = resolveBuffModifierZone(p.stat, p.zone);
           const modValue = rv(p.value ?? p.valueRef, 0);
           if (modZone && modValue) {
             modifiers.push({ zone: modZone, valuePerStack: modValue });
+          }
+        }
+        if (Array.isArray(p.modifiers)) {
+          for (const m of p.modifiers) {
+            if (!m?.stat || !m?.zone) continue;
+            const modZone = resolveBuffModifierZone(m.stat, m.zone);
+            const modValue = rv(m.value ?? m.valueRef, 0);
+            if (modZone && modValue) {
+              modifiers.push({ zone: modZone, valuePerStack: modValue });
+            }
           }
         }
 
@@ -2275,6 +2341,7 @@ export function simulate(
               stat: p.stat, zone: p.zone,
               sourceRef: inferredSourceRef,
               fromTrigger,
+              ...(p.internal ? { internal: true } : {}),
             });
             // Push trigger event for enemy buff application (used by weapons like 宏愿)
             hitTriggerEvents?.push({
@@ -2299,6 +2366,7 @@ export function simulate(
               stat: p.stat, zone: p.zone,
               sourceRef: inferredSourceRef,
               fromTrigger,
+              ...(p.internal ? { internal: true } : {}),
             });
           }
         } else {
@@ -2314,6 +2382,7 @@ export function simulate(
               stat: p.stat, zone: p.zone,
               sourceRef: inferredSourceRef,
               fromTrigger,
+              ...(p.internal ? { internal: true } : {}),
             });
           }
         }
@@ -2440,6 +2509,12 @@ export function simulate(
            *  potentials because the talent damage isn't itself a 战技 hit. */
           skipSourceTypeBonus?: boolean;
           canCrit?: boolean;
+          /** When true, the emitted damage event is flagged `hideFromHits` so the
+           *  damage-calc per-hit table doesn't list it under the parent action.
+           *  Conceptually models a debuff DOT (e.g. ROSSI 爪印斫痕) — damage
+           *  still counts toward totals/DPS, but visually it lives apart from
+           *  the action's own hits. */
+          hideFromHits?: boolean;
         };
         const delay = rv(p.delay, 0);
         const mult = rv(p.multiplier, 0)
@@ -2501,6 +2576,7 @@ export function simulate(
             triggerName: (effect.params as any).triggerName || "追加攻击",
             zones: result.zones,
             critEventKey,
+            ...(p.hideFromHits ? { hideFromHits: true } : {}),
           });
         }
         break;

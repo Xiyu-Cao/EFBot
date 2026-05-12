@@ -313,9 +313,21 @@ function mapActionsToPlacedSkills(
     const action = sorted[i];
     if (action.isDisabled) continue;
 
+    // ── Pre-resolve skill (skills only) to detect instant-cast variants ──
+    // Skill-type actions might resolve to an in-chain variant with duration=0
+    // (e.g. LASTRITE skillInChain). Instant-cast skills don't displace the
+    // running attack — they fire alongside it. Resolving early lets us decide
+    // whether to push aStart vs. keep it in place.
+    let preResolvedSkill: Skill | null = null;
+    if (action.type === "skill") {
+      const inAttackChain = isInAttackChain(sorted, i);
+      preResolvedSkill = resolveSkillForAction(action, skills, track.id, inAttackChain);
+    }
+    const isInstantCast = preResolvedSkill?.duration === 0;
+
     // ── 0. Apply push rule based on previously-resolved running skill ──
     let aStart = action.startTime || 0;
-    if (runningSkill && aStart < runningEnd) {
+    if (runningSkill && aStart < runningEnd && !isInstantCast) {
       // Incoming category probe: type is sufficient for the matrix lookup
       // (isHeavyAttack only matters for active-side categorization).
       const incoming = { type: action.type, kind: action.kind, id: action._v2SkillId } as any;
@@ -342,9 +354,11 @@ function mapActionsToPlacedSkills(
       }
 
       skill = resolveSkillForAction(action, skills, track.id, false, segIdx);
+    } else if (action.type === "skill") {
+      // Reuse the pre-resolved skill (computed above for the instant-cast check).
+      skill = preResolvedSkill;
     } else {
-      const inAttackChain = action.type === "skill" && isInAttackChain(sorted, i);
-      skill = resolveSkillForAction(action, skills, track.id, inAttackChain);
+      skill = resolveSkillForAction(action, skills, track.id, false);
     }
 
     if (!skill) continue;
@@ -380,9 +394,13 @@ function mapActionsToPlacedSkills(
     }
 
     // ── 3. Update running skill for push rule ──
-    runningSkill = skill;
-    runningStart = aStart;
-    runningEnd = aStart + v2Dur;
+    // Instant-cast skills (duration=0) don't replace the running animation, so
+    // subsequent actions still measure against the original running attack.
+    if (!isInstantCast) {
+      runningSkill = skill;
+      runningStart = aStart;
+      runningEnd = aStart + v2Dur;
+    }
 
     // ── 4. Emit PlacedSkill with push-adjusted start time ──
     const variantList = variants?.[action.type] || undefined;
@@ -428,7 +446,16 @@ function resolveSkillForAction(action: StoreAction, skills: any, _trackId: strin
     return skills.skill || null;
   }
   if (actionType === "link") {
-    if (Array.isArray(skills.link)) return skills.link[0];
+    if (Array.isArray(skills.link)) {
+      // Multi-link characters (e.g. ROSSI 燎影时刻 第一段 + 第二段): use the
+      // action's _v2SkillId to pick the right segment. Falls back to link[0]
+      // when the legacy action carries no _v2SkillId.
+      if (action._v2SkillId) {
+        const found = skills.link.find((s: Skill) => s.id === action._v2SkillId);
+        if (found) return found;
+      }
+      return skills.link[0];
+    }
     return skills.link || null;
   }
   if (actionType === "ultimate") {

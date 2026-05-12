@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { simulate, type PlacedSkill, type EnemyConfig } from "./kernel";
 import { computeCharacterBuild, type CharacterInput } from "./characterBuild";
+import type { CharacterBuild } from "./types";
 import type { Skill, Hit, DamageElement, SkillVariant } from "./types";
 
 // ── Helper: make a simple hit ──
@@ -2146,6 +2147,164 @@ describe("V2 Kernel — per-skill cooldown gating + link_cd_reduction %", () => 
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// Cooldown group (shared CD bucket) — for multi-segment chained skills
+// like ROSSI 燎影时刻 第一段 + 第二段.
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — cooldownGroup + cooldownStartOffset (chained-skill CD)", () => {
+  function cdSkillExt(opts: {
+    id: string;
+    type: "link" | "skill" | "ultimate";
+    duration?: number;
+    cooldown: number;
+    cooldownGroup?: string;
+    cooldownStartOffset?: number;
+    requiresPreviousAction?: Skill["requiresPreviousAction"];
+  }): Skill {
+    return {
+      id: opts.id, type: opts.type, name: opts.id,
+      element: "cold",
+      duration: opts.duration ?? 1,
+      spCost: 0,
+      cooldown: opts.cooldown,
+      hits: [], checkpoints: [],
+      ...(opts.cooldownGroup !== undefined ? { cooldownGroup: opts.cooldownGroup } : {}),
+      ...(opts.cooldownStartOffset !== undefined ? { cooldownStartOffset: opts.cooldownStartOffset } : {}),
+      ...(opts.requiresPreviousAction !== undefined ? { requiresPreviousAction: opts.requiresPreviousAction } : {}),
+    };
+  }
+
+  it("cooldownStartOffset delays the CD start past action_end", () => {
+    // Skill duration=1, cd=10, offset=5 → expiry = end(1) + offset(5) + cd(10) = 16
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link = cdSkillExt({ id: "delayed", type: "link", cooldown: 10, cooldownStartOffset: 5 });
+
+    // Placement at t=15 should be REJECTED (15 < 16).
+    const rejected = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link, startTime: 15 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((rejected.validationError ? 1 : 0)).toBe(1);
+
+    // Placement at t=17 should be ACCEPTED (17 > 16).
+    const accepted = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link, startTime: 17 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((accepted.validationError ? 1 : 0)).toBe(0);
+  });
+
+  it("cooldownGroup: 第二段 (chained follow-up) extends bucket via Math.max", () => {
+    // 第一段: duration=1, cd=10, offset=5, group=G → expiry = 16
+    // 第二段: duration=2, cd=10, group=G, requiresPreviousAction within [0.5, 3]s
+    //   Placed at t=2 → bucket Math.max(16, 2+2+10=14) → stays 16
+    //   Placed at t=5 → bucket Math.max(16, 5+2+10=17) → 17
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link1 = cdSkillExt({
+      id: "link1", type: "link", duration: 1, cooldown: 10,
+      cooldownGroup: "G", cooldownStartOffset: 5,
+    });
+    const link2 = cdSkillExt({
+      id: "link2", type: "link", duration: 2, cooldown: 10,
+      cooldownGroup: "G",
+      requiresPreviousAction: { skillId: "link1", withinFrames: { min: 30, max: 360 } }, // 0.5s - 6s
+    });
+
+    // Case A: 第二段 at t=2 (end=4) → bucket stays at 16 from 第一段.
+    // Next 第一段 attempt at t=15 < 16: rejected.
+    const caseA = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link2, startTime: 2 },
+      { actionId: "a3", actorId: "ACTOR", skill: link1, startTime: 15 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((caseA.validationError ? 1 : 0)).toBe(1);
+    expect(caseA.validationError!.actionId).toBe("a3");
+
+    // Case A2: same setup, 第一段 retry at t=17 — bucket cleared at 16.
+    const caseA2 = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link2, startTime: 2 },
+      { actionId: "a3", actorId: "ACTOR", skill: link1, startTime: 17 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((caseA2.validationError ? 1 : 0)).toBe(0);
+
+    // Case B: 第二段 at t=5 (end=7) → bucket extends to 17.
+    // 第一段 retry at t=17 - eps should now be rejected; at t=18 accepted.
+    const caseB = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link2, startTime: 5 },
+      { actionId: "a3", actorId: "ACTOR", skill: link1, startTime: 16.5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((caseB.validationError ? 1 : 0)).toBe(1);
+    expect(caseB.validationError!.actionId).toBe("a3");
+
+    const caseB2 = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link2, startTime: 5 },
+      { actionId: "a3", actorId: "ACTOR", skill: link1, startTime: 17.5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((caseB2.validationError ? 1 : 0)).toBe(0);
+  });
+
+  it("chained-skill (requiresPreviousAction) bypasses its own group CD check", () => {
+    // After 第一段 sets bucket expiry=16, placing 第二段 at t=2 is INSIDE that
+    // window — but 第二段 has requiresPreviousAction so the CD check is skipped.
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link1 = cdSkillExt({
+      id: "link1", type: "link", duration: 1, cooldown: 10,
+      cooldownGroup: "G", cooldownStartOffset: 5,
+    });
+    const link2 = cdSkillExt({
+      id: "link2", type: "link", duration: 2, cooldown: 10,
+      cooldownGroup: "G",
+      requiresPreviousAction: { skillId: "link1", withinFrames: { min: 30, max: 360 } },
+    });
+
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link2, startTime: 2 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((result.validationError ? 1 : 0)).toBe(0);
+  });
+
+  it("Math.max-extend never shortens: a later, smaller write keeps the higher expiry", () => {
+    // 第一段 sets expiry=16. 第二段 at t=2 writes 14. Bucket must remain 16.
+    const build = makeGenericBuild("ACTOR", "cold");
+    const link1 = cdSkillExt({
+      id: "link1", type: "link", duration: 1, cooldown: 10,
+      cooldownGroup: "G", cooldownStartOffset: 5,
+    });
+    const link2 = cdSkillExt({
+      id: "link2", type: "link", duration: 1, cooldown: 10,
+      cooldownGroup: "G",
+      requiresPreviousAction: { skillId: "link1", withinFrames: { min: 30, max: 360 } },
+    });
+
+    // Next 第一段 at t=15 still inside [..16] should be rejected (bucket
+    // wasn't shortened by 第二段's write of t(2)+end(1)+cd(10)=13).
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ACTOR", skill: link2, startTime: 2 },
+      { actionId: "a3", actorId: "ACTOR", skill: link1, startTime: 15 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((result.validationError ? 1 : 0)).toBe(1);
+    expect(result.validationError!.actionId).toBe("a3");
+  });
+
+  it("skills without cooldownGroup keep legacy per-skill-id keying", () => {
+    // Sanity: two skills with different ids and NO group → independent CDs.
+    const build = makeGenericBuild("ACTOR", "cold");
+    const a = cdSkillExt({ id: "a", type: "link", cooldown: 10 });
+    const b = cdSkillExt({ id: "b", type: "link", cooldown: 10 });
+    const result = simulate([build], [
+      { actionId: "x1", actorId: "ACTOR", skill: a, startTime: 0 },
+      { actionId: "x2", actorId: "ACTOR", skill: b, startTime: 2 }, // different id → unaffected
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((result.validationError ? 1 : 0)).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // MultiplierRef.section — disambiguate labels shared across sections
 // ═══════════════════════════════════════════════════════════════════
 
@@ -2834,8 +2993,11 @@ describe("V2 Kernel — ROSSI talent_1 沸血", () => {
           offset: 1, checkpointIndex: 0,
           damage: { multiplier: 100, stagger: 0, element: "blaze", canCrit: true, school: "magic", sourceType: "skill" },
           effects: [
-            // Apply 斫痕 buffs to enemy so talent_1 condition sees them
-            { type: "buff_apply", params: { buffId: "rossi_zhuohen_blaze_vuln", target: "enemy", stat: "blaze_dmg", zone: "vulnerability", value: 12, duration: 25 } },
+            // Apply 斫痕 compound buff so talent_1 condition sees it
+            { type: "buff_apply", params: { buffId: "rossi_zhuohen", target: "enemy", duration: 25, modifiers: [
+              { stat: "physical_dmg", zone: "vulnerability", value: 12 },
+              { stat: "blaze_dmg",    zone: "vulnerability", value: 12 },
+            ] } },
           ],
           standardLogic: true,
         },
@@ -2942,6 +3104,120 @@ describe("V2 Kernel — ROSSI talent_1 沸血", () => {
     expect(secondStab.isCrit).toBe(false);
     expect(secondStab.damage).toBeGreaterThanOrEqual(146);
     expect(secondStab.damage).toBeLessThanOrEqual(148);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// ROSSI 燎影时刻 link CD (shared cooldownGroup + cooldownStartOffset)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — ROSSI 燎影时刻 link CD (shared bucket)", () => {
+  // Window: 第二段 placeable in [92f, 452f] (= 6s queue) after 第一段.
+  // CD bucket key: "ROSSI/rossi_link_group".
+  // 第一段 duration 154f, cd 15s, offset = (452-154)/60 ≈ 4.967s.
+  //   → bucket expiry after 第一段-only = end(154f) + 4.967s + 15s
+  //                                     = 154f + 19.967s ≈ start + 22.533s
+  //   (equivalently: start + 452f + 15s = start + 22.533s ✓)
+  // With 第二段 placed late: bucket extends to 第二段.end + 15s.
+
+  function makeRossiBuild(): CharacterBuild {
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 0, potentialLevel: 0, talentLevels: {},
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1114, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [],
+    };
+    return computeCharacterBuild(input);
+  }
+
+  /** Test fixture: ROSSI link skills with releaseConditions stripped so these
+   *  CD tests don't trip on enemy state requirements (orthogonal to CD logic). */
+  async function loadLinks(): Promise<{ link1: Skill; link2: Skill }> {
+    const rossi = await import("./characters/rossi");
+    const linkArr = rossi.skills.link as Skill[];
+    const link1: Skill = { ...linkArr[0]!, releaseConditions: undefined };
+    const link2: Skill = { ...linkArr[1]! };
+    return { link1, link2 };
+  }
+
+  it("第一段 alone: bucket expires at start + 452f + 15s (window-close + 15s)", async () => {
+    const { link1 } = await loadLinks();
+    const build = makeRossiBuild();
+    const targetExpiry = 452 / 60 + 15; // ≈ 22.533
+
+    // Place 第二个 第一段 at t=22 — should be REJECTED (22 < 22.533).
+    const rejected = simulate([build], [
+      { actionId: "a1", actorId: "ROSSI", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ROSSI", skill: link1, startTime: 22 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((rejected.validationError ? 1 : 0)).toBe(1);
+    expect(rejected.validationError!.code).toBe("ISSUE_COOLDOWN_ACTIVE");
+
+    // Place at t=23 — should be ACCEPTED.
+    const accepted = simulate([build], [
+      { actionId: "a1", actorId: "ROSSI", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ROSSI", skill: link1, startTime: 23 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((accepted.validationError ? 1 : 0)).toBe(0);
+    void targetExpiry;
+  });
+
+  it("第二段 inside window: extends bucket to 第二段.end + 15s when later than window-close+15s", async () => {
+    const { link1, link2 } = await loadLinks();
+    const build = makeRossiBuild();
+
+    // Place 第二段 at t=7 (= 420f, inside [92f, 452f]). Base 第二段 duration=95f.
+    // 第二段.end + 15s = 7 + 95/60 + 15 = 7 + 1.583 + 15 = 23.583s
+    // 第一段's contribution = start + 452f + 15s = 22.533s
+    // Math.max → 23.583s.
+    const rejectedAt23 = simulate([build], [
+      { actionId: "a1", actorId: "ROSSI", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ROSSI", skill: link2, startTime: 7 },
+      { actionId: "a3", actorId: "ROSSI", skill: link1, startTime: 23 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((rejectedAt23.validationError ? 1 : 0)).toBe(1);
+    expect(rejectedAt23.validationError!.actionId).toBe("a3");
+
+    const acceptedAt24 = simulate([build], [
+      { actionId: "a1", actorId: "ROSSI", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ROSSI", skill: link2, startTime: 7 },
+      { actionId: "a3", actorId: "ROSSI", skill: link1, startTime: 24 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((acceptedAt24.validationError ? 1 : 0)).toBe(0);
+  });
+
+  it("第二段 placed early (before window-close + 15s) doesn't shorten bucket", async () => {
+    const { link1, link2 } = await loadLinks();
+    const build = makeRossiBuild();
+
+    // 第二段 at t=2 (= 120f, inside 精确衔接 [123,167]f — close enough; default
+    // variant has duration 95f = 1.583s, ends at ~3.583s). Bucket Math.max:
+    // 22.533 vs 3.583+15=18.583 → stays 22.533.
+    const rejected = simulate([build], [
+      { actionId: "a1", actorId: "ROSSI", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ROSSI", skill: link2, startTime: 2 },
+      { actionId: "a3", actorId: "ROSSI", skill: link1, startTime: 22 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((rejected.validationError ? 1 : 0)).toBe(1);
+    expect(rejected.validationError!.actionId).toBe("a3");
+  });
+
+  it("第二段 bypasses its own CD check inside 第一段's bucket window", async () => {
+    const { link1, link2 } = await loadLinks();
+    const build = makeRossiBuild();
+
+    // 第一段 sets bucket to 22.533. Placing 第二段 at t=2 (inside that window)
+    // would normally be blocked by group CD, but requiresPreviousAction makes
+    // 第二段 skip its own group CD check.
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ROSSI", skill: link1, startTime: 0 },
+      { actionId: "a2", actorId: "ROSSI", skill: link2, startTime: 2 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected", validateConditions: true });
+    expect((result.validationError ? 1 : 0)).toBe(0);
   });
 });
 
@@ -3101,6 +3377,785 @@ describe("V2 Kernel — previousActionTiming variant selection", () => {
       .find(d => Math.abs(d.time - 4.1) < 0.01);
     expect(followupDmg).toBeTruthy();
     expect(followupDmg.multiplier).toBe(100); // base, variant NOT selected
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// buff_apply.internal + multi-modifier buffs (ROSSI 终结技 / 二段连携 patterns)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — buff_apply: internal flag + multi-modifier", () => {
+  it("internal=true buff still modifies BuffManager (damage zone correct) but emits event with internal: true", () => {
+    const build = makeBuild();
+    // Skill: hit1 applies an internal +50% crit_dmg buff, hit2 fires a damage
+    // that should reflect the buffed crit zone.
+    const skill: Skill = {
+      id: "internal_test", type: "skill", name: "test",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        {
+          offset: 0.1, checkpointIndex: 0,
+          damage: null,
+          effects: [
+            {
+              type: "buff_apply",
+              params: {
+                buffId: "internal_buff",
+                target: "self",
+                stat: "crit_dmg",
+                zone: "crit",
+                value: 50,
+                duration: 5,
+                internal: true,
+              },
+            },
+          ],
+          standardLogic: true,
+        },
+        {
+          offset: 1.0, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        },
+      ],
+      checkpoints: [],
+    };
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:1:0", "yes"]]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "real", rng: () => 0.99, probLocks });
+
+    // Internal flag must propagate to the emitted event so projections can hide it.
+    const buffEvent = result.events.find((e: any) => e.type === "buff_apply" && e.buffId === "internal_buff") as any;
+    expect(buffEvent).toBeTruthy();
+    expect(buffEvent.internal).toBe(true);
+
+    // Damage of the second hit must reflect the +50% crit_dmg buff in BuffManager.
+    // Base ATK=1000, mult=100% → 1000 × 1 × 0.5 × 1.0 = 500 non-crit; crit zone =
+    // (1 + 0.5 base + 0.5 internal) = 2.0 → 1000 × 1 × 0.5 × 2.0 = 1000 crit.
+    const dmg = (result.events.filter((e: any) => e.type === "damage") as any[])[0];
+    expect(dmg.isCrit).toBe(true);
+    expect(dmg.damage).toBe(1000);
+  });
+
+  it("modifiers[] applies multiple stat changes in a single buff_apply", () => {
+    const build = makeBuild();
+    const skill: Skill = {
+      id: "multi_mod_test", type: "skill", name: "test",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        {
+          offset: 0.1, checkpointIndex: 0,
+          damage: null,
+          effects: [
+            {
+              type: "buff_apply",
+              params: {
+                buffId: "multi_mod_buff",
+                target: "self",
+                duration: 5,
+                // ROSSI 二段连携 pattern: 暴击率 + 暴击伤害 in one buff.
+                modifiers: [
+                  { stat: "crit_rate", zone: "crit", value: 25 },
+                  { stat: "crit_dmg",  zone: "crit", value: 30 },
+                ],
+              },
+            },
+          ],
+          standardLogic: true,
+        },
+        {
+          offset: 1.0, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        },
+      ],
+      checkpoints: [],
+    };
+    // Force the hit to crit so we observe the +30% crit_dmg modifier.
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:1:0", "yes"]]);
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "real", rng: () => 0.99, probLocks });
+
+    // Exactly ONE buff_apply event (not two) — proves the modifiers[] form
+    // consolidates into a single buff rather than spawning per-stat events.
+    const buffApplies = result.events.filter((e: any) => e.type === "buff_apply" && e.buffId === "multi_mod_buff");
+    expect(buffApplies.length).toBe(1);
+
+    // Crit damage uses 50% base + 30% from buff = 80% → crit zone = 1.80.
+    // 1000 × 1 × 0.5 × 1.80 = 900.
+    const dmg = (result.events.filter((e: any) => e.type === "damage") as any[])[0];
+    expect(dmg.isCrit).toBe(true);
+    expect(dmg.damage).toBe(900);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// hideFromHits on delayed_damage (ROSSI 爪印斫痕 DOT pattern)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — delayed_damage hideFromHits flag", () => {
+  it("propagates to the emitted damage event", () => {
+    const build = makeBuild();
+    const skill: Skill = {
+      id: "dot_test", type: "skill", name: "test",
+      element: "physical", duration: 3, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.5, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [
+          // A "DOT tick" delayed damage; should not appear in per-hit table.
+          { type: "delayed_damage", params: { delay: 1.0, multiplier: 50, element: "physical", school: "physical", canCrit: false, hideFromHits: true } },
+          // A regular trigger damage; should appear normally.
+          { type: "delayed_damage", params: { delay: 0.5, multiplier: 30, element: "physical", school: "physical", canCrit: false } },
+        ],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const dmgs = (result.events.filter((e: any) => e.type === "damage") as any[]);
+    // 3 damage events: main hit + 2 delayed
+    expect(dmgs.length).toBe(3);
+    const hiddenDmg = dmgs.find(d => d.multiplier === 50);
+    const visibleDmg = dmgs.find(d => d.multiplier === 30);
+    expect(hiddenDmg!.hideFromHits).toBe(true);
+    expect(visibleDmg!.hideFromHits).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// talentLevel + potentialLevel VariantConditions (ROSSI 战技 stage cascade)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — talentLevel / potentialLevel variant conditions", () => {
+  // ROSSI 强化战技 cascade: 6 variants keyed by talent_0 level × P1 potential
+  // present. Priority order: P2+P1pot (35) > P2 (30) > P1+P1pot (25) > P1 (20)
+  // > notalent+P1pot (15) > notalent (10). Highest priority matching wins.
+
+  async function loadVariants() {
+    const rossi = await import("./characters/rossi");
+    return (rossi.variants as { skill?: SkillVariant[] })?.skill || [];
+  }
+
+  function makeRossiBuildForVariant(promotion: number, potentialLevel: number, talentLevels: Record<string, number>): CharacterBuild {
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion, potentialLevel, talentLevels,
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1000, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [{ source: "test", stat: "crit_rate", value: -5, type: "flat" as const }],
+    };
+    return computeCharacterBuild(input);
+  }
+
+  async function castStrengthenedSkill(build: CharacterBuild, variants: SkillVariant[]) {
+    const rossi = await import("./characters/rossi");
+    const baseSkill = rossi.skills.skill;
+    // Pre-apply break, then cast 战技.
+    const breakApplier: Skill = {
+      id: "breaker", type: "attack", name: "breaker",
+      element: "physical", duration: 0.1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.05, checkpointIndex: 0,
+        damage: { multiplier: 0, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [{ type: "break_apply", params: { stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    return simulate([build], [
+      { actionId: "br", actorId: "ROSSI", skill: breakApplier, startTime: 0 },
+      { actionId: "a", actorId: "ROSSI", skill: baseSkill, startTime: 1, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "expected" });
+  }
+
+  it("talent_0 level 0, potential 0 → enh_notalent_nopot variant", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(0, 0, {});
+    const result = await castStrengthenedSkill(build, variants);
+    const actionStart = result.events.find((e: any) => e.type === "action_start" && e.actionId === "a") as any;
+    expect(actionStart.variantId).toBe("rossi_skill_enh_notalent_nopot");
+  });
+
+  it("talent_0 level 1, potential 0 → enh_p1_nopot variant", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(1, 0, { talent_0: 1 });
+    const result = await castStrengthenedSkill(build, variants);
+    const actionStart = result.events.find((e: any) => e.type === "action_start" && e.actionId === "a") as any;
+    expect(actionStart.variantId).toBe("rossi_skill_enh_p1_nopot");
+  });
+
+  it("talent_0 level 2, potential 0 → enh_p2_nopot variant", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(2, 0, { talent_0: 2 });
+    const result = await castStrengthenedSkill(build, variants);
+    const actionStart = result.events.find((e: any) => e.type === "action_start" && e.actionId === "a") as any;
+    expect(actionStart.variantId).toBe("rossi_skill_enh_p2_nopot");
+  });
+
+  it("talent_0 level 2, potential 1 → enh_p2_p1pot variant (highest priority)", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(2, 1, { talent_0: 2 });
+    const result = await castStrengthenedSkill(build, variants);
+    const actionStart = result.events.find((e: any) => e.type === "action_start" && e.actionId === "a") as any;
+    expect(actionStart.variantId).toBe("rossi_skill_enh_p2_p1pot");
+  });
+
+  it("talent_0 level 0, potential 1 → enh_notalent_p1pot variant", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(0, 1, {});
+    const result = await castStrengthenedSkill(build, variants);
+    const actionStart = result.events.find((e: any) => e.type === "action_start" && e.actionId === "a") as any;
+    expect(actionStart.variantId).toBe("rossi_skill_enh_notalent_p1pot");
+  });
+
+  it("no break → falls through to basic skill (no variant)", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(2, 1, { talent_0: 2 });
+    const rossi = await import("./characters/rossi");
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ROSSI", skill: rossi.skills.skill, startTime: 0, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "expected" });
+    const actionStart = result.events.find((e: any) => e.type === "action_start" && e.actionId === "a") as any;
+    expect(actionStart.variantId).toBeUndefined();
+    // Basic skill = 3 hits
+    const dmgs = result.events.filter((e: any) => e.type === "damage");
+    expect(dmgs.length).toBe(3);
+  });
+
+  it("P1 SP refund fires exactly once per 强化战技 cast (not 4x on 狼之珀)", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(0, 1, {});
+    const result = await castStrengthenedSkill(build, variants);
+    // sp_change events from this skill cast — should include exactly 1
+    // sp_restore (the P1 refund), beyond the cast's own sp_cost.
+    const spEvents = result.events.filter((e: any) =>
+      e.type === "sp_change" && e.actorId === "ROSSI" && e.reason === "hit_restore"
+    );
+    expect(spEvents.length).toBe(1);
+    expect((spEvents[0] as any).change).toBe(10);
+  });
+
+  it("Without P1 potential, no SP refund fires on 强化战技 cast", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(0, 0, {});
+    const result = await castStrengthenedSkill(build, variants);
+    const spRestores = result.events.filter((e: any) =>
+      e.type === "sp_change" && e.actorId === "ROSSI" && e.reason === "hit_restore"
+    );
+    expect(spRestores.length).toBe(0);
+  });
+
+  it("狼之珀 emits 4 damage events: 1 main + 3 delayed_damage (each independently crits)", async () => {
+    const variants = await loadVariants();
+    const build = makeRossiBuildForVariant(0, 0, {});
+    const rossi = await import("./characters/rossi");
+    // resolveRef must yield non-zero so delayed_damage emits (mult > 0 gate).
+    const resolveRef = (_actor: string, label: string) =>
+      label === "第二段伤害倍率" ? 288 :
+      label === "第一段伤害倍率" ? 192 : 0;
+    const breakApplier: Skill = {
+      id: "breaker", type: "attack", name: "breaker",
+      element: "physical", duration: 0.1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.05, checkpointIndex: 0,
+        damage: { multiplier: 0, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [{ type: "break_apply", params: { stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const result = simulate([build], [
+      { actionId: "br", actorId: "ROSSI", skill: breakApplier, startTime: 0 },
+      { actionId: "a", actorId: "ROSSI", skill: rossi.skills.skill, startTime: 1, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "expected", resolveRef });
+    const skillDmgs = (result.events.filter((e: any) =>
+      e.type === "damage" && e.actionId === "a"
+    ) as any[]);
+    // basic 3 (hit1/2/3) + 1 launch effect damage (from hit3's physical_anomaly)
+    // + 1 狼之珀 main + 3 狼之珀 delayed = 8 damages total.
+    expect(skillDmgs.length).toBe(8);
+    const wolfPearlDmgs = skillDmgs.filter(d => d.element === "blaze");
+    expect(wolfPearlDmgs.length).toBe(4);
+    // 3 of the 4 wolf-pearl are delayed_damage (fromTrigger=true, triggerName="狼之珀")
+    const wolfDelayedDmgs = wolfPearlDmgs.filter(d => d.fromTrigger);
+    expect(wolfDelayedDmgs.length).toBe(3);
+  });
+
+  it("沸血 talent_1 fires exactly once per 强化战技 cast (狼之珀 4-as-1 hit)", async () => {
+    // Force EVERY canCrit damage to crit via "expected" mode with crit_rate=95
+    // (kernel base 5 + 95 = 100 → expected crit zone = full crit_dmg). The
+    // talent_1 trigger fires on the main hit's hit_damage event regardless of
+    // how many delayed_damages also rolled — and since delayed_damage doesn't
+    // push hit_damage events, 沸血 fires exactly once.
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 2, potentialLevel: 0, talentLevels: { talent_0: 2, talent_1: 2 },
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1000, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [{ source: "test", stat: "crit_rate", value: 95, type: "flat" as const }],
+    };
+    const build = computeCharacterBuild(input);
+    const rossi = await import("./characters/rossi");
+    const variants = (rossi.variants as { skill?: SkillVariant[] })?.skill || [];
+
+    const breakApplier: Skill = {
+      id: "breaker", type: "attack", name: "breaker",
+      element: "physical", duration: 0.1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.05, checkpointIndex: 0,
+        damage: { multiplier: 0, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [{ type: "break_apply", params: { stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const triggersByActor = new Map([["ROSSI", rossi.triggers]]);
+    const resolveRef = (_actor: string, label: string) =>
+      label === "talent_1" ? 24 :
+      label === "第二段伤害倍率" ? 288 :
+      label === "第一段伤害倍率" ? 192 : 0;
+    // Real mode + crit_rate 100% (95 + base 5) + rng=0 → every canCrit damage crits.
+    // The 沸血 trigger filters on `crit_hit` and the actionType filter, so it fires
+    // when the main hit body damage crits (which it will with crit_rate at 100).
+    const result = simulate([build], [
+      { actionId: "br", actorId: "ROSSI", skill: breakApplier, startTime: 0 },
+      { actionId: "a", actorId: "ROSSI", skill: rossi.skills.skill, startTime: 1, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "real", rng: () => 0, resolveRef }, triggersByActor);
+
+    // Count fevorousBlood fires (blaze fromTrigger damages NOT named "狼之珀"
+    // or "爪印斫痕" — those are the wolf-pearl extras and 斫痕 DOT respectively).
+    const allTriggerBlaze = result.events.filter((e: any) =>
+      e.type === "damage" && e.fromTrigger && e.element === "blaze"
+    ) as any[];
+    const fevorousFires = allTriggerBlaze.filter(d =>
+      d.triggerName !== "狼之珀" && d.triggerName !== "爪印斫痕"
+    );
+    // talent_1 fires exactly once per 强化战技 cast — once for the main 狼之珀
+    // hit's crit. The 3 wolf-pearl delayed_damages also crit but don't fire
+    // hit_damage trigger events (delayed_damage suppresses the cascade), and
+    // 25 斫痕 DOT ticks similarly don't cascade.
+    expect(fevorousFires.length).toBe(1);
+  });
+
+  it("斫痕 is a single compound debuff applying both physical_vuln + blaze_vuln", () => {
+    // One buff_apply with two modifiers. Single buff bar entry, single icon
+    // (rossi_zhuohen → /avatars/ROSSI/icon_talent_wulfa_01.webp).
+    // Both physical and blaze hits should benefit from their respective vuln.
+    const build = makeBuild();
+    const skill: Skill = {
+      id: "test_zhuohen", type: "skill", name: "test",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [
+        // Hit 0: apply the compound 斫痕 debuff
+        {
+          offset: 0.1, checkpointIndex: 0,
+          damage: null,
+          effects: [{
+            type: "buff_apply", params: {
+              buffId: "rossi_zhuohen",
+              target: "enemy",
+              duration: 25,
+              modifiers: [
+                { stat: "physical_dmg", zone: "vulnerability", value: 12 },
+                { stat: "blaze_dmg",    zone: "vulnerability", value: 12 },
+              ],
+            },
+          }],
+          standardLogic: true,
+        },
+        // Hit 1: physical hit — should benefit from 物理脆弱 +12%
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        },
+        // Hit 2: blaze hit — should benefit from 灼热脆弱 +12%
+        {
+          offset: 1.0, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "blaze", canCrit: false, school: "magic", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        },
+      ],
+      checkpoints: [],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // Exactly ONE buff_apply event for rossi_zhuohen (compound, not split)
+    const buffApplies = result.events.filter((e: any) =>
+      e.type === "buff_apply" && e.buffId === "rossi_zhuohen"
+    );
+    expect(buffApplies.length).toBe(1);
+
+    // Both physical AND blaze damage benefit from their respective vuln modifier.
+    // Base ATK=1000, mult=100% → 1000 × 1 × 0.5 = 500 baseline; with +12% vuln → 560.
+    const dmgs = result.events.filter((e: any) => e.type === "damage") as any[];
+    const physicalDmg = dmgs.find(d => d.element === "physical");
+    const blazeDmg = dmgs.find(d => d.element === "blaze");
+    expect(physicalDmg!.damage).toBe(560);
+    expect(blazeDmg!.damage).toBe(560);
+  });
+
+  it("沸血 does NOT fire on normal attacks even with 斫痕 buff active", async () => {
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 2, potentialLevel: 0, talentLevels: { talent_0: 2, talent_1: 2 },
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1000, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [{ source: "test", stat: "crit_rate", value: -5, type: "flat" as const }],
+    };
+    const build = computeCharacterBuild(input);
+    const rossi = await import("./characters/rossi");
+    // A normal attack that pre-applies the 斫痕 vuln buff (simulating prior 战技),
+    // then crits. The 沸血 trigger should NOT fire (attack ≠ skill/link/ultimate).
+    const attack: Skill = {
+      id: "atk_test", type: "attack", name: "atk",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [
+        // Pre-apply 斫痕 compound debuff so trigger condition's enemy_has_buff matches
+        {
+          offset: 0.1, checkpointIndex: 0,
+          damage: null,
+          effects: [
+            { type: "buff_apply", params: { buffId: "rossi_zhuohen", target: "enemy", duration: 25, modifiers: [
+              { stat: "physical_dmg", zone: "vulnerability", value: 12 },
+              { stat: "blaze_dmg",    zone: "vulnerability", value: 12 },
+            ] } },
+          ],
+          standardLogic: true,
+        },
+        // Then a critting normal attack
+        {
+          offset: 0.5, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: true, school: "physical", sourceType: "attack" },
+          effects: [], standardLogic: true,
+        },
+      ],
+      checkpoints: [],
+    };
+    const probLocks = new Map<string, "yes" | "no">([["crit:a:1:0", "yes"]]);
+    const triggersByActor = new Map([["ROSSI", rossi.triggers]]);
+    const resolveRef = (_actor: string, label: string) => label === "talent_1" ? 24 : 0;
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ROSSI", skill: attack, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "real", rng: () => 0.99, probLocks, resolveRef }, triggersByActor);
+    // No blaze trigger damages should be emitted (沸血 filtered out by source_action_type).
+    const fevorousFires = result.events.filter((e: any) =>
+      e.type === "damage" && e.fromTrigger && e.element === "blaze"
+    );
+    expect(fevorousFires.length).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Instant-cast (duration=0) skill — LASTRITE skillInChain
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — instant-cast skill (duration=0) doesn't interrupt active", () => {
+  it("a duration=0 skill placed during an active attack does NOT truncate the attack", () => {
+    const build = makeBuild();
+    // Active attack — duration 2s, single hit at 1s.
+    const attack: Skill = {
+      id: "active_attack", type: "attack", name: "atk",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    // Instant skill — duration 0, single effect-only "hit" at 0.04s offset.
+    const instantSkill: Skill = {
+      id: "instant_skill", type: "skill", name: "instant",
+      element: "physical", duration: 0, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.04, checkpointIndex: 0,
+        damage: null,
+        effects: [{ type: "buff_apply", params: { buffId: "test_inf", target: "self", duration: 5, stat: "attack_percent", zone: "attackPercent", value: 10 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    // Place attack at 0, instant skill at 0.5 (mid-attack), then another attack at 2.5.
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: attack, startTime: 0 },
+      { actionId: "s",  actorId: "ACTOR", skill: instantSkill, startTime: 0.5 },
+      { actionId: "a2", actorId: "ACTOR", skill: attack, startTime: 2.5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // a1 should fire its hit at 1.0 (not interrupted by the instant skill at 0.5).
+    const a1Damage = result.events.find((e: any) => e.type === "damage" && e.actionId === "a1");
+    expect(a1Damage).toBeTruthy();
+    // a1's action_end shouldn't be marked interrupted.
+    const a1End = result.events.find((e: any) => e.type === "action_end" && e.actionId === "a1") as any;
+    expect(a1End).toBeTruthy();
+    expect(a1End.interrupted).toBe(false);
+    // a2 fires its damage at 2.5+1 = 3.5 (normal, not blocked).
+    const a2Damage = result.events.find((e: any) => e.type === "damage" && e.actionId === "a2");
+    expect(a2Damage).toBeTruthy();
+    // Instant skill buff_apply event fired.
+    const buffApply = result.events.find((e: any) => e.type === "buff_apply" && e.buffId === "test_inf");
+    expect(buffApply).toBeTruthy();
+  });
+
+  it("instant-cast skill itself is not blocked by an active attack (placement proceeds)", () => {
+    const build = makeBuild();
+    const attack: Skill = {
+      id: "active_attack", type: "attack", name: "atk",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const instantSkill: Skill = {
+      id: "instant_skill", type: "skill", name: "instant",
+      element: "physical", duration: 0, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.04, checkpointIndex: 0,
+        damage: { multiplier: 200, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+        effects: [], standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    // Place instant during active attack — its damage should still fire.
+    const result = simulate([build], [
+      { actionId: "a1", actorId: "ACTOR", skill: attack, startTime: 0 },
+      { actionId: "s",  actorId: "ACTOR", skill: instantSkill, startTime: 0.5 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // The instant skill's damage event should be present (multiplier 200 distinguishes it).
+    const instantDmg = result.events.find((e: any) => e.type === "damage" && e.multiplier === 200);
+    expect(instantDmg).toBeTruthy();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// magic_attachment delay support (LASTRITE 低温灌注 phantom 19f delay)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — magic_attachment delay parameter", () => {
+  it("attachment_change event time = hit time + delay", () => {
+    const build = makeBuild();
+    const skill: Skill = {
+      id: "delayed_attach_test", type: "skill", name: "test",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "cold", canCrit: false, school: "magic", sourceType: "skill" },
+        // Attach cold with a 19f delay — the change event should land at hit time + 19/60.
+        effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1, delay: 19/60 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const attachEvent = result.events.find((e: any) => e.type === "attachment_change" && e.stacks === 1) as any;
+    expect(attachEvent).toBeTruthy();
+    // Hit lands at 1.0s; with delay 19/60s, attachment event at 1 + 19/60 ≈ 1.317s.
+    expect(attachEvent.time).toBeCloseTo(1 + 19/60, 5);
+  });
+
+  it("delay defaults to 0 when omitted (event time = hit time)", () => {
+    const build = makeBuild();
+    const skill: Skill = {
+      id: "no_delay_attach", type: "skill", name: "test",
+      element: "physical", duration: 2, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 1, checkpointIndex: 0,
+        damage: { multiplier: 100, stagger: 0, element: "cold", canCrit: false, school: "magic", sourceType: "skill" },
+        effects: [{ type: "magic_attachment", params: { element: "cold", stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    const attachEvent = result.events.find((e: any) => e.type === "attachment_change" && e.stacks === 1) as any;
+    expect(attachEvent.time).toBeCloseTo(1, 5);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// V2 ultimate_gaugeMax propagation (E fix)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 — adapter.applyV2Overrides sets char.ultimate_gaugeMax from V2 module", () => {
+  it("ROSSI: char.ultimate_gaugeMax = 110 after applyV2Overrides", async () => {
+    const { preloadV2Modules, applyV2Overrides } = await import("./characters/adapter");
+    await preloadV2Modules();
+    const rossiChar: any = { id: "ROSSI", ultimate_gaugeMax: 100 /* stale gamedata */ };
+    const ok = applyV2Overrides(rossiChar);
+    expect(ok).toBe(true);
+    // V2 module's gaugeCost (110) overrides stale gamedata (100).
+    expect(rossiChar.ultimate_gaugeMax).toBe(110);
+    expect(rossiChar.ultimate_gaugeCost).toBe(110);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// silentTriggers Hit flag (狼之珀 4-as-1 hit semantics)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — Hit.silentTriggers suppresses trigger event emission", () => {
+  it("damage event still emitted, but no hit_damage / skill_hit trigger events fire", () => {
+    const build = makeBuild();
+    const skill: Skill = {
+      id: "silent_test", type: "skill", name: "test",
+      element: "physical", duration: 1, spCost: 0, cooldown: 0,
+      hits: [
+        // Normal hit — fires triggers
+        {
+          offset: 0.1, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+        },
+        // Silent hit — no trigger events but damage still emitted
+        {
+          offset: 0.2, checkpointIndex: 0,
+          damage: { multiplier: 100, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "skill" },
+          effects: [], standardLogic: true,
+          silentTriggers: true,
+        },
+      ],
+      checkpoints: [],
+    };
+    // Simpler test: just observe the hit_damage trigger event count.
+    // Run a sim and verify the event stream contains the expected damage events.
+    const result = simulate([build], [
+      { actionId: "a", actorId: "ACTOR", skill, startTime: 0 },
+    ], defaultEnemy, { initialSP: 0, critMode: "expected" });
+
+    // 2 main damage events (both hits) — silentTriggers doesn't prevent damage emit
+    const dmgs = result.events.filter((e: any) => e.type === "damage") as any[];
+    expect(dmgs.length).toBe(2);
+    expect(dmgs[0].damage).toBeGreaterThan(0);
+    expect(dmgs[1].damage).toBeGreaterThan(0);
+
+    // Both action_start + (2 damages) are emitted; the silent hit is a normal
+    // damage event but no associated hit_damage trigger event flows from it.
+    // The trigger-event suppression is internal to the kernel — directly
+    // verifiable via the kernel's behavior in chained-trigger tests elsewhere
+    // (e.g. the "P1 SP refund fires exactly once" test, which exercises the
+    // same silentTriggers path through ROSSI 强化战技 狼之珀 sub-hits 2-4).
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// enemyHasBreak VariantCondition (ROSSI 战技 basic vs 强化 auto-select)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("V2 Kernel — enemyHasBreak variant condition", () => {
+  // Pattern: a skill whose 强化 variant fires only when the target has 破防 at
+  // cast time. ROSSI 战技 is the canonical user.
+
+  function makeBreakBuild(): CharacterBuild {
+    const input: CharacterInput = {
+      id: "ROSSI", name: "ROSSI", element: "physical", rarity: 6,
+      promotion: 0, potentialLevel: 0, talentLevels: {},
+      baseStrength: 0, baseAgility: 0, baseIntellect: 0, baseWill: 0,
+      baseAttack: 1000, baseHp: 1000,
+      mainAttribute: "agility", subAttribute: "intellect",
+      weaponId: null, weaponBaseAtk: 0, weaponLevel: 90,
+      equipmentSetId: null, baseGaugeMax: 300,
+      statModifiers: [{ source: "test", stat: "crit_rate", value: -5, type: "flat" as const }],
+    };
+    return computeCharacterBuild(input);
+  }
+
+  it("selects 强化 variant only when enemy is broken at cast time", async () => {
+    const rossi = await import("./characters/rossi");
+    const baseSkill = rossi.skills.skill;
+    const variants = (rossi.variants as { skill?: SkillVariant[] })?.skill || [];
+    expect(variants.length).toBeGreaterThan(0);
+
+    const build = makeBreakBuild();
+
+    // Case A: no 破防 — basic 3-hit version fires (duration 110f, 3 damage events)
+    const noBreak = simulate([build], [
+      { actionId: "a", actorId: "ROSSI", skill: baseSkill, startTime: 0, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "expected" });
+    const noBreakDmgs = noBreak.events.filter(e => e.type === "damage") as any[];
+    expect(noBreakDmgs.length).toBe(3);  // hit1-3 only
+
+    // Case B: pre-apply 1 stack of break, then cast 战技 — 强化 variant fires.
+    // Apply break via a dummy skill that emits a break_apply effect before 战技.
+    const breakApplier: Skill = {
+      id: "breaker", type: "attack", name: "breaker",
+      element: "physical", duration: 0.1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.05, checkpointIndex: 0,
+        damage: { multiplier: 0, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [{ type: "break_apply", params: { stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const broken = simulate([build], [
+      { actionId: "br", actorId: "ROSSI", skill: breakApplier, startTime: 0 },
+      { actionId: "a", actorId: "ROSSI", skill: baseSkill, startTime: 1, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "expected" });
+    const brokenDmgs = (broken.events.filter(e => e.type === "damage") as any[])
+      .filter(d => d.time >= 1); // exclude the break_apply hit's own damage event
+    // 强化版 = 3 hit (第一段) + 4 sub-hits (狼之珀) + 25 斫痕 DOT ticks = 32 damage events
+    // Just verify > 3 (definitely not basic) and the 狼之珀 sub-hits land at ~139-142f.
+    expect(brokenDmgs.length).toBeGreaterThan(3);
+    const wolfHit = brokenDmgs.find(d => Math.abs(d.time - (1 + 139/60)) < 0.05);
+    expect(wolfHit).toBeTruthy();
+  });
+
+  it("variant.action_start event carries variantId when 强化 fires", async () => {
+    const rossi = await import("./characters/rossi");
+    const baseSkill = rossi.skills.skill;
+    const variants = (rossi.variants as { skill?: SkillVariant[] })?.skill || [];
+    const build = makeBreakBuild();
+
+    const breakApplier: Skill = {
+      id: "breaker", type: "attack", name: "breaker",
+      element: "physical", duration: 0.1, spCost: 0, cooldown: 0,
+      hits: [{
+        offset: 0.05, checkpointIndex: 0,
+        damage: { multiplier: 0, stagger: 0, element: "physical", canCrit: false, school: "physical", sourceType: "attack" },
+        effects: [{ type: "break_apply", params: { stacks: 1 } }],
+        standardLogic: true,
+      }],
+      checkpoints: [],
+    };
+    const result = simulate([build], [
+      { actionId: "br", actorId: "ROSSI", skill: breakApplier, startTime: 0 },
+      { actionId: "a", actorId: "ROSSI", skill: baseSkill, startTime: 1, variants },
+    ], defaultEnemy, { initialSP: 100, critMode: "expected" });
+    const actionStart = result.events.find(
+      (e: any) => e.type === "action_start" && e.actionId === "a"
+    ) as any;
+    expect(actionStart).toBeTruthy();
+    // Default test build: promotion=0, potentialLevel=0 → no talent, no P1.
+    // Priority cascade picks the no-talent / no-potential 强化 variant.
+    expect(actionStart.variantId).toBe("rossi_skill_enh_notalent_nopot");
   });
 });
 

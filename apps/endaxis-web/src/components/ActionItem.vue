@@ -197,6 +197,9 @@ function getDamageTickTitle(tick) {
 // V2-ready actors: source of truth is `store.v2EffectiveCooldowns` — post-
 //   `(cd - flat) * (1 - pct/100)`, already accounts for mastery level +
 //   potential flat-seconds + equipment link_cd_reduction %.
+// Multi-link chains (ROSSI 燎影时刻): the primary segment hides its CD bar
+//   (group bucket is conceptually owned by the followup) — driven by
+//   `linkBySkillId.get(_v2SkillId) === 0`.
 // Non-V2 actors: fall back to library `action.cooldown` × link %-reduction,
 //   which was the previous behavior.
 const effectiveCooldown = computed(() => {
@@ -205,9 +208,19 @@ const effectiveCooldown = computed(() => {
   if (!track) return baseCd
 
   // V2 path: prefer kernel/panel-resolved CD when available.
-  const v2Map = store.v2EffectiveCooldowns
-  const v2Cd = v2Map?.get?.(track.id)?.[props.action.type]
-  if (typeof v2Cd === 'number' && v2Cd > 0) return v2Cd
+  const v2Entry = store.v2EffectiveCooldowns?.get?.(track.id)
+  if (v2Entry) {
+    // Per-skill-id lookup wins (multi-segment chains). If the action's
+    // _v2SkillId resolves to 0 here, we treat that as "explicitly hidden"
+    // — falling back to the type-level value would re-introduce the bar.
+    if (props.action.type === 'link' && props.action._v2SkillId && v2Entry.linkBySkillId) {
+      if (v2Entry.linkBySkillId.has(props.action._v2SkillId)) {
+        return v2Entry.linkBySkillId.get(props.action._v2SkillId) || 0
+      }
+    }
+    const v2Cd = v2Entry[props.action.type]
+    if (typeof v2Cd === 'number' && v2Cd > 0) return v2Cd
+  }
 
   // Legacy fallback (non-V2 actors, or skill types with no panel CD).
   if (props.action.type !== 'link') return baseCd
@@ -309,6 +322,87 @@ const style = computed(() => {
     backdropFilter: store.isCapturing ? 'none' : 'blur(4px)',
     color: isSelected.value ? '#ffffff' : color,
     boxShadow: isSelected.value ? `0 0 10px ${color}` : 'none'
+  }
+})
+
+// Multi-link placement window (ROSSI 第一段 → 第二段 可施放 + 精确衔接).
+// Drives two indicator bars rendered in place of the CD bar on the primary
+// segment, since the primary itself has no CD bar (group bucket shifted to
+// the followup). Returns null when the action isn't the primary of a chain.
+const linkPlacementWindow = computed(() => {
+  if (props.action.type !== 'link') return null
+  if (!props.action._v2SkillId) return null
+  const track = store.tracks.find(t => t.actions?.some(a => a.instanceId === props.action.instanceId))
+  if (!track) return null
+  const windows = store.linkFollowupWindowsByActor?.get?.(track.id)
+  if (!windows) return null
+  return windows.get(props.action._v2SkillId) || null
+})
+
+function _windowStyleAt(openSec, closeSec) {
+  const layout = actionLayout.value
+  if (!layout) return { display: 'none' }
+  const start = Number(props.action.startTime) || 0
+  const xOpen = store.timeToPx(start + openSec) - store.timeToPx(start)
+  const xClose = store.timeToPx(start + closeSec) - store.timeToPx(start)
+  const w = Math.max(0, xClose - xOpen)
+  if (w <= 0) return { display: 'none' }
+  return {
+    width: `${w}px`,
+    transform: `translate(${layout.bar.leftEdge + xOpen}px, ${layout.bar.relativeY}px)`,
+  }
+}
+
+const placementWindowStyle = computed(() => {
+  const w = linkPlacementWindow.value
+  if (!w) return { display: 'none' }
+  return _windowStyleAt(w.placementOpen, w.placementClose)
+})
+
+const precisionWindowStyle = computed(() => {
+  const w = linkPlacementWindow.value
+  if (!w || w.precisionOpen === undefined) return { display: 'none' }
+  return _windowStyleAt(w.precisionOpen, w.precisionClose)
+})
+
+/**
+ * Post-window CD bar (primary segment of a chain when followup wasn't placed).
+ * Mirrors the kernel's group-bucket expiry: CD starts at primary.start +
+ * placementClose (= window-close) and runs for the followup's effective CD.
+ * Hidden when the user has placed the followup inside the window.
+ */
+const postWindowCd = computed(() => {
+  const w = linkPlacementWindow.value
+  if (!w?.followupSkillId) return null
+  const track = store.tracks.find(t => t.actions?.some(a => a.instanceId === props.action.instanceId))
+  if (!track) return null
+  const primaryStart = Number(props.action.startTime) || 0
+  const windowStart = primaryStart + w.placementOpen
+  const windowEnd = primaryStart + w.placementClose
+  // Detect a placed followup of the matching skill id inside this window.
+  const followupPlaced = (track.actions || []).some(a => {
+    if (a.isDisabled) return false
+    if (a._v2SkillId !== w.followupSkillId) return false
+    const t = Number(a.startTime) || 0
+    return t >= windowStart - 0.001 && t <= windowEnd + 0.001
+  })
+  if (followupPlaced) return null
+  const cd = store.v2EffectiveCooldowns?.get?.(track.id)?.linkBySkillId?.get?.(w.followupSkillId) || 0
+  if (cd <= 0) return null
+  return { startOffset: w.placementClose, cd }
+})
+
+const postWindowCdStyle = computed(() => {
+  const pw = postWindowCd.value
+  const layout = actionLayout.value
+  if (!pw || !layout) return { display: 'none' }
+  const start = Number(props.action.startTime) || 0
+  const xStart = store.timeToPx(start + pw.startOffset) - store.timeToPx(start)
+  const xEnd = store.timeToPx(start + pw.startOffset + pw.cd) - store.timeToPx(start)
+  return {
+    width: `${Math.max(0, xEnd - xStart)}px`,
+    transform: `translate(${layout.bar.leftEdge + xStart}px, ${layout.bar.relativeY}px)`,
+    opacity: 0.6,
   }
 })
 
@@ -637,6 +731,30 @@ function handleEffectDrop(effectId) {
          zIndex: 1
        }">
       </div>
+    </div>
+
+    <!-- Multi-link 可施放 window (primary segment of a chain, e.g. ROSSI 第一段). -->
+    <div v-if="!isGhostMode && linkPlacementWindow"
+         class="link-window-bar bottom-bar"
+         :style="placementWindowStyle">
+      <div class="link-window-line placement"></div>
+      <span class="link-window-label placement">{{ t('actionItem.linkPlaceable') || '可施放' }}</span>
+    </div>
+    <!-- Precision sub-window (auto-selects 精确衔接 variant when followup lands here). -->
+    <div v-if="!isGhostMode && linkPlacementWindow && linkPlacementWindow.precisionOpen !== undefined"
+         class="link-window-bar precision bottom-bar"
+         :style="precisionWindowStyle">
+      <div class="link-window-line precision"></div>
+      <span class="link-window-label precision">{{ t('actionItem.linkPrecise') || '精确衔接' }}</span>
+    </div>
+    <!-- Post-window CD bar: shown on primary segment when no followup was
+         placed (group bucket starts ticking at window-close). -->
+    <div v-if="!isGhostMode && postWindowCd"
+         class="cd-bar-container bottom-bar"
+         :style="postWindowCdStyle">
+      <div class="cd-line" :style="{ backgroundColor: themeColor }"></div>
+      <span class="cd-text" :style="{ color: themeColor }">{{ store.formatTimeLabel(postWindowCd.cd) }}</span>
+      <div class="cd-end-mark" :style="{ backgroundColor: themeColor, zIndex: 1 }"></div>
     </div>
 
     <div v-if="!isGhostMode && action.type === 'ultimate' && (action.enhancementTime || 0) > 0"
@@ -1034,6 +1152,17 @@ function handleEffectDrop(effectId) {
 .cd-line { flex-grow: 1; height: 2px; }
 .cd-text { position: absolute; left: 0; top: 4px; font-size: 10px; font-weight: bold; line-height: 1; }
 .cd-end-mark { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 1px; height: 8px; }
+
+/* Multi-link placement window indicators (ROSSI 第一段 → 第二段). Same lane as
+ * the CD bar; primary segment hides its CD bar so they don't conflict. */
+.link-window-bar { position: absolute; height: 2px; display: flex; align-items: center; pointer-events: none; opacity: 0.85; }
+.link-window-line { flex-grow: 1; height: 2px; }
+.link-window-line.placement { background-color: #69c0ff; }
+.link-window-line.precision { background-color: #fadb14; height: 3px; }
+.link-window-bar.precision { z-index: 2; }
+.link-window-label { position: absolute; left: 0; top: 4px; font-size: 9px; font-weight: bold; line-height: 1; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+.link-window-label.placement { color: #69c0ff; }
+.link-window-label.precision { color: #fadb14; top: -10px; }
 
 .custom-blue-bar { height: 2px; display: flex; align-items: center; color: #69c0ff; z-index: 5; }
 .cb-line { flex-grow: 1; height: 2px; background-color: #69c0ff; }

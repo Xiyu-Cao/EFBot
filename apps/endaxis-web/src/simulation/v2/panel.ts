@@ -149,6 +149,11 @@ export function resolveSkillsForPanel(
   }
 
   // ── 3. Link CD from skillData ──
+  // For multi-segment chains (e.g. ROSSI 燎影时刻 第一段 + 第二段) all segments
+  // share the same in-game CD, so all link[] entries get the level-resolved
+  // value. Bucket-sharing across segments is handled by `cooldownGroup` +
+  // kernel Math.max-extend (see effects.ts / kernel.ts), independent of which
+  // value each segment carries.
   if (out.link && mod?.skillData?.link) {
     const cd = readCooldownFromSkillData(mod.skillData.link, toLevelIndex(skillLevels?.link));
     if (cd > 0) {
